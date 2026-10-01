@@ -1,0 +1,88 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+*.egg
+.venv/
+venv/
+env/
+
+# Node
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+
+# Environment
+.env
+.env.local
+.env.production
+.env.development
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Uploads
+uploads/
+**/uploads/
+!uploads/.gitkeep
+!**/uploads/.gitkeep
+
+# AI / IDE
+.claude/
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+*.log
+
+# Generated test artifacts
+test-create-flow.js
+frontend/test-create-flow.js
+frontend/screenshot-*.png
+
+# Root documentation (project-specific guides, not repo docs)
+/DASHBOARD_FIXES_SUMMARY.md
+/IMPLEMENTATION_COMPLETE.md
+/IMPLEMENTATION_GUIDE.md
+/PHONE_VALIDATION_GUIDE.md
+/QUICK_START_SECURITY.md
+/SECURITY_COMPLETION_SUMMARY.md
+/SECURITY_DEPLOYMENT_CHECKLIST.md
+/SECURITY_HARDENING_GUIDE.md
+/SECURITY_IMPLEMENTATION_COMPLETE.md
+/SECURITY_IMPLEMENTATION_ROADMAP.md
+/SECURITY_PATCHES.md
+/TRIAL_ABUSE_PREVENTION_GUIDE.md
+/TRIAL_ENFORCEMENT_SUMMARY.md
+/TRIAL_IMPLEMENTATION_FRONTEND.md
+
+# Root scripts (except Nomba test scripts)
+/*.sh
+!/test_nomba.sh
+!/test_verify.sh
+
+# Root images
+/*.png
+
+# Root logs
+/*.log
+
+# Deploy helpers
+/deploy/
+
+# Backend specific
+backend/app/__pycache__/
+backend/.venv/
+
+# Frontend specific
+frontend/.next/
+frontend/node_modules/
+frontend/out/
