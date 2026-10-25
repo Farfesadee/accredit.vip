@@ -155,35 +155,59 @@ def anniversary_content() -> dict:
             "note": "Come dressed to celebrate thirty years with us.",
             "colors": [],
         },
-        # Short montage of the client's own artwork, set to "Ordinary".
-        "video_url": "/uploads/anniversary-montage.mp4",
-        "invite_video_url": "/uploads/anniversary-montage.mp4",
-        "invite_poster_url": "/uploads/photo_2026-10-21_17-48-21.jpg",
-        "hero_image": "/uploads/photo_2026-10-21_17-48-21.jpg",
+        # One companion rides on the guest's own pass (same rule as event 82).
+        "plus_one": {
+            "allowed": True,
+            "note": "Your invitation admits two: you and one companion.",
+        },
+        # Short montage cut from the couple's own photographs, set to "Ordinary".
+        # Versioned so a replaced cut is never served from cache.
+        "video_url": "/uploads/anniversary-montage.mp4?v=3",
+        "invite_video_url": "/uploads/anniversary-montage.mp4?v=3",
+        # The opening carries their traditional attire portrait (red cap, white
+        # agbada, red lace), which the client chose by name, so the names and
+        # "Together since December 1996" read at a glance on a phone.
+        "invite_poster_url": "/uploads/anniv-hero.jpg?v=3",
+        "hero_image": "/uploads/anniv-hero.jpg?v=3",
         "hero_line": "Celebrating 30 beautiful years of love, laughter and lifelong companionship.",
-        "collage_url": "/uploads/anniversary-collage.jpg",
-        # The couple's own photographs, recovered from the client's PDF at
-        # full size, carry the gallery and the opening film.
+        # Gallery: five frames from the photographs the client sent in October
+        # 2026. width/height travel with each one so the boxes hold their shape
+        # before the bytes arrive (no layout shift while a guest scrolls).
         "photos": [
             {
-                "url": "/uploads/anniv-studio.jpg",
-                "caption": "Nelkon & Blessing",
-                "note": "Today",
+                "url": "/uploads/anniv-g1.jpg",
+                "caption": "Still them",
+                "note": "Thirty years on",
+                "width": 900,
+                "height": 1125,
             },
             {
-                "url": "/uploads/anniv-traditional.jpg",
-                "caption": "The beginning",
-                "note": "December 1996",
+                "url": "/uploads/anniv-g2.jpg",
+                "caption": "Black tie",
+                "note": "An evening out",
+                "width": 900,
+                "height": 1125,
             },
             {
-                "url": "/uploads/anniv-garden.jpg",
-                "caption": "Still smiling",
-                "note": "Thirty years later",
+                "url": "/uploads/anniv-g3.jpg",
+                "caption": "Out and about",
+                "note": "Somewhere warm",
+                "width": 900,
+                "height": 1125,
             },
             {
-                "url": "/uploads/anniv-outdoor.jpg",
-                "caption": "The family",
-                "note": "All of us",
+                "url": "/uploads/anniv-g4.jpg",
+                "caption": "An ordinary day",
+                "note": "The best ones",
+                "width": 900,
+                "height": 1125,
+            },
+            {
+                "url": "/uploads/anniv-g5.jpg?v=2",
+                "caption": "Laughing",
+                "note": "Still",
+                "width": 900,
+                "height": 1125,
             },
         ],
         "music_url": "/uploads/anniversary-ordinary.mp3",
@@ -454,8 +478,9 @@ async def submit_registration(
     organization = req.organization.strip()
     sub_department = req.sub_department.strip()
     category = req.category.strip()
-    # Event 82 only: one companion rides on the guest's own pass.
-    plus_one = bool(req.plus_one) and is_gala_event(event)
+    # Events 82 and 84: one companion rides on the guest's own pass.
+    party_allowed = is_gala_event(event) or is_anniversary_event(event)
+    plus_one = bool(req.plus_one) and party_allowed
     plus_one_name = req.plus_one_name.strip() if plus_one else ""
 
     if event.id == 67:
@@ -472,7 +497,7 @@ async def submit_registration(
     elif not (name and email and phone):
         raise HTTPException(status_code=400, detail="Name, email and phone number are required")
 
-    if is_gala_event(event) and plus_one and not plus_one_name:
+    if party_allowed and plus_one and not plus_one_name:
         raise HTTPException(status_code=400, detail="Please provide the name of your plus one")
 
     existing_guest = None
@@ -554,7 +579,7 @@ async def submit_registration(
         }
         guest.category = category
 
-    if is_gala_event(event) and (organization or plus_one):
+    if party_allowed and (organization or plus_one):
         data = {**(guest.custom_data or {})}
         if organization:
             data["organization"] = organization

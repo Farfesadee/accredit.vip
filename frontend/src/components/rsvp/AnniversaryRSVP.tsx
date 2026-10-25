@@ -23,15 +23,19 @@ import { COUNTRIES, flagEmoji } from "@/components/shared/phone-input";
  * element carries the whole visit, from the cover through to the RSVP.
  */
 
-// Palette lifted from the client's flier: aubergine, lavender, cream.
-const INK = "#241B33";
-const INK_DEEP = "#171021";
-const ACTION = "#5B3F82";
-const ACTION_LIGHT = "#7B5BA8";
-const LAV = "#C3B2DE";
-const CREAM = "#FAF6EF";
-const CREAM_SOFT = "#F3EDE2";
-const MUTED = "#6B6076";
+// Palette: the client's Image 4, applied to the page as directed.
+// Purple carries the surface (60%), lavender the panels (25%), peach the
+// accents and actions (15%), white the type and highlights.
+const PURPLE = "#6E6FFA";
+const INK = "#241C6B"; // deep violet: reading text on light, base of the dark
+const INK_DEEP = "#1B1550";
+const ACTION = "#6E6FFA"; // the purple itself, for rules and links on light
+const ACTION_LIGHT = "#8A8BFC";
+const LAV = "#E6E6FA";
+const PEACH = "#FFDAB9";
+const CREAM = "#FFFFFF";
+const CREAM_SOFT = "#F4F4FE";
+const MUTED = "#6B6B96";
 
 // Fonts from the client's PDF: Urbanist is the exact typeface used there
 // (sans), with Yellowtail and Great Vibes standing in for the two script
@@ -53,10 +57,7 @@ const FONT_CSS = `
    containing block for the fixed header and drag it along on scroll. */
 .anniv-fade{animation:annivFade 700ms ease both}
 .anniv-script-lh{line-height:0.92;padding-bottom:0.12em}
-.anniv-cover-half{position:absolute;inset:0;background-repeat:no-repeat;background-position:center 4%;background-size:auto 54%}
-@media(max-height:640px){.anniv-cover-half{background-size:auto 46%}}
-@media(min-width:768px){.anniv-cover-half{background-position:76% 50%;background-size:auto 84%}}
-@media(min-width:1280px){.anniv-cover-half{background-size:auto 88%}}
+.anniv-cover-half{position:absolute;inset:0;overflow:hidden}
 `;
 
 interface Props {
@@ -114,7 +115,7 @@ function AnnivCountdown({ target }: { target?: string }) {
         <div
           key={u.l}
           className="border py-5 text-center"
-          style={{ borderColor: "rgba(195,178,222,0.18)" }}
+          style={{ borderColor: "rgba(230,230,250,0.18)" }}
         >
           <p
             style={{
@@ -130,7 +131,7 @@ function AnnivCountdown({ target }: { target?: string }) {
           </p>
           <p
             className="mt-2 text-[8.5px] uppercase"
-            style={{ letterSpacing: "0.26em", color: "rgba(195,178,222,0.75)" }}
+            style={{ letterSpacing: "0.26em", color: "rgba(230,230,250,0.75)" }}
           >
             {u.l}
           </p>
@@ -197,7 +198,7 @@ function AnnivPhoneInput({
 
   return (
     <div ref={wrapRef} className="relative">
-      <div className="flex items-center gap-2 border-b" style={{ borderColor: "#cfc5b6" }}>
+      <div className="flex items-center gap-2 border-b" style={{ borderColor: "#C9C9E8" }}>
         <button
           type="button"
           onClick={() => {
@@ -225,16 +226,16 @@ function AnnivPhoneInput({
       {open && (
         <div
           className="absolute left-0 right-0 top-full z-50 mt-1 overflow-hidden border shadow-xl"
-          style={{ borderColor: "#d9d1c3", background: "#FFFDF9" }}
+          style={{ borderColor: "#C9C9E8", background: "#FFFFFF" }}
         >
-          <div className="border-b p-2" style={{ borderColor: "#EDE4D5" }}>
+          <div className="border-b p-2" style={{ borderColor: "#E6E6FA" }}>
             <input
               ref={searchRef}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Search country or code"
               className="h-10 w-full border px-3 text-[14px] outline-none"
-              style={{ borderColor: "#E3D9C8", background: CREAM_SOFT, color: INK }}
+              style={{ borderColor: "#C9C9E8", background: CREAM_SOFT, color: INK }}
             />
           </div>
           <div className="max-h-48 overflow-y-auto py-1">
@@ -276,21 +277,25 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
   const poster: string = c.invite_poster_url || c.hero_image || "";
   const film: string = c.invite_video_url || c.video_url || "";
   const music: string = c.music_url || "";
-  const collage: string = c.collage_url || "";
   const groom: string = c.groom || "Nelkon";
   const bride: string = c.bride || "Blessing";
   const surname: string = c.surname || "Obi-Uzu";
   const ceremony = c.ceremony || {};
   const dress = c.dress_code || {};
-  const photos: { url: string; caption: string; note: string }[] =
+  const photos: { url: string; caption: string; note: string; width?: number; height?: number }[] =
     c.photos && c.photos.length
       ? c.photos
       : [
-          { url: "/uploads/anniv-studio.jpg", caption: "Nelkon & Blessing", note: "Today" },
-          { url: "/uploads/anniv-traditional.jpg", caption: "The beginning", note: "December 1996" },
-          { url: "/uploads/anniv-garden.jpg", caption: "Still smiling", note: "Thirty years later" },
-          { url: "/uploads/anniv-outdoor.jpg", caption: "The family", note: "All of us" },
+          { url: "/uploads/anniv-g1.jpg", caption: "Still them", note: "Thirty years on" },
+          { url: "/uploads/anniv-g2.jpg", caption: "Black tie", note: "An evening out" },
+          { url: "/uploads/anniv-g3.jpg", caption: "Out and about", note: "Somewhere warm" },
+          { url: "/uploads/anniv-g4.jpg", caption: "An ordinary day", note: "The best ones" },
+          { url: "/uploads/anniv-g5.jpg?v=2", caption: "Laughing", note: "Still" },
         ];
+
+  // One companion rides on the guest's own pass (same rule as the gala).
+  const plusOneNote: string =
+    c.plus_one?.note || "Your invitation admits two: you and one companion.";
 
   const [phase, setPhase] = useState<"cover" | "film" | "invitation">(() => {
     try {
@@ -326,6 +331,8 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
   const [phone, setPhone] = useState("");
   const [dialCode, setDialCode] = useState("+234");
   const [attendance, setAttendance] = useState<"yes" | "no" | null>(null);
+  const [plusOne, setPlusOne] = useState(false);
+  const [plusOneName, setPlusOneName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(
     guest?.status === "accepted" || guest?.status === "declined"
@@ -514,6 +521,12 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
   const submit = async (response: "yes" | "no") => {
     setError("");
     setAttendance(response);
+    const wantsCompanion = plusOne && Boolean(c.plus_one?.allowed ?? true);
+    if (response === "yes" && wantsCompanion && !plusOneName.trim()) {
+      setError("Please add the name of the companion joining you.");
+      setAttendance(null);
+      return;
+    }
     if (guestToken) {
       // Personal link: this guest is already on the list, so the reply is
       // recorded against their own row. Nothing to re-enter.
@@ -521,7 +534,12 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
       try {
         await apiClient(`/rsvp/${guestToken}`, {
           method: "POST",
-          body: { response: response === "yes" ? "yes" : "no" },
+          body: {
+            response: response === "yes" ? "yes" : "no",
+            plus_one: response === "yes" ? wantsCompanion : false,
+            plus_one_name:
+              response === "yes" && wantsCompanion ? plusOneName.trim() : "",
+          },
         });
         setDeclined(response === "no");
         setDone(true);
@@ -556,6 +574,9 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
           email: email.trim(),
           phone: phone ? `${dialCode}${phone.replace(/\D/g, "")}` : "",
           response: response === "yes" ? "accepted" : "declined",
+          plus_one: response === "yes" ? wantsCompanion : false,
+          plus_one_name:
+            response === "yes" && wantsCompanion ? plusOneName.trim() : "",
         },
       });
       setDeclined(response === "no");
@@ -601,7 +622,7 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
 
   const gate =
     phase !== "invitation" ? (
-      <div className="fixed inset-0 z-[95] overflow-hidden" style={{ background: "#050409" }}>
+      <div className="fixed inset-0 z-[95] overflow-hidden" style={{ background: "#140F3C" }}>
         <video
           ref={filmRef}
           src={film}
@@ -626,12 +647,12 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
                 .catch(() => {});
             }}
             className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4"
-            style={{ background: "rgba(5,4,9,0.72)" }}
+            style={{ background: "rgba(20,15,60,0.72)" }}
             aria-label="Play the anniversary film"
           >
             <span
               className="flex h-20 w-20 items-center justify-center rounded-full text-2xl"
-              style={{ background: ACTION, color: CREAM }}
+              style={{ background: PEACH, color: INK }}
             >
               &#9654;
             </span>
@@ -646,88 +667,111 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
 
         {phase === "cover" && (
           <>
-            {/* The client's flier, split down the middle, parts on its own. */}
+            {/* The cover: their own photograph above, the words on a purple
+                panel beneath, so the picture, "Together since December 1996",
+                the names and the date all read inside one phone screen. Two
+                copies of the same composition are clipped down the middle and
+                part like a curtain when the invitation opens by itself. */}
             {(["left", "right"] as const).map((side) => (
               <div
                 key={side}
                 aria-hidden
                 className="anniv-cover-half"
                 style={{
-                  backgroundImage: poster ? `url(${poster})` : undefined,
-                  clipPath:
-                    side === "left" ? "inset(0 50% 0 0)" : "inset(0 0 0 50%)",
+                  background: PURPLE,
+                  clipPath: side === "left" ? "inset(0 50% 0 0)" : "inset(0 0 0 50%)",
                   transform: opening
                     ? `translateX(${side === "left" ? "-100%" : "100%"})`
                     : "none",
                   transition: "transform 1150ms cubic-bezier(0.76, 0, 0.24, 1)",
                   willChange: "transform",
                 }}
-              />
-            ))}
+              >
+                <div className="absolute inset-0 flex flex-col md:block">
+                  <div className="relative h-[50svh] w-full flex-none overflow-hidden md:absolute md:inset-y-0 md:left-auto md:right-0 md:h-full md:w-[54%]">
+                    {poster && (
+                      <img
+                        src={poster}
+                        alt=""
+                        className="h-full w-full object-cover"
+                        style={{ objectPosition: "center top" }}
+                      />
+                    )}
+                    {/* Soft hand-off into the purple panel on a phone. */}
+                    <div
+                      className="pointer-events-none absolute inset-x-0 bottom-0 h-32 md:hidden"
+                      style={{
+                        background: `linear-gradient(to bottom, rgba(110,111,250,0), rgba(110,111,250,0.55) 62%, ${PURPLE})`,
+                      }}
+                    />
+                  </div>
 
-            {/* A soft wash so the flier sits on the page rather than in a box. */}
-            <div
-              className="pointer-events-none absolute inset-0"
-              style={{
-                background:
-                  "radial-gradient(circle at 50% 28%, rgba(91,63,130,0.30), transparent 52%), linear-gradient(to top, #050409 0%, rgba(5,4,9,0.9) 16%, rgba(5,4,9,0) 40%)",
-                opacity: opening ? 0 : 1,
-                transition: "opacity 420ms ease",
-              }}
-            />
+                  <div
+                    className="relative z-10 flex flex-1 flex-col items-center justify-center px-6 pb-8 pt-2 text-center md:absolute md:inset-y-0 md:left-0 md:right-[54%] md:px-12 md:pb-0 md:pt-0 md:text-left"
+                    style={{
+                      background: `linear-gradient(to bottom, ${PURPLE} 0%, #5A5BEA 100%)`,
+                      opacity: opening ? 0 : 1,
+                      transition: "opacity 380ms ease",
+                    }}
+                  >
+                  <p
+                    className="anniv-rise text-[9.5px] uppercase sm:text-[10.5px]"
+                    style={{ letterSpacing: "0.42em", color: LAV, animationDelay: "200ms" }}
+                  >
+                    Together since {c.since || "December 1996"}
+                  </p>
+                  <h1
+                    className="anniv-rise anniv-script-lh mt-3"
+                    style={{
+                      fontFamily: SCRIPT,
+                      fontSize: "clamp(44px, 13vw, 78px)",
+                      color: CREAM,
+                      textShadow: "0 6px 40px rgba(20,15,60,0.35)",
+                      animationDelay: "420ms",
+                    }}
+                  >
+                    {groom} &amp; {bride}
+                  </h1>
+                  <p
+                    className="anniv-rise mt-1 text-[11px] uppercase"
+                    style={{ letterSpacing: "0.5em", color: CREAM, animationDelay: "700ms" }}
+                  >
+                    {surname}
+                  </p>
+                  <span
+                    className="anniv-rise mt-4 block h-px w-16"
+                    style={{ background: PEACH, opacity: 0.85, animationDelay: "850ms" }}
+                  />
+                  <p
+                    className="anniv-rise mt-4 text-[10px] uppercase sm:text-[11px]"
+                    style={{
+                      letterSpacing: "0.3em",
+                      color: "rgba(255,255,255,0.92)",
+                      animationDelay: "1000ms",
+                    }}
+                  >
+                    {ceremony.date || "Tuesday, December 15, 2026"}
+                  </p>
 
-            <div
-              className="absolute inset-x-0 bottom-0 z-10 flex flex-col items-center px-6 pb-14 text-center md:inset-y-0 md:right-auto md:w-1/2 md:items-start md:justify-end md:px-14 md:pb-20 md:text-left"
-              style={{ opacity: opening ? 0 : 1, transition: "opacity 380ms ease" }}
-            >
-              <p
-                className="anniv-rise text-[9.5px] uppercase sm:text-[10.5px]"
-                style={{ letterSpacing: "0.42em", color: LAV, animationDelay: "200ms" }}
-              >
-                Together since {c.since || "December 1996"}
-              </p>
-              <h1
-                className="anniv-rise anniv-script-lh mt-4"
-                style={{
-                  fontFamily: SCRIPT,
-                  fontSize: "clamp(42px, 13vw, 74px)",
-                  color: CREAM,
-                  textShadow: "0 6px 40px rgba(0,0,0,0.55)",
-                  animationDelay: "420ms",
-                }}
-              >
-                {groom} &amp; {bride}
-              </h1>
-              <p
-                className="anniv-rise mt-2 text-[11px] uppercase"
-                style={{ letterSpacing: "0.5em", color: CREAM, animationDelay: "700ms" }}
-              >
-                {surname}
-              </p>
-              <span
-                className="anniv-rise mt-6 block h-px w-16"
-                style={{ background: LAV, opacity: 0.7, animationDelay: "850ms" }}
-              />
-              <p
-                className="anniv-rise mt-5 text-[10px] uppercase sm:text-[11px]"
-                style={{ letterSpacing: "0.3em", color: "rgba(250,246,239,0.86)", animationDelay: "1000ms" }}
-              >
-                {ceremony.date || "Tuesday, December 15, 2026"}
-              </p>
-
-              {/* The invitation opens by itself. */}
-              <div className="mt-8 h-px w-40 overflow-hidden" style={{ background: "rgba(195,178,222,0.25)" }}>
-                <span
-                  className="block h-px w-full"
-                  style={{
-                    background: LAV,
-                    transformOrigin: "left center",
-                    animation: "annivFill 3.5s linear forwards",
-                    opacity: opening ? 0 : 1,
-                  }}
-                />
+                  {/* The invitation opens by itself. */}
+                  <div
+                    className="mt-6 h-px w-40 overflow-hidden"
+                    style={{ background: "rgba(230,230,250,0.3)" }}
+                  >
+                    <span
+                      className="block h-px w-full"
+                      style={{
+                        background: PEACH,
+                        transformOrigin: "left center",
+                        animation: "annivFill 3.5s linear forwards",
+                        opacity: opening ? 0 : 1,
+                      }}
+                    />
+                  </div>
+                  </div>
+                </div>
               </div>
-            </div>
+            ))}
           </>
         )}
 
@@ -742,7 +786,7 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
               color: CREAM,
               background: "rgba(0,0,0,0.5)",
               backdropFilter: "blur(8px)",
-              border: "1px solid rgba(195,178,222,0.22)",
+              border: "1px solid rgba(230,230,250,0.22)",
               animation:
                 musicSilent || (musicBlocked && !musicOn)
                   ? "annivFloat 2.4s ease-in-out infinite"
@@ -776,8 +820,8 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
           style={{
             bottom: "calc(1.1rem + env(safe-area-inset-bottom))",
             letterSpacing: "0.22em",
-            borderColor: "rgba(195,178,222,0.5)",
-            background: "rgba(23,16,33,0.92)",
+            borderColor: "rgba(230,230,250,0.5)",
+            background: "rgba(27,21,80,0.92)",
             color: CREAM,
             animation: "annivFloat 2.4s ease-in-out infinite",
           }}
@@ -795,8 +839,8 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
               // No backdrop blur: on phones it repaints the whole page on every
               // scroll frame and reads as jumping content. A solid tint is
               // cheaper and looks the same over a dark page.
-              background: showTop ? "rgba(23,16,33,0.94)" : "transparent",
-              borderBottom: showTop ? "1px solid rgba(195,178,222,0.14)" : "1px solid transparent",
+              background: showTop ? "rgba(27,21,80,0.94)" : "transparent",
+              borderBottom: showTop ? "1px solid rgba(230,230,250,0.14)" : "1px solid transparent",
             }}
           >
             <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4 sm:px-8">
@@ -807,7 +851,7 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
               >
                 <span
                   className="flex h-9 w-9 items-center justify-center rounded-full border text-[11px]"
-                  style={{ borderColor: "rgba(195,178,222,0.5)", color: CREAM }}
+                  style={{ borderColor: "rgba(230,230,250,0.5)", color: CREAM }}
                 >
                   NB
                 </span>
@@ -826,8 +870,8 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
                     className="flex h-10 items-center gap-2 rounded-full border px-3 text-[9px] uppercase transition-colors"
                     style={{
                       letterSpacing: "0.2em",
-                      borderColor: musicOn ? "rgba(195,178,222,0.55)" : "rgba(195,178,222,0.28)",
-                      background: musicOn ? "rgba(91,63,130,0.65)" : "rgba(250,246,239,0.06)",
+                      borderColor: musicOn ? "rgba(230,230,250,0.55)" : "rgba(230,230,250,0.28)",
+                      background: musicOn ? "rgba(75,75,216,0.65)" : "rgba(255,255,255,0.06)",
                       color: CREAM,
                       animation:
                         musicSilent || (musicBlocked && !musicOn)
@@ -842,7 +886,7 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
                 <a
                   href="#rsvp"
                   className="rounded-full px-5 py-2.5 text-[10px] uppercase transition-colors"
-                  style={{ letterSpacing: "0.24em", background: ACTION, color: CREAM }}
+                  style={{ letterSpacing: "0.24em", background: PEACH, color: INK, fontWeight: 600 }}
                 >
                   RSVP
                 </a>
@@ -853,13 +897,13 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
           {/* ------------------------------------------------------ hero */}
           <section
             className="relative flex min-h-[100svh] flex-col justify-center overflow-hidden px-6 pb-16 pt-24 sm:px-8 lg:pt-28"
-            style={{ background: INK }}
+            style={{ background: `linear-gradient(180deg, ${PURPLE} 0%, #5A5BEA 58%, #4B4BD8 100%)` }}
           >
             <div
               className="pointer-events-none absolute inset-0"
               style={{
                 background:
-                  "radial-gradient(circle at 30% 22%, rgba(91,63,130,0.55), transparent 58%), radial-gradient(circle at 88% 78%, rgba(195,178,222,0.18), transparent 55%)",
+                  "radial-gradient(circle at 26% 18%, rgba(230,230,250,0.24), transparent 58%), radial-gradient(circle at 88% 82%, rgba(255,218,185,0.16), transparent 55%)",
               }}
             />
             <div className="relative z-10 mx-auto grid w-full max-w-6xl items-center gap-10 lg:grid-cols-[0.85fr_1fr] lg:gap-16">
@@ -868,15 +912,16 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
                   <img
                     src={poster}
                     alt={`${groom} and ${bride} ${surname}`}
-                    width={874}
-                    height={1240}
-                    className="w-full max-w-[290px] sm:max-w-[330px] lg:max-w-[390px]"
+                    width={1200}
+                    height={1500}
+                    className="w-full max-w-[300px] sm:max-w-[340px] lg:max-w-[400px]"
                     style={{
-                      boxShadow: "0 40px 90px rgba(0,0,0,0.55)",
+                      boxShadow: "0 40px 90px rgba(20,15,60,0.45)",
                       borderRadius: "2px",
                       // space reserved before the file arrives, so nothing jumps
-                      aspectRatio: "874 / 1240",
+                      aspectRatio: "1200 / 1500",
                       objectFit: "cover",
+                      objectPosition: "center 26%",
                     }}
                   />
                 )}
@@ -906,28 +951,28 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
                   {surname}
                 </p>
                 <div className="mt-6 flex items-center justify-center gap-3 lg:justify-start">
-                  <span className="block h-px w-12" style={{ background: LAV, opacity: 0.7 }} />
-                  <span className="block h-1.5 w-1.5 rotate-45" style={{ background: LAV }} />
-                  <span className="block h-px w-12" style={{ background: LAV, opacity: 0.7 }} />
+                  <span className="block h-px w-12" style={{ background: PEACH, opacity: 0.85 }} />
+                  <span className="block h-1.5 w-1.5 rotate-45" style={{ background: PEACH }} />
+                  <span className="block h-px w-12" style={{ background: PEACH, opacity: 0.85 }} />
                 </div>
                 <div className="mt-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 lg:justify-start">
                   <span
                     className="text-[10px] uppercase sm:text-[11px]"
-                    style={{ letterSpacing: "0.28em", color: "rgba(250,246,239,0.9)" }}
+                    style={{ letterSpacing: "0.28em", color: "rgba(255,255,255,0.9)" }}
                   >
                     {ceremony.date || "Tuesday, December 15, 2026"}
                   </span>
-                  <span className="hidden h-3 w-px sm:block" style={{ background: "rgba(195,178,222,0.45)" }} />
+                  <span className="hidden h-3 w-px sm:block" style={{ background: "rgba(230,230,250,0.45)" }} />
                   <span
                     className="text-[10px] uppercase sm:text-[11px]"
-                    style={{ letterSpacing: "0.28em", color: "rgba(250,246,239,0.9)" }}
+                    style={{ letterSpacing: "0.28em", color: "rgba(255,255,255,0.9)" }}
                   >
                     {ceremony.time || "3:00 PM"}
                   </span>
-                  <span className="hidden h-3 w-px sm:block" style={{ background: "rgba(195,178,222,0.45)" }} />
+                  <span className="hidden h-3 w-px sm:block" style={{ background: "rgba(230,230,250,0.45)" }} />
                   <span
                     className="text-[10px] uppercase sm:text-[11px]"
-                    style={{ letterSpacing: "0.28em", color: "rgba(250,246,239,0.9)" }}
+                    style={{ letterSpacing: "0.28em", color: "rgba(255,255,255,0.9)" }}
                   >
                     Victoria Island, Lagos
                   </span>
@@ -935,10 +980,10 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
                 <a
                   href="#letter"
                   className="mt-9 inline-flex items-center gap-3 text-[10px] uppercase"
-                  style={{ letterSpacing: "0.3em", color: LAV }}
+                  style={{ letterSpacing: "0.3em", color: PEACH }}
                 >
                   Read the invitation
-                  <span className="block h-px w-10" style={{ background: LAV, opacity: 0.6 }} />
+                  <span className="block h-px w-10" style={{ background: PEACH, opacity: 0.7 }} />
                 </a>
               </div>
             </div>
@@ -948,12 +993,12 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
           <section id="letter" className="relative overflow-hidden px-6 py-20 sm:py-28" style={{ background: CREAM }}>
             <div
               className="pointer-events-none absolute -right-24 -top-24 h-64 w-64 rounded-full"
-              style={{ background: "radial-gradient(circle, rgba(195,178,222,0.35), transparent 70%)" }}
+              style={{ background: "radial-gradient(circle, rgba(230,230,250,0.75), transparent 70%)" }}
             />
             <div className="relative mx-auto max-w-2xl text-center">
               <p
                 className="text-[9.5px] uppercase sm:text-[10.5px]"
-                style={{ letterSpacing: "0.42em", color: ACTION }}
+                style={{ letterSpacing: "0.42em", color: "#4B4BD8" }}
               >
                 Please join us to celebrate
               </p>
@@ -976,83 +1021,24 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
                 30th Anniversary
               </p>
               <div className="mx-auto mt-8 flex items-center justify-center gap-3">
-                <span className="block h-px w-16" style={{ background: LAV }} />
-                <span className="block h-1.5 w-1.5 rotate-45" style={{ background: ACTION }} />
-                <span className="block h-px w-16" style={{ background: LAV }} />
+                <span className="block h-px w-16" style={{ background: PEACH }} />
+                <span className="block h-1.5 w-1.5 rotate-45" style={{ background: "#4B4BD8" }} />
+                <span className="block h-px w-16" style={{ background: PEACH }} />
               </div>
-              <p className="mx-auto mt-8 max-w-xl text-[15px] leading-relaxed" style={{ color: "#4B4356" }}>
+              <p className="mx-auto mt-8 max-w-xl text-[15px] leading-relaxed" style={{ color: "#3A3470" }}>
                 {c.hero_line ||
                   "Celebrating 30 beautiful years of love, laughter and lifelong companionship."}
               </p>
             </div>
           </section>
 
-          {/* ---------------------------------------------- thirty years */}
-          <section id="story" className="relative overflow-hidden px-6 py-20 sm:py-24" style={{ background: INK }}>
-            <div
-              className="pointer-events-none absolute inset-0"
-              style={{
-                background:
-                  "radial-gradient(circle at 50% 0%, rgba(91,63,130,0.55), transparent 62%)",
-              }}
-            />
-            <div className="relative mx-auto max-w-5xl text-center">
-              <div className="flex items-end justify-center gap-3 sm:gap-6">
-                <span
-                  className="leading-none"
-                  style={{ fontFamily: BRUSH, fontSize: "clamp(96px, 22vw, 190px)", color: CREAM }}
-                >
-                  30
-                </span>
-                <span
-                  className="anniv-script-lh pb-6"
-                  style={{ fontFamily: SCRIPT, fontSize: "clamp(56px, 13vw, 112px)", color: LAV }}
-                >
-                  years
-                </span>
-              </div>
-              <p
-                className="mt-2 text-[10px] uppercase sm:text-[11px]"
-                style={{ letterSpacing: "0.44em", color: "rgba(250,246,239,0.7)" }}
-              >
-                1996 &middot; 2026
-              </p>
-
-              {collage && (
-                <figure className="mx-auto mt-14 max-w-3xl">
-                  <img
-                    src={collage}
-                    alt="Together since 1996"
-                    width={1240}
-                    height={1753}
-                    className="w-full rounded-sm"
-                    style={{
-                      boxShadow: "0 30px 90px rgba(0,0,0,0.5)",
-                      // The portrait collage is nearly 500px tall on a phone.
-                      // Reserving its box keeps every section below it still
-                      // while the file is still arriving.
-                      aspectRatio: "1240 / 1753",
-                      objectFit: "cover",
-                    }}
-                  />
-                  <figcaption
-                    className="mt-5 text-[9.5px] uppercase"
-                    style={{ letterSpacing: "0.34em", color: "rgba(195,178,222,0.85)" }}
-                  >
-                    The years, in their own photographs
-                  </figcaption>
-                </figure>
-              )}
-            </div>
-          </section>
-
           {/* --------------------------------------------------- gallery */}
-          <section id="gallery" className="px-5 py-20 sm:px-8 sm:py-24" style={{ background: CREAM_SOFT }}>
+          <section id="gallery" className="px-5 py-20 sm:px-8 sm:py-24" style={{ background: LAV }}>
             <div className="mx-auto max-w-6xl">
               <div className="text-center">
                 <p
                   className="text-[9.5px] uppercase sm:text-[10.5px]"
-                  style={{ letterSpacing: "0.42em", color: ACTION }}
+                  style={{ letterSpacing: "0.42em", color: "#4B4BD8" }}
                 >
                   A life together
                 </p>
@@ -1062,38 +1048,40 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
                 >
                   Thirty years of us
                 </h2>
+                <span
+                  className="mx-auto mt-6 block h-px w-16"
+                  style={{ background: PEACH }}
+                />
               </div>
 
-              <div className="mt-12 grid grid-cols-2 gap-3 sm:gap-5 md:grid-cols-4">
-                {photos.map((p, i) => (
-                  <figure
-                    key={p.url}
-                    className={
-                      i === 0
-                        ? "col-span-2 row-span-2 md:col-span-2 md:row-span-2"
-                        : i === 3
-                        ? "col-span-2 md:col-span-2"
-                        : ""
-                    }
-                  >
-                    <div className="overflow-hidden" style={{ background: INK }}>
+              <div className="mt-10 flex flex-wrap justify-center gap-3 sm:mt-12 sm:gap-5">
+                {photos.map((p) => (
+                  <figure key={p.url} className="w-[calc(50%-0.375rem)] min-w-0 sm:w-[calc(33.333%-0.834rem)]">
+                    <div className="overflow-hidden" style={{ background: "#C9C9F0" }}>
                       <img
                         src={p.url}
                         alt={p.caption}
                         loading="lazy"
+                        width={p.width || 900}
+                        height={p.height || 1125}
                         className="h-full w-full object-cover transition-transform duration-700 hover:scale-[1.03]"
                         style={{
-                          aspectRatio: i === 0 ? "4 / 5" : i === 3 ? "4 / 3" : "4 / 5",
+                          // The box exists before the bytes do, so the page never
+                          // reflows under a scrolling thumb.
+                          aspectRatio: `${p.width || 900} / ${p.height || 1125}`,
                         }}
                       />
                     </div>
                     <figcaption className="mt-3">
-                      <p style={{ fontFamily: SCRIPT, fontSize: "22px", color: ACTION, lineHeight: 1.1 }}>
+                      <p
+                        className="anniv-script-lh"
+                        style={{ fontFamily: SCRIPT, fontSize: "21px", color: INK, lineHeight: 1.05 }}
+                      >
                         {p.caption}
                       </p>
                       <p
                         className="mt-1 text-[9px] uppercase"
-                        style={{ letterSpacing: "0.28em", color: MUTED }}
+                        style={{ letterSpacing: "0.26em", color: "#55558A" }}
                       >
                         {p.note}
                       </p>
@@ -1105,39 +1093,43 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
           </section>
 
           {/* ------------------------------------------------ quote band */}
-          <section id="quote" className="relative flex min-h-[70svh] items-center justify-center overflow-hidden px-6 py-24">
-            <img
-              src="/uploads/anniv-studio-large.jpg"
-              alt=""
-              aria-hidden
-              className="absolute inset-0 h-full w-full object-cover"
-              style={{ objectPosition: "center 12%" }}
-            />
-            <div
-              className="absolute inset-0"
-              style={{
-                background:
-                  "linear-gradient(to bottom, rgba(23,16,33,0.82), rgba(23,16,33,0.62), rgba(23,16,33,0.9))",
-              }}
-            />
-            <blockquote className="relative z-10 mx-auto max-w-2xl text-center">
-              <p
-                style={{
-                  fontFamily: SCRIPT,
-                  fontSize: "clamp(30px, 6.5vw, 50px)",
-                  color: CREAM,
-                  lineHeight: 1.25,
-                }}
-              >
-                Thirty years of love, laughter and lifelong companionship.
-              </p>
-              <footer
-                className="mt-6 text-[9.5px] uppercase"
-                style={{ letterSpacing: "0.4em", color: LAV }}
-              >
-                {groom} &amp; {bride}
-              </footer>
-            </blockquote>
+          <section
+            id="quote"
+            className="relative overflow-hidden"
+            style={{ background: `linear-gradient(180deg, ${PURPLE} 0%, #5A5BEA 100%)` }}
+          >
+            {/* Photograph and words sit side by side on a wide screen and one
+                above the other on a phone, so no copy is ever laid over a
+                face. */}
+            <div className="mx-auto flex max-w-6xl flex-col md:min-h-[68svh] md:flex-row md:items-stretch">
+              <div className="order-1 md:order-2 md:w-[58%]">
+                <img
+                  src="/uploads/anniv-quote.jpg?v=2"
+                  alt={`${groom} and ${bride}`}
+                  loading="lazy"
+                  className="aspect-[3/2] h-full w-full object-cover md:aspect-auto"
+                  style={{ objectPosition: "center 45%" }}
+                />
+              </div>
+              <blockquote className="order-2 flex flex-1 flex-col justify-center px-6 py-14 text-center md:order-1 md:px-14 md:text-left">
+                <p
+                  style={{
+                    fontFamily: SCRIPT,
+                    fontSize: "clamp(28px, 6vw, 46px)",
+                    color: CREAM,
+                    lineHeight: 1.25,
+                  }}
+                >
+                  Thirty years of love, laughter and lifelong companionship.
+                </p>
+                <footer
+                  className="mt-6 text-[9.5px] uppercase"
+                  style={{ letterSpacing: "0.4em", color: PEACH }}
+                >
+                  {groom} &amp; {bride}
+                </footer>
+              </blockquote>
+            </div>
           </section>
 
           {/* ------------------------------------------------------ day */}
@@ -1179,7 +1171,7 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
                   <div
                     key={item.label}
                     className="border p-6"
-                    style={{ borderColor: "rgba(195,178,222,0.22)", background: "rgba(195,178,222,0.04)" }}
+                    style={{ borderColor: "rgba(230,230,250,0.22)", background: "rgba(230,230,250,0.04)" }}
                   >
                     <span className="flex items-center gap-2" style={{ color: LAV }}>
                       {item.icon}
@@ -1196,7 +1188,7 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
 
               <p
                 className="mx-auto mt-6 max-w-2xl text-center text-[13.5px] leading-relaxed"
-                style={{ color: "rgba(250,246,239,0.7)" }}
+                style={{ color: "rgba(255,255,255,0.7)" }}
               >
                 {ceremony.location ||
                   "Plot 3 & 4, Water Corporation Road, Victoria Island, Lagos"}
@@ -1208,7 +1200,7 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 px-6 py-3.5 text-[10px] uppercase"
-                  style={{ letterSpacing: "0.26em", background: ACTION, color: CREAM }}
+                  style={{ letterSpacing: "0.26em", background: PEACH, color: INK, fontWeight: 600 }}
                 >
                   <MapPin size={13} /> Get directions
                 </a>
@@ -1216,7 +1208,7 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
                   href={icsHref}
                   download="nelkon-blessing-30th-anniversary.ics"
                   className="inline-flex items-center gap-2 border px-6 py-3.5 text-[10px] uppercase"
-                  style={{ letterSpacing: "0.26em", borderColor: "rgba(195,178,222,0.4)", color: LAV }}
+                  style={{ letterSpacing: "0.26em", borderColor: "rgba(230,230,250,0.45)", color: LAV }}
                 >
                   <CalendarDays size={13} /> Add to calendar
                 </a>
@@ -1226,7 +1218,7 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
 
               <div
                 className="mt-12 border p-7 text-center sm:p-9"
-                style={{ borderColor: "rgba(195,178,222,0.22)" }}
+                style={{ borderColor: "rgba(230,230,250,0.22)" }}
               >
                 <p
                   className="text-[9px] uppercase"
@@ -1240,7 +1232,7 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
                 >
                   {dress.theme || "Elegant"}
                 </p>
-                <p className="mt-3 text-[13px]" style={{ color: "rgba(250,246,239,0.65)" }}>
+                <p className="mt-3 text-[13px]" style={{ color: "rgba(255,255,255,0.65)" }}>
                   {dress.note || "Come dressed to celebrate thirty years with us."}
                 </p>
               </div>
@@ -1249,266 +1241,304 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
 
           {/* ----------------------------------------------------- RSVP */}
           <section id="rsvp" className="px-5 py-20 sm:px-8 sm:py-24" style={{ background: CREAM }}>
-            <div className="mx-auto max-w-5xl">
-              <div className="grid gap-10 md:grid-cols-[0.85fr_1fr] md:items-center">
-                <div className="order-2 md:order-1">
-                  <div className="overflow-hidden">
-                    <img
-                      src="/uploads/anniv-traditional.jpg"
-                      alt={`${groom} and ${bride}`}
-                      loading="lazy"
-                      className="h-full w-full object-cover"
-                      style={{ aspectRatio: "4 / 5" }}
-                    />
-                  </div>
-                  <p
-                    className="mt-4 text-[9px] uppercase"
-                    style={{ letterSpacing: "0.3em", color: MUTED }}
+            <div className="mx-auto max-w-xl">
+              {done ? (
+                <div className="text-center">
+                  <span
+                    className="mx-auto flex h-14 w-14 items-center justify-center rounded-full border"
+                    style={{ borderColor: "#4B4BD8", color: "#4B4BD8" }}
                   >
-                    We would love to celebrate with you
+                    {declined ? "\u2715" : "\u2713"}
+                  </span>
+                  <h3
+                    className="anniv-script-lh mt-6"
+                    style={{ fontFamily: SCRIPT, fontSize: "clamp(32px, 6vw, 44px)", color: INK }}
+                  >
+                    {declined ? "Thank you for letting us know" : "We cannot wait to see you"}
+                  </h3>
+                  <p className="mx-auto mt-4 max-w-md text-[14.5px] leading-relaxed" style={{ color: "#3A3470" }}>
+                    {declined
+                      ? "You will be missed. Thank you for your reply."
+                      : plusOne
+                      ? "Your places are reserved. Your entry pass covers you and your companion, and will reach you by email or WhatsApp before the celebration."
+                      : "Your place is reserved. Your entry pass will reach you by email or WhatsApp before the celebration."}
                   </p>
+                  {guestToken && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDone(false);
+                        setDeclined(false);
+                        setAttendance(null);
+                        setError("");
+                      }}
+                      className="mt-6 text-[10px] uppercase underline underline-offset-4"
+                      style={{ letterSpacing: "0.2em", color: MUTED }}
+                    >
+                      Change my response
+                    </button>
+                  )}
                 </div>
-
-                <div className="order-1 md:order-2">
-                  {done ? (
-                    <div className="text-center md:text-left">
-                      <span
-                        className="flex h-14 w-14 items-center justify-center rounded-full border"
-                        style={{ borderColor: ACTION, color: ACTION }}
+              ) : (
+                <>
+                  <div className="text-center">
+                    <p
+                      className="text-[9.5px] uppercase"
+                      style={{ letterSpacing: "0.4em", color: "#4B4BD8" }}
+                    >
+                      Kindly respond
+                    </p>
+                    <h3
+                      className="anniv-script-lh mt-3"
+                      style={{ fontFamily: SCRIPT, fontSize: "clamp(32px, 6.5vw, 46px)", color: INK }}
+                    >
+                      Will you celebrate with us?
+                    </h3>
+                    <p className="mx-auto mt-4 max-w-md text-[13.5px] leading-relaxed" style={{ color: MUTED }}>
+                      {plusOneNote}
+                    </p>
+                    {guestToken && guest?.name && (
+                      <p
+                        className="mt-3 text-[9.5px] uppercase"
+                        style={{ letterSpacing: "0.3em", color: "#4B4BD8" }}
                       >
-                        {declined ? "\u2715" : "\u2713"}
-                      </span>
-                      <h3
-                        className="anniv-script-lh mt-6"
-                        style={{ fontFamily: SCRIPT, fontSize: "clamp(32px, 6vw, 44px)", color: INK }}
-                      >
-                        {declined ? "Thank you for letting us know" : "We cannot wait to see you"}
-                      </h3>
-                      <p className="mt-4 text-[14.5px] leading-relaxed" style={{ color: "#4B4356" }}>
-                        {declined
-                          ? "You will be missed. Thank you for your reply."
-                          : "Your place is reserved. Your entry pass will reach you by email or WhatsApp before the celebration."}
+                        Reserved for {guest.name}
                       </p>
-                      {guestToken && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setDone(false);
-                            setDeclined(false);
-                            setAttendance(null);
-                            setError("");
-                          }}
-                          className="mt-6 text-[10px] uppercase underline underline-offset-4"
-                          style={{ letterSpacing: "0.2em", color: MUTED }}
-                        >
-                          Change my response
-                        </button>
-                      )}
+                    )}
+                  </div>
+
+                  {/* One companion, exactly as the gala does it. */}
+                  <div className="mt-9">
+                    <p
+                      className="text-[9.5px] uppercase"
+                      style={{ letterSpacing: "0.26em", color: MUTED }}
+                    >
+                      Your party
+                    </p>
+                    <div className="mt-3 grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setPlusOne(false)}
+                        aria-pressed={!plusOne}
+                        className="px-3 py-3.5 text-[10px] uppercase transition-colors"
+                        style={{
+                          letterSpacing: "0.18em",
+                          background: plusOne ? "transparent" : PEACH,
+                          color: plusOne ? MUTED : INK,
+                          border: `1px solid ${plusOne ? "#C9C9E8" : PEACH}`,
+                          fontWeight: plusOne ? 400 : 600,
+                        }}
+                      >
+                        Just me
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPlusOne(true)}
+                        aria-pressed={plusOne}
+                        className="px-3 py-3.5 text-[10px] uppercase transition-colors"
+                        style={{
+                          letterSpacing: "0.18em",
+                          background: plusOne ? PEACH : "transparent",
+                          color: plusOne ? INK : MUTED,
+                          border: `1px solid ${plusOne ? PEACH : "#C9C9E8"}`,
+                          fontWeight: plusOne ? 600 : 400,
+                        }}
+                      >
+                        Me + one
+                      </button>
+                    </div>
+                  </div>
+
+                  {plusOne && (
+                    <label className="mt-5 block">
+                      <span
+                        className="text-[9.5px] uppercase"
+                        style={{ letterSpacing: "0.26em", color: MUTED }}
+                      >
+                        Companion&apos;s name <span style={{ color: "#4B4BD8" }}>*</span>
+                      </span>
+                      <input
+                        value={plusOneName}
+                        onChange={(e) => setPlusOneName(e.target.value)}
+                        placeholder="Who is joining you?"
+                        className="mt-2 h-12 w-full border-b bg-transparent px-1 text-[15px] outline-none"
+                        style={{ borderColor: "#C9C9E8", color: INK }}
+                      />
+                    </label>
+                  )}
+
+                  {guestToken ? (
+                    <div className="mt-8 grid gap-3 sm:grid-cols-2">
+                      <button
+                        onClick={() => submit("yes")}
+                        disabled={submitting}
+                        className="px-4 py-4 text-[10.5px] uppercase disabled:opacity-60"
+                        style={{
+                          letterSpacing: "0.16em",
+                          background: PEACH,
+                          color: INK,
+                          fontWeight: 600,
+                        }}
+                      >
+                        {submitting && attendance === "yes" ? "Sending..." : "Confirm my seat"}
+                      </button>
+                      <button
+                        onClick={() => submit("no")}
+                        disabled={submitting}
+                        className="px-4 py-4 text-[10.5px] uppercase disabled:opacity-60"
+                        style={{
+                          letterSpacing: "0.16em",
+                          background: "transparent",
+                          color: MUTED,
+                          border: "1px solid #C9C9E8",
+                        }}
+                      >
+                        {submitting && attendance === "no" ? "Sending..." : "Sorry, I cannot make it"}
+                      </button>
+                    </div>
+                  ) : !showForm ? (
+                    <div className="mt-8 grid gap-3 sm:grid-cols-2">
+                      <button
+                        onClick={() => {
+                          setShowForm(true);
+                          setAttendance("yes");
+                          setError("");
+                        }}
+                        className="px-4 py-4 text-[10.5px] uppercase"
+                        style={{
+                          letterSpacing: "0.16em",
+                          background: PEACH,
+                          color: INK,
+                          fontWeight: 600,
+                        }}
+                      >
+                        Yes, I will be there
+                      </button>
+                      <button
+                        onClick={() => submit("no")}
+                        disabled={submitting}
+                        className="px-4 py-4 text-[10.5px] uppercase disabled:opacity-60"
+                        style={{
+                          letterSpacing: "0.16em",
+                          background: "transparent",
+                          color: MUTED,
+                          border: "1px solid #C9C9E8",
+                        }}
+                      >
+                        {submitting && attendance === "no" ? "Sending..." : "Sorry, I cannot make it"}
+                      </button>
                     </div>
                   ) : (
-                    <>
-                      <p
-                        className="text-[9.5px] uppercase"
-                        style={{ letterSpacing: "0.4em", color: ACTION }}
-                      >
-                        Kindly respond
-                      </p>
-                      <h3
-                        className="anniv-script-lh mt-3"
-                        style={{ fontFamily: SCRIPT, fontSize: "clamp(32px, 6.5vw, 46px)", color: INK }}
-                      >
-                        Will you celebrate with us?
-                      </h3>
-
-                      {guestToken && guest?.name && (
+                    <form
+                      className="mt-8 space-y-4"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        submit("yes");
+                      }}
+                    >
+                      <div className="flex items-center justify-between gap-3">
                         <p
-                          className="mt-4 text-[9.5px] uppercase"
-                          style={{ letterSpacing: "0.3em", color: MUTED }}
+                          className="text-[9.5px] uppercase"
+                          style={{ letterSpacing: "0.26em", color: MUTED }}
                         >
-                          Reserved for {guest.name}
+                          Your details
                         </p>
-                      )}
-
-                      {guestToken ? (
-                        <div className="mt-8 grid gap-3 sm:grid-cols-2">
-                          <button
-                            onClick={() => submit("yes")}
-                            disabled={submitting}
-                            className="px-4 py-4 text-[10.5px] uppercase disabled:opacity-60"
-                            style={{
-                              letterSpacing: "0.16em",
-                              background: ACTION,
-                              color: CREAM,
-                              fontWeight: 600,
-                            }}
-                          >
-                            {submitting && attendance === "yes" ? "Sending..." : "Confirm my seat"}
-                          </button>
-                          <button
-                            onClick={() => submit("no")}
-                            disabled={submitting}
-                            className="px-4 py-4 text-[10.5px] uppercase disabled:opacity-60"
-                            style={{
-                              letterSpacing: "0.16em",
-                              background: "transparent",
-                              color: MUTED,
-                              border: "1px solid #d9d1c3",
-                            }}
-                          >
-                            {submitting && attendance === "no"
-                              ? "Sending..."
-                              : "Sorry, I cannot make it"}
-                          </button>
-                          {error && (
-                            <p className="sm:col-span-2 text-[13px]" style={{ color: "#A33A2B" }}>
-                              {error}
-                            </p>
-                          )}
-                        </div>
-                      ) : null}
-
-                      {!guestToken && showForm && (
                         <button
                           type="button"
                           onClick={() => {
                             setShowForm(false);
+                            setAttendance(null);
                             setError("");
                           }}
-                          className="mt-6 inline-flex items-center gap-2 text-[10px] uppercase transition-colors"
+                          className="inline-flex items-center gap-2 text-[10px] uppercase transition-colors"
                           style={{ letterSpacing: "0.2em", color: MUTED }}
                         >
                           <ArrowRight size={12} className="rotate-180" /> Back
                         </button>
-                      )}
+                      </div>
 
-                      {!guestToken && (!showForm ? (
-                        <div className="mt-8 grid gap-3 sm:grid-cols-2">
-                          <button
-                            onClick={() => {
-                              setShowForm(true);
-                              setAttendance("yes");
-                            }}
-                            className="px-4 py-4 text-[10.5px] uppercase"
-                            style={{
-                              letterSpacing: "0.16em",
-                              background: ACTION,
-                              color: CREAM,
-                              fontWeight: 600,
-                            }}
-                          >
-                            Yes, I will be there
-                          </button>
-                          <button
-                            onClick={() => submit("no")}
-                            disabled={submitting}
-                            className="px-4 py-4 text-[10.5px] uppercase"
-                            style={{
-                              letterSpacing: "0.16em",
-                              background: "transparent",
-                              color: MUTED,
-                              border: "1px solid #d9d1c3",
-                            }}
-                          >
-                            {submitting && attendance === "no"
-                              ? "Sending..."
-                              : "Sorry, I cannot make it"}
-                          </button>
-                        </div>
-                      ) : (
-                        <form
-                          className="mt-6 space-y-4"
-                          onSubmit={(e) => {
-                            e.preventDefault();
-                            submit("yes");
-                          }}
+                      <label className="block">
+                        <span
+                          className="text-[9.5px] uppercase"
+                          style={{ letterSpacing: "0.26em", color: MUTED }}
                         >
-                          <label className="block">
-                            <span
-                              className="text-[9.5px] uppercase"
-                              style={{ letterSpacing: "0.26em", color: MUTED }}
-                            >
-                              Full name <span style={{ color: ACTION }}>*</span>
-                            </span>
-                            <input
-                              required
-                              value={name}
-                              onChange={(e) => setName(e.target.value)}
-                              placeholder="Your full name"
-                              className="mt-2 h-12 w-full border-b bg-transparent px-1 text-[15px] outline-none"
-                              style={{ borderColor: "#cfc5b6", color: INK }}
-                            />
-                          </label>
+                          Full name <span style={{ color: "#4B4BD8" }}>*</span>
+                        </span>
+                        <input
+                          required
+                          value={name}
+                          onChange={(e) => setName(e.target.value)}
+                          placeholder="Your full name"
+                          className="mt-2 h-12 w-full border-b bg-transparent px-1 text-[15px] outline-none"
+                          style={{ borderColor: "#C9C9E8", color: INK }}
+                        />
+                      </label>
 
-                          <label className="block">
-                            <span
-                              className="text-[9.5px] uppercase"
-                              style={{ letterSpacing: "0.26em", color: MUTED }}
-                            >
-                              Email
-                            </span>
-                            <input
-                              type="email"
-                              value={email}
-                              onChange={(e) => setEmail(e.target.value)}
-                              placeholder="you@example.com"
-                              className="mt-2 h-12 w-full border-b bg-transparent px-1 text-[15px] outline-none"
-                              style={{ borderColor: "#cfc5b6", color: INK }}
-                            />
-                          </label>
+                      <label className="block">
+                        <span
+                          className="text-[9.5px] uppercase"
+                          style={{ letterSpacing: "0.26em", color: MUTED }}
+                        >
+                          Email
+                        </span>
+                        <input
+                          type="email"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          placeholder="you@example.com"
+                          className="mt-2 h-12 w-full border-b bg-transparent px-1 text-[15px] outline-none"
+                          style={{ borderColor: "#C9C9E8", color: INK }}
+                        />
+                      </label>
 
-                          <div>
-                            <span
-                              className="text-[9.5px] uppercase"
-                              style={{ letterSpacing: "0.26em", color: MUTED }}
-                            >
-                              Phone number
-                            </span>
-                            <div className="mt-2">
-                              <AnnivPhoneInput
-                                dialCode={dialCode}
-                                number={phone}
-                                onDialCode={setDialCode}
-                                onNumber={setPhone}
-                              />
-                            </div>
-                          </div>
+                      <div>
+                        <span
+                          className="text-[9.5px] uppercase"
+                          style={{ letterSpacing: "0.26em", color: MUTED }}
+                        >
+                          Phone number
+                        </span>
+                        <div className="mt-2">
+                          <AnnivPhoneInput
+                            dialCode={dialCode}
+                            number={phone}
+                            onDialCode={setDialCode}
+                            onNumber={setPhone}
+                          />
+                        </div>
+                      </div>
 
-                          {error && (
-                            <p className="text-[13px]" style={{ color: "#A33A2B" }}>
-                              {error}
-                            </p>
-                          )}
-
-                          <button
-                            type="submit"
-                            disabled={submitting}
-                            className="mt-2 w-full py-4 text-[10.5px] uppercase disabled:opacity-60"
-                            style={{
-                              letterSpacing: "0.2em",
-                              background: ACTION,
-                              color: CREAM,
-                              fontWeight: 600,
-                            }}
-                          >
-                            {submitting && attendance === "yes" ? "Sending..." : "Send my RSVP"}
-                          </button>
-                        </form>
-                      ))}
-
-                      {!guestToken && !showForm && error && (
-                        <p className="mt-4 text-[13px]" style={{ color: "#A33A2B" }}>
-                          {error}
-                        </p>
-                      )}
-                    </>
+                      <button
+                        type="submit"
+                        disabled={submitting}
+                        className="mt-2 w-full py-4 text-[10.5px] uppercase disabled:opacity-60"
+                        style={{
+                          letterSpacing: "0.2em",
+                          background: PEACH,
+                          color: INK,
+                          fontWeight: 600,
+                        }}
+                      >
+                        {submitting && attendance === "yes" ? "Sending..." : "Send my RSVP"}
+                      </button>
+                    </form>
                   )}
-                </div>
-              </div>
+
+                  {error && (
+                    <p className="mt-4 text-center text-[13px]" style={{ color: "#B3341F" }}>
+                      {error}
+                    </p>
+                  )}
+                </>
+              )}
             </div>
           </section>
 
           {/* --------------------------------------------------- footer */}
-          <footer className="px-6 py-16 text-center" style={{ background: INK }}>
+          <footer
+            className="px-6 py-16 text-center"
+            style={{ background: `linear-gradient(180deg, ${PURPLE} 0%, #4B4BD8 100%)` }}
+          >
             <p
               className="anniv-script-lh"
               style={{ fontFamily: SCRIPT, fontSize: "clamp(34px, 7vw, 52px)", color: CREAM }}
@@ -1522,18 +1552,18 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
               {surname}
             </p>
             <div className="mx-auto mt-7 flex items-center justify-center gap-3">
-              <span className="block h-px w-14" style={{ background: "rgba(195,178,222,0.4)" }} />
-              <span className="block h-1.5 w-1.5 rotate-45" style={{ background: LAV }} />
-              <span className="block h-px w-14" style={{ background: "rgba(195,178,222,0.4)" }} />
+              <span className="block h-px w-14" style={{ background: "rgba(255,218,185,0.6)" }} />
+              <span className="block h-1.5 w-1.5 rotate-45" style={{ background: PEACH }} />
+              <span className="block h-px w-14" style={{ background: "rgba(255,218,185,0.6)" }} />
             </div>
-            <p className="mt-7 text-[13px]" style={{ color: "rgba(250,246,239,0.7)" }}>
+            <p className="mt-7 text-[13px]" style={{ color: "rgba(255,255,255,0.82)" }}>
               {ceremony.date || "Tuesday, December 15, 2026"} &middot; {ceremony.time || "3:00 PM"} &middot;{" "}
               {ceremony.venue || "Landmark Centre, Hall 2"}
             </p>
             {c.hashtag && (
               <p
                 className="mt-4 text-[10px] uppercase"
-                style={{ letterSpacing: "0.3em", color: LAV }}
+                style={{ letterSpacing: "0.3em", color: PEACH }}
               >
                 {c.hashtag}
               </p>
@@ -1543,13 +1573,13 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
               className="mx-auto mt-9 flex items-center gap-2 rounded-full border px-5 py-2.5 text-[9.5px] uppercase transition-colors"
               style={{
                 letterSpacing: "0.24em",
-                borderColor: "rgba(195,178,222,0.4)",
+                borderColor: "rgba(255,218,185,0.55)",
                 color: CREAM,
               }}
             >
               <ArrowUp size={13} /> Back to the top
             </button>
-            <p className="mt-8 text-[9px] uppercase" style={{ letterSpacing: "0.3em", color: "rgba(250,246,239,0.4)" }}>
+            <p className="mt-8 text-[9px] uppercase" style={{ letterSpacing: "0.3em", color: "rgba(255,255,255,0.55)" }}>
               Powered by Accredit Interactive
             </p>
           </footer>

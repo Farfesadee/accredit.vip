@@ -874,7 +874,7 @@ export default function GuestsTabContent({
                             {eventId === 77 && guest.custom_data?.organization && (
                               <p className="text-xs text-slate-500 mt-1"><span className="font-medium text-slate-400">Org:</span> {guest.custom_data.organization}</p>
                             )}
-                            {eventId === 82 && guest.custom_data?.party_size === 2 && (
+                            {(eventId === 82 || eventId === 84) && guest.custom_data?.party_size === 2 && (
                               <p className="text-xs text-amber-600 mt-1">
                                 <span className="font-medium">Plus one:</span> {guest.custom_data?.plus_one_name || "Companion"} (pass admits 2)
                               </p>
@@ -1101,7 +1101,7 @@ export default function GuestsTabContent({
                             {eventId === 77 && guest.custom_data?.organization && (
                               <p className="text-xs text-slate-500 mt-0.5"><span className="font-medium text-slate-400">Org:</span> {guest.custom_data.organization}</p>
                             )}
-                            {eventId === 82 && guest.custom_data?.party_size === 2 && (
+                            {(eventId === 82 || eventId === 84) && guest.custom_data?.party_size === 2 && (
                               <p className="text-xs text-amber-600 mt-0.5">
                                 <span className="font-medium">Plus one:</span> {guest.custom_data?.plus_one_name || "Companion"} (admits 2)
                               </p>

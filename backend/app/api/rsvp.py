@@ -252,14 +252,18 @@ async def submit_rsvp(
     if rsvp.note:
         guest.rsvp_note = rsvp.note
 
-    # Event 82 (gala) only: the personal-link page can record one companion who
+    # Events 82 and 84: the personal-link page can record one companion who
     # rides on the same pass. Every other event ignores these fields entirely.
     if rsvp.plus_one is not None:
         try:
-            from app.api.event_registration import is_gala_event
+            from app.api.event_registration import is_anniversary_event, is_gala_event
         except Exception:
-            is_gala_event = None
-        if is_gala_event is not None and is_gala_event(event):
+            is_gala_event = is_anniversary_event = None
+        party_allowed = bool(
+            is_gala_event is not None
+            and (is_gala_event(event) or is_anniversary_event(event))
+        )
+        if party_allowed:
             data = dict(guest.custom_data or {})
             if rsvp.plus_one:
                 data["plus_one"] = True

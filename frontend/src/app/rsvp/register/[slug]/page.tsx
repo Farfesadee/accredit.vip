@@ -267,18 +267,9 @@ export default function EventRegistrationPage() {
     }
   };
 
-  if (showSplash) {
+  if (showSplash && !isAnniversarySlug) {
     return (
       <>
-        {/* The client's typefaces start downloading under the welcome screen,
-            so the cover never re-flows when they arrive. */}
-        {isAnniversarySlug && (
-          <>
-            <link rel="preload" href="/fonts/urbanist.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
-            <link rel="preload" href="/fonts/yellowtail.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
-            <link rel="preload" href="/fonts/greatvibes.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
-          </>
-        )}
         <BrandSplash onDone={() => setShowSplash(false)} />
       </>
     );
@@ -313,13 +304,18 @@ export default function EventRegistrationPage() {
     }
     if (isAnniversarySlug) {
       return (
-        <div className="flex min-h-screen items-center justify-center" style={{ background: "#241B33" }}>
+        <div className="flex min-h-screen items-center justify-center" style={{ background: "#6E6FFA" }}>
+          {/* The client's typefaces start downloading immediately, so the
+              opening cover never re-flows when they arrive. */}
+          <link rel="preload" href="/fonts/urbanist.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+          <link rel="preload" href="/fonts/yellowtail.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+          <link rel="preload" href="/fonts/greatvibes.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
           <div className="text-center">
-            <Loader className="mx-auto mb-6 h-8 w-8 animate-spin" style={{ color: "#C3B2DE" }} />
-            <p className="text-[10px] uppercase" style={{ color: "#C3B2DE", letterSpacing: "0.32em" }}>
+            <Loader className="mx-auto mb-6 h-8 w-8 animate-spin" style={{ color: "#FFDAB9" }} />
+            <p className="text-[10px] uppercase" style={{ color: "#FFFFFF", letterSpacing: "0.32em" }}>
               Thirty Years
             </p>
-            <p className="mt-3 text-[11px]" style={{ color: "rgba(250,246,239,0.55)" }}>
+            <p className="mt-3 text-[11px]" style={{ color: "rgba(230,230,250,0.85)" }}>
               Please wait while the invitation opens
             </p>
           </div>

@@ -511,6 +511,15 @@ def _anniv_rows(content: dict) -> list[tuple[str, str]]:
     ]
 
 
+def _anniv_party(guest: Guest) -> tuple[int, str]:
+    """How many this pass admits, and the companion's name if there is one."""
+    data = getattr(guest, "custom_data", None) or {}
+    name = (data.get("plus_one_name") or "").strip()
+    if data.get("plus_one") or data.get("party_size") == 2:
+        return 2, name
+    return 1, ""
+
+
 def _build_anniv_invite_message(
     guest: Guest,
     event: Event,
@@ -533,6 +542,9 @@ def _build_anniv_invite_message(
     )
 
     subject = "You are invited: Nelkon & Blessing 30th Wedding Anniversary"
+    party_note = (content.get("plus_one") or {}).get("note") or (
+        "Your invitation admits two: you and one companion."
+    )
     body = (
         f"Dear {guest.name},\n\n"
         "With hearts full of gratitude, Nelkon and Blessing Obi-Uzu invite you to "
@@ -541,6 +553,7 @@ def _build_anniv_invite_message(
         f"Time: {ceremony['time']} (WAT)\n\n"
         f"Venue: {ceremony['venue']}, {ceremony['location']}\n\n"
         f"Dress Code: {dress.get('theme') or 'Elegant'}\n\n"
+        f"{party_note}\n\n"
         f"Kindly confirm your seat: {rsvp_link}\n\n"
         "With love,\nThe Obi-Uzu Family"
     )
@@ -566,6 +579,8 @@ def _build_anniv_invite_message(
         '<p style="margin:16px 0 0;font-size:13px;line-height:1.7;color:#a396bd;font-style:italic">'
         f"{dress.get('note') or 'Come dressed to celebrate thirty years with us.'}"
         "</p>"
+        '<p style="margin:10px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:11px;'
+        f'line-height:1.7;letter-spacing:1px;color:{ANNIV_LAV}">{party_note}</p>'
         '<div style="text-align:center;margin:26px 0 8px">'
         f'<a href="{rsvp_link}" style="display:inline-block;background:{ANNIV_LAV};color:#241B33;'
         "padding:15px 44px;text-decoration:none;font-family:Arial,Helvetica,sans-serif;"
@@ -591,6 +606,14 @@ def _build_anniv_qr_message(
     ceremony = content["ceremony"]
     dress = content["dress_code"]
     rsvp_link = f"{settings.FRONTEND_URL}/rsvp/{guest.rsvp_token}"
+    party_size, companion = _anniv_party(guest)
+    admits_text = (
+        f"This pass admits two guests: you and {companion}."
+        if party_size == 2 and companion
+        else "This pass admits two guests: you and one companion."
+        if party_size == 2
+        else "This pass admits one guest."
+    )
 
     subject = "Your Entry Pass: Nelkon & Blessing 30th Wedding Anniversary"
     body = (
@@ -601,7 +624,7 @@ def _build_anniv_qr_message(
         f"Time: {ceremony['time']} (WAT)\n\n"
         f"Venue: {ceremony['venue']}, {ceremony['location']}\n\n"
         f"Dress Code: {dress.get('theme') or 'Elegant'}\n\n"
-        "This pass admits one guest.\n\n"
+        f"{admits_text}\n\n"
         f"View your pass: {rsvp_link}\n\n"
         "With love,\nThe Obi-Uzu Family"
     )
@@ -618,8 +641,16 @@ def _build_anniv_qr_message(
             'letter-spacing:2px;color:#5d4b7a;text-transform:uppercase">Scan at the door</p>'
             "</div>"
             '<p style="margin:12px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
-            f'letter-spacing:2px;color:#8b7fa3">THIS PASS ADMITS ONE GUEST</p>'
-            "</div>"
+            f'letter-spacing:2px;color:#8b7fa3">'
+            f"{'THIS PASS ADMITS TWO GUESTS' if party_size == 2 else 'THIS PASS ADMITS ONE GUEST'}</p>"
+            + (
+                '<p style="margin:6px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
+                f'letter-spacing:2px;color:{ANNIV_CREAM};text-transform:uppercase">'
+                f"WITH {companion or 'ONE COMPANION'}</p>"
+                if party_size == 2
+                else ""
+            )
+            + "</div>"
         )
     else:
         qr_block = (
