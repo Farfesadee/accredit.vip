@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { NotificationBell } from "@/components/notification-bell";
 import { AdminLogoutButton } from "@/components/admin/logout-button";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 
 interface AdminUser {
   id: number;
@@ -81,6 +82,12 @@ export default function AdminSettingsPage() {
   const [pricing, setPricing] = useState<any[]>([]);
   const [pricingSaving, setPricingSaving] = useState(false);
   const [pricingMsg, setPricingMsg] = useState("");
+  const [pricingErr, setPricingErr] = useState("");
+  const [adminsError, setAdminsError] = useState("");
+  const [confirmState, setConfirmState] = useState<{
+    title: string; message: string; confirmLabel: string;
+    variant: "danger" | "warning" | "default"; action: () => void;
+  } | null>(null);
 
   const loadPricing = async () => {
     try {
@@ -105,12 +112,12 @@ export default function AdminSettingsPage() {
   const savePricing = async () => {
     setPricingSaving(true);
     setPricingMsg("");
+    setPricingErr("");
     try {
       await apiClient("/admin/settings/platform/pricing_channels", { method: "PUT", body: { value: pricing } });
       setPricingMsg("Pricing updated — live on the pricing page now.");
     } catch (err: any) {
-      setPricingMsg("");
-      alert(err.message || "Save failed");
+      setPricingErr(err.message || "Save failed");
     }
     setPricingSaving(false);
   };
@@ -208,12 +215,22 @@ export default function AdminSettingsPage() {
   };
 
   const handleDeleteAdmin = async (id: number, email: string) => {
-    if (!confirm(`Delete admin ${email}? This cannot be undone.`)) return;
+    setAdminsError("");
+    setConfirmState({
+      title: "Delete admin?",
+      message: `Delete admin ${email}? This cannot be undone.`,
+      confirmLabel: "Delete",
+      variant: "danger",
+      action: () => doDeleteAdmin(id),
+    });
+  };
+
+  const doDeleteAdmin = async (id: number) => {
     try {
       await apiClient(`/admin/users/${id}`, { method: "DELETE" });
       fetchAdmins();
     } catch (err) {
-      alert(err instanceof Error ? err.message : "Delete failed");
+      setAdminsError(err instanceof Error ? err.message : "Delete failed");
     }
   };
 
@@ -400,6 +417,7 @@ export default function AdminSettingsPage() {
                 <h2 className="text-lg font-black text-[#0D1B2A] mb-4 flex items-center gap-2">
                   <Users className="w-5 h-5 text-[#1ABC9C]" /> All Admins
                 </h2>
+                {adminsError && <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{adminsError}</div>}
                 {adminsLoading ? (
                   <div className="flex justify-center py-8"><Loader className="w-6 h-6 animate-spin text-[#1ABC9C]" /></div>
                 ) : (
@@ -482,6 +500,7 @@ export default function AdminSettingsPage() {
                 <h2 className="text-lg font-black text-[#0D1B2A] mb-1">Channel Pricing</h2>
                 <p className="text-xs text-[#94a3b8] mb-4">Shown on the public pricing page. Changes go live immediately.</p>
                 {pricingMsg && <div className="mb-4 p-3 rounded-lg bg-green-50 border border-green-200 text-sm text-green-700">{pricingMsg}</div>}
+                {pricingErr && <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-sm text-red-700">{pricingErr}</div>}
                 <div className="space-y-4">
                   {pricing.map((ch, i) => (
                     <div key={ch.id} className="rounded-xl border border-[#e8edf2] p-4">
@@ -513,6 +532,17 @@ export default function AdminSettingsPage() {
           )}
         </main>
       </div>
+      {confirmState && (
+        <ConfirmDialog
+          open
+          title={confirmState.title}
+          message={confirmState.message}
+          confirmLabel={confirmState.confirmLabel}
+          variant={confirmState.variant}
+          onConfirm={() => { const a = confirmState.action; setConfirmState(null); a(); }}
+          onCancel={() => setConfirmState(null)}
+        />
+      )}
     </div>
   );
 }

@@ -16,11 +16,14 @@ export function SessionGuard({ children }: { children: React.ReactNode }) {
     if (loading) return;
 
     const isProtectedRoute = PROTECTED_ROUTES.some((route) => pathname.startsWith(route));
+    // The pickup portal handles its own gate (separate staff login at
+    // /dashboard/pickups/login), so the global redirect must not hijack it.
+    const isPickupRoute = pathname.startsWith("/dashboard/pickups");
 
     // Unauthenticated visitors get sent to login. Authenticated users are
     // NEVER logged out for navigating: sessions persist across public
     // pages, tab switches, and browser restarts (until token/idle expiry).
-    if (!user && isProtectedRoute) {
+    if (!user && isProtectedRoute && !isPickupRoute) {
       router.push(pathname.startsWith("/admin") ? "/admin/login" : "/login");
     }
   }, [pathname, user, loading, router]);

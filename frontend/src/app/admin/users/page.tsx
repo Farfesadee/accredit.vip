@@ -9,6 +9,7 @@ import { ChevronLeft, Search, Menu, X, BarChart3, Calendar, Users, Settings, Loa
 import { apiClient } from "@/lib/api-client";
 import { NotificationBell } from "@/components/notification-bell";
 import { AdminLogoutButton } from "@/components/admin/logout-button";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 
 function maskEmail(email: string) {
   const [local, domain] = email.split("@");
@@ -37,6 +38,11 @@ export default function AdminUsersPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageInput, setPageInput] = useState("1");
   const itemsPerPage = 10;
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [confirmState, setConfirmState] = useState<{
+    title: string; message: string; confirmLabel: string;
+    variant: "danger" | "warning" | "default"; action: () => void;
+  } | null>(null);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -53,6 +59,28 @@ export default function AdminUsersPage() {
 
   useEffect(() => { fetchUsers(); }, []);
   useEffect(() => { const t = setTimeout(fetchUsers, 300); return () => clearTimeout(t); }, [searchQuery]);
+
+  const askSuspend = (u: any) => {
+    setActionError(null);
+    setConfirmState({
+      title: u.is_active ? "Suspend user?" : "Unsuspend user?",
+      message: u.is_active
+        ? `Suspend ${u.email}? They will be logged out and blocked.`
+        : `Unsuspend ${u.email}?`,
+      confirmLabel: u.is_active ? "Suspend" : "Unsuspend",
+      variant: u.is_active ? "danger" : "default",
+      action: () => doSuspend(u),
+    });
+  };
+
+  const doSuspend = async (u: any) => {
+    try {
+      await apiClient(`/admin/users/${u.id}/suspend`, { method: "POST", body: { suspended: u.is_active } });
+      fetchUsers();
+    } catch (err: any) {
+      setActionError(err.message || "Action failed");
+    }
+  };
 
   if (authLoading || !user) return <div className="min-h-screen flex items-center justify-center bg-[#f8f9fc]"><Loader className="w-8 h-8 animate-spin text-[#1ABC9C]" /></div>;
 
@@ -145,6 +173,9 @@ export default function AdminUsersPage() {
             </div>
           ) : (
             <div className="bg-white rounded-2xl border border-[#e8edf2] overflow-hidden">
+              {actionError && (
+                <p className="mx-3 sm:mx-6 mt-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl p-3">{actionError}</p>
+              )}
               <div className="overflow-x-auto"><table className="w-full">
                 <thead>
                   <tr className="border-b border-[#e8edf2] bg-[#f8f9fc]">
@@ -177,13 +208,7 @@ export default function AdminUsersPage() {
                       <td className="px-6 py-4">
                         {u.role !== "admin" && u.role !== "super_admin" ? (
                           <button
-                            onClick={async () => {
-                              if (!confirm(`${u.is_active ? "Suspend" : "Unsuspend"} ${u.email}?${u.is_active ? " They will be logged out and blocked." : ""}`)) return;
-                              try {
-                                await apiClient(`/admin/users/${u.id}/suspend`, { method: "POST", body: { suspended: u.is_active } });
-                                fetchUsers();
-                              } catch (err: any) { alert(err.message || "Action failed"); }
-                            }}
+                            onClick={() => askSuspend(u)}
                             className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-all ${u.is_active ? "bg-red-50 text-red-600 hover:bg-red-100" : "bg-green-50 text-green-600 hover:bg-green-100"}`}
                           >
                             {u.is_active ? "Suspend" : "Unsuspend"}
@@ -201,6 +226,17 @@ export default function AdminUsersPage() {
           )}
         </main>
       </div>
+      {confirmState && (
+        <ConfirmDialog
+          open
+          title={confirmState.title}
+          message={confirmState.message}
+          confirmLabel={confirmState.confirmLabel}
+          variant={confirmState.variant}
+          onConfirm={() => { const a = confirmState.action; setConfirmState(null); a(); }}
+          onCancel={() => setConfirmState(null)}
+        />
+      )}
     </div>
   );
 }

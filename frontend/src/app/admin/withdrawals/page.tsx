@@ -9,6 +9,7 @@ import { ChevronLeft, Menu, X, BarChart3, Calendar, Users, Settings, Loader, Clo
 import { apiClient } from "@/lib/api-client";
 import { NotificationBell } from "@/components/notification-bell";
 import { AdminLogoutButton } from "@/components/admin/logout-button";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 
 function maskEmail(email: string) {
   const [local, domain] = email.split("@");
@@ -37,6 +38,11 @@ export default function AdminWithdrawalsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageInput, setPageInput] = useState("1");
   const itemsPerPage = 10;
+  const [actionMsg, setActionMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [confirmState, setConfirmState] = useState<{
+    title: string; message: string; confirmLabel: string;
+    variant: "danger" | "warning" | "default"; action: () => void;
+  } | null>(null);
 
   const fetchWithdrawals = async () => {
     setLoading(true);
@@ -51,11 +57,74 @@ export default function AdminWithdrawalsPage() {
 
   useEffect(() => { fetchWithdrawals(); }, [filter]);
 
-  const handleAction = async (id: number, action: string) => {
+  const friendlyError = (err: any) => {
+    const msg = err?.message || "Action failed";
+    if (/401|unauthorized|not authenticated|session|token/i.test(msg)) {
+      return "Your session expired. Please log out and log back in, then try again.";
+    }
+    return msg;
+  };
+
+  const ACTION_META: Record<string, { title: string; message: (w: any) => string; confirmLabel: string; variant: "danger" | "warning" | "default" }> = {
+    approve: {
+      title: "Approve withdrawal?",
+      message: (w) => `Approve ${w.currency} ${Number(w.amount).toLocaleString()} to ${w.user_name} (${w.user_email})? Ref ${w.reference}.`,
+      confirmLabel: "Approve",
+      variant: "warning",
+    },
+    flag: {
+      title: "Flag withdrawal?",
+      message: (w) => `Flag ${w.currency} ${Number(w.amount).toLocaleString()} (Ref ${w.reference}) for review? It will leave the pending queue.`,
+      confirmLabel: "Flag",
+      variant: "warning",
+    },
+    fail: {
+      title: "Reject withdrawal?",
+      message: (w) => `Reject ${w.currency} ${Number(w.amount).toLocaleString()} (Ref ${w.reference})? This marks it failed.`,
+      confirmLabel: "Reject",
+      variant: "danger",
+    },
+    complete: {
+      title: "Mark complete?",
+      message: (w) => `Mark ${w.currency} ${Number(w.amount).toLocaleString()} (Ref ${w.reference}) as completed?`,
+      confirmLabel: "Complete",
+      variant: "default",
+    },
+    unflag: {
+      title: "Unflag withdrawal?",
+      message: (w) => `Remove the flag on ${w.currency} ${Number(w.amount).toLocaleString()} (Ref ${w.reference}) and return it to pending?`,
+      confirmLabel: "Unflag",
+      variant: "default",
+    },
+  };
+
+  const askAction = (w: any, action: string) => {
+    const meta = ACTION_META[action];
+    if (!meta) return;
+    setActionMsg(null);
+    setConfirmState({
+      title: meta.title,
+      message: meta.message(w),
+      confirmLabel: meta.confirmLabel,
+      variant: meta.variant,
+      action: () => doAction(w.id, action),
+    });
+  };
+
+  const doAction = async (id: number, action: string) => {
     try {
-      await apiClient(`/admin/withdrawals/${id}/process?action=${action}`, { method: "POST" });
+      const res = await apiClient<{ status: string }>(`/admin/withdrawals/${id}/process?action=${action}`, { method: "POST" });
+      setActionMsg({ ok: true, text: `Withdrawal ${res.status}.` });
       fetchWithdrawals();
-    } catch {}
+    } catch (err: any) {
+      setActionMsg({ ok: false, text: friendlyError(err) });
+    }
+  };
+
+  const handleAction = async (id: number, action: string) => {
+    const w = withdrawals.find((x) => x.id === id);
+    if (!w) return;
+    askAction(w, action);
   };
 
   if (authLoading || !user) return <div className="min-h-screen flex items-center justify-center bg-[#f8f9fc]"><Loader className="w-8 h-8 animate-spin text-[#1ABC9C]" /></div>;
@@ -124,6 +193,11 @@ export default function AdminWithdrawalsPage() {
         </header>
 
         <main className="p-4 sm:p-6">
+          {actionMsg && (
+            <div className={`mb-4 p-3 rounded-xl border text-sm font-medium ${actionMsg.ok ? "bg-green-50 border-green-200 text-green-700" : "bg-red-50 border-red-200 text-red-700"}`}>
+              {actionMsg.text}
+            </div>
+          )}
           <div className="bg-white rounded-2xl border border-[#e8edf2] p-6 mb-6">
             <div className="flex gap-2 mb-4">
               {["pending", "processing", "completed", "failed", "flagged", "all"].map((f) => (
@@ -181,6 +255,11 @@ export default function AdminWithdrawalsPage() {
                       <button onClick={() => handleAction(w.id, "fail")} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 font-bold text-xs"><XCircle className="w-4 h-4" /> Mark Failed</button>
                     </div>
                   )}
+                  {w.status === "flagged" && (
+                    <div className="flex gap-2 mt-3 pt-3 border-t border-[#e8edf2]">
+                      <button onClick={() => handleAction(w.id, "unflag")} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 font-bold text-xs"><CheckCircle className="w-4 h-4" /> Unflag (back to pending)</button>
+                    </div>
+                  )}
                 </div>
               ))}
               {withdrawals.length === 0 && <div className="bg-white rounded-2xl border border-[#e8edf2] p-12 text-center"><p className="text-[#94a3b8]">No withdrawals found</p></div>}
@@ -188,6 +267,17 @@ export default function AdminWithdrawalsPage() {
           )}
         </main>
       </div>
+      {confirmState && (
+        <ConfirmDialog
+          open
+          title={confirmState.title}
+          message={confirmState.message}
+          confirmLabel={confirmState.confirmLabel}
+          variant={confirmState.variant}
+          onConfirm={() => { const a = confirmState.action; setConfirmState(null); a(); }}
+          onCancel={() => setConfirmState(null)}
+        />
+      )}
     </div>
   );
 }

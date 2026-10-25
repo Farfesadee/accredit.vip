@@ -9,7 +9,44 @@ interface EnvelopeSplashProps {
   coverImage?: string | null;
   onMusicStart: () => void;
   onOpen: () => void;
+  theme?: "default" | "gold";
+  openingTitle?: string;
 }
+
+const THEMES = {
+  default: {
+    bg: "linear-gradient(135deg, #1a0a14 0%, #2d1228 50%, #1a0a14 100%)",
+    particle: "26, 188, 156",
+    titleFrom: "#1ABC9C",
+    titleTo: "#f472b6",
+    envBodyFrom: "#1ABC9C",
+    envBodyTo: "#c4146e",
+    flapFrom: "#d61a7b",
+    flapTo: "#1ABC9C",
+    foldFrom: "#b81464",
+    foldTo: "#c4146e",
+    sealFrom: "#1ABC9C",
+    sealTo: "#a01050",
+    eyebrow: "rgba(26,188,156,0.6)",
+    sub: "rgba(26,188,156,0.4)",
+  },
+  gold: {
+    bg: "linear-gradient(135deg, #141007 0%, #2b2113 50%, #141007 100%)",
+    particle: "201, 162, 39",
+    titleFrom: "#C9A227",
+    titleTo: "#f3e3ac",
+    envBodyFrom: "#8a6d1f",
+    envBodyTo: "#C9A227",
+    flapFrom: "#6e5518",
+    flapTo: "#8a6d1f",
+    foldFrom: "#5c4714",
+    foldTo: "#8a6d1f",
+    sealFrom: "#e6c65a",
+    sealTo: "#8a6d1f",
+    eyebrow: "rgba(201,162,39,0.75)",
+    sub: "rgba(201,162,39,0.55)",
+  },
+};
 
 export default function EnvelopeSplash({
   eventTitle,
@@ -18,7 +55,10 @@ export default function EnvelopeSplash({
   coverImage,
   onMusicStart,
   onOpen,
+  theme = "default",
+  openingTitle,
 }: EnvelopeSplashProps) {
+  const P = THEMES[theme];
   const [isOpening, setIsOpening] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const openedRef = useRef(false);
@@ -37,9 +77,9 @@ export default function EnvelopeSplash({
   return (
     <div
       className="min-h-screen flex flex-col items-center justify-center px-4 relative overflow-hidden"
-      style={{ background: "linear-gradient(135deg, #1a0a14 0%, #2d1228 50%, #1a0a14 100%)" }}
+      style={{ background: P.bg }}
     >
-      {/* Pink/rose bokeh particles */}
+      {/* Bokeh particles */}
       {!isOpening && (
         <div className="absolute inset-0 pointer-events-none">
           {Array.from({ length: 30 }).map((_, i) => (
@@ -51,7 +91,7 @@ export default function EnvelopeSplash({
                 top: `${Math.random() * 100}%`,
                 width: `${4 + Math.random() * 12}px`,
                 height: `${4 + Math.random() * 12}px`,
-                backgroundColor: `rgba(26, 188, 156, ${0.1 + Math.random() * 0.25})`,
+                backgroundColor: `rgba(${P.particle}, ${0.1 + Math.random() * 0.25})`,
                 filter: `blur(${1 + Math.random() * 3}px)`,
                 animation: `bokeh ${3 + Math.random() * 5}s ease-in-out infinite`,
                 animationDelay: `${Math.random() * 4}s`,
@@ -71,8 +111,8 @@ export default function EnvelopeSplash({
           50% { transform: translateY(-8px) rotate(0.5deg); }
         }
         @keyframes sealPulse {
-          0%, 100% { box-shadow: 0 0 20px rgba(26, 188, 156, 0.3); }
-          50% { box-shadow: 0 0 40px rgba(26, 188, 156, 0.6); }
+          0%, 100% { box-shadow: 0 0 20px rgba(${P.particle}, 0.3); }
+          50% { box-shadow: 0 0 40px rgba(${P.particle}, 0.6); }
         }
         @keyframes envelopeOpen {
           0% { transform: scale(1); }
@@ -91,7 +131,7 @@ export default function EnvelopeSplash({
 
       {!isOpen ? (
         <div className="flex flex-col items-center z-10">
-          <p className="text-[#1ABC9C]/60 text-xs uppercase tracking-[0.4em] mb-3 font-medium">You&apos;re Invited To</p>
+          <p className="text-xs uppercase tracking-[0.4em] mb-3 font-medium" style={{ color: P.eyebrow }}>You&apos;re Invited To</p>
           {(() => {
             const parts = eventTitle.split(": ");
             return (
@@ -99,7 +139,7 @@ export default function EnvelopeSplash({
                 <h1
                   className="text-3xl sm:text-5xl font-black text-center mb-1"
                   style={{
-                    background: "linear-gradient(135deg, #1ABC9C, #f472b6, #1ABC9C)",
+                    background: `linear-gradient(135deg, ${P.titleFrom}, ${P.titleTo}, ${P.titleFrom})`,
                     backgroundClip: "text",
                     WebkitBackgroundClip: "text",
                     color: "transparent",
@@ -108,14 +148,14 @@ export default function EnvelopeSplash({
                   {parts[0]}
                 </h1>
                 {parts.length > 1 && (
-                  <p className="text-[#1ABC9C]/50 text-sm italic text-center mb-2">Hosted by {parts.slice(1).join(": ")}</p>
+                  <p className="text-sm italic text-center mb-2" style={{ color: P.sub }}>Hosted by {parts.slice(1).join(": ")}</p>
                 )}
               </>
             );
           })()}
-          <p className="text-[#1ABC9C]/40 text-sm mb-10">{eventDate}</p>
+          <p className="text-sm mb-10" style={{ color: P.sub }}>{eventDate}</p>
 
-          {/* CSS Pink Envelope */}
+          {/* CSS Envelope */}
           <div
             onClick={handleOpen}
             className={`relative cursor-pointer group ${!isOpening ? "animate-[envelopeFloat_4s_ease-in-out_infinite]" : ""}`}
@@ -127,14 +167,14 @@ export default function EnvelopeSplash({
               style={{
                 width: "288px",
                 height: "192px",
-                boxShadow: isOpening ? "none" : "0 20px 60px rgba(0,0,0,0.5), 0 0 40px rgba(26, 188, 156,0.3)",
+                boxShadow: isOpening ? "none" : `0 20px 60px rgba(0,0,0,0.5), 0 0 40px rgba(${P.particle},0.3)`,
               }}
             >
               {/* Envelope body */}
               <div
                 className="absolute inset-0 rounded-lg"
                 style={{
-                  background: "linear-gradient(145deg, #1ABC9C, #c4146e)",
+                  background: `linear-gradient(145deg, ${P.envBodyFrom}, ${P.envBodyTo})`,
                   borderRadius: "12px",
                 }}
               />
@@ -144,7 +184,7 @@ export default function EnvelopeSplash({
                 style={{
                   height: "50%",
                   clipPath: "polygon(0 0, 100% 0, 50% 100%)",
-                  background: "linear-gradient(180deg, #d61a7b, #1ABC9C)",
+                  background: `linear-gradient(180deg, ${P.flapFrom}, ${P.flapTo})`,
                   borderRadius: "12px 12px 0 0",
                   zIndex: 1,
                 }}
@@ -155,7 +195,7 @@ export default function EnvelopeSplash({
                 style={{
                   height: "55%",
                   clipPath: "polygon(0 100%, 50% 0%, 100% 100%)",
-                  background: "linear-gradient(0deg, #b81464, #c4146e)",
+                  background: `linear-gradient(0deg, ${P.foldFrom}, ${P.foldTo})`,
                   opacity: 0.5,
                 }}
               />
@@ -174,8 +214,8 @@ export default function EnvelopeSplash({
                   <div
                     className="w-16 h-16 sm:w-20 sm:h-20 rounded-full flex items-center justify-center animate-[sealPulse_2s_ease-in-out_infinite]"
                     style={{
-                      background: "radial-gradient(circle at 35% 35%, #1ABC9C, #a01050)",
-                      boxShadow: "0 4px 20px rgba(26, 188, 156,0.5), inset 0 2px 4px rgba(255,255,255,0.3)",
+                      background: `radial-gradient(circle at 35% 35%, ${P.sealFrom}, ${P.sealTo})`,
+                      boxShadow: `0 4px 20px rgba(${P.particle},0.5), inset 0 2px 4px rgba(255,255,255,0.3)`,
                     }}
                   >
                     <span className="text-white text-2xl font-bold italic" style={{ textShadow: "0 2px 4px rgba(0,0,0,0.3)" }}>A</span>
@@ -185,7 +225,7 @@ export default function EnvelopeSplash({
             </div>
 
             {!isOpening && (
-              <p className="text-center mt-8 text-[#1ABC9C]/50 text-sm animate-pulse tracking-widest">
+              <p className="text-center mt-8 text-sm animate-pulse tracking-widest" style={{ color: P.sub }}>
                 TAP TO OPEN
               </p>
             )}
@@ -196,20 +236,20 @@ export default function EnvelopeSplash({
               <p
                 className="text-2xl sm:text-3xl font-black"
                 style={{
-                  background: "linear-gradient(135deg, #1ABC9C, #f472b6, #1ABC9C)",
+                  background: `linear-gradient(135deg, ${P.titleFrom}, ${P.titleTo}, ${P.titleFrom})`,
                   backgroundClip: "text",
                   WebkitBackgroundClip: "text",
                   color: "transparent",
                 }}
               >
-                Happy Birthday {celebrantName}!
+                {openingTitle || `Happy Birthday ${celebrantName}!`}
               </p>
             </div>
           )}
         </div>
       ) : (
         <div className="text-center animate-[cardReveal_0.8s_ease-out] z-10">
-          <p className="text-[#1ABC9C]/60 text-lg">Loading your invitation...</p>
+          <p className="text-lg" style={{ color: P.eyebrow }}>Loading your invitation...</p>
         </div>
       )}
     </div>

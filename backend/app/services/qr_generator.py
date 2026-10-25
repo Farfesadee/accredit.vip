@@ -24,7 +24,7 @@ def extract_dominant_color(image_data: bytes) -> str:
         pixels = list(img.getdata())
 
         if not pixels:
-            return '#E91E8C'  # Default fallback
+            return '#1ABC9C'  # Default fallback (brand teal)
 
         # Calculate average color
         r = sum(p[0] for p in pixels) // len(pixels)
@@ -35,7 +35,7 @@ def extract_dominant_color(image_data: bytes) -> str:
         return f'#{r:02x}{g:02x}{b:02x}'.upper()
     except Exception as e:
         print(f"Error extracting dominant color: {e}")
-        return '#E91E8C'  # Default fallback
+        return '#1ABC9C'  # Default fallback (brand teal)
 
 
 def generate_styled_qr(

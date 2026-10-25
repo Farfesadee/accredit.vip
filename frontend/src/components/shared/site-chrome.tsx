@@ -37,6 +37,8 @@ export function SiteChrome() {
   const [supportOpen, setSupportOpen] = useState(false);
   const [announcement, setAnnouncement] = useState<{ id: number; title: string; body: string } | null>(null);
   const [hideFloats, setHideFloats] = useState(false);
+  const [hideChrome, setHideChrome] = useState(false);
+  const [showSupport, setShowSupport] = useState(false);
 
   useEffect(() => {
     captureUtm();
@@ -44,10 +46,27 @@ export function SiteChrome() {
       setCookieOk(localStorage.getItem("accredit_cookie_ok") === "1");
     } catch {}
     const path = window.location.pathname;
+    // Bespoke, full-bleed invitations (The Art of Attention, Patrick & Sarah):
+    // no platform progress bar, cookie banner or floating buttons over the
+    // client's artwork.
+    const bespokeInvite =
+      path.startsWith("/rsvp/register/the-art-of-attention") ||
+      path.startsWith("/rsvp/register/patrick-sarah-white-wedding") ||
+      path.startsWith("/rsvp/register/nelkon-blessing-30th-anniversary") ||
+      path.startsWith("/rsvp/asoebi/patrick-sarah-white-wedding");
+    setHideChrome(bespokeInvite);
     // No floating buttons on gate/admin tooling (accreditation scanners,
     // scan helpers, admin console) where they would cover controls.
     setHideFloats(
-      path.startsWith("/accreditation") || path.startsWith("/admin") || path.startsWith("/scan")
+      bespokeInvite ||
+        path.startsWith("/accreditation") || path.startsWith("/admin") || path.startsWith("/scan")
+    );
+    // Contact-support bubble lives only on the landing page and a few
+    // public pages — never inside dashboards, gates, auth or ticket flows.
+    setShowSupport(
+      ["/", "/attend", "/pricing", "/contact", "/community"].includes(path) ||
+        path.startsWith("/features") ||
+        path.startsWith("/events")
     );
     if (path.startsWith("/dashboard") || path.startsWith("/admin")) {
       apiClient<{ announcements: { id: number; title: string; body: string }[] }>("/announcements/active")
@@ -59,6 +78,18 @@ export function SiteChrome() {
         })
         .catch(() => {});
     }
+  }, []);
+
+  // A page can announce itself as a bespoke invitation once it knows what it
+  // is showing (personal links only learn their event after the fetch), so the
+  // chrome clears itself rather than relying on the URL alone.
+  useEffect(() => {
+    const onBespoke = () => {
+      setHideChrome(true);
+      setHideFloats(true);
+    };
+    window.addEventListener("accredit:bespoke-invite", onBespoke);
+    return () => window.removeEventListener("accredit:bespoke-invite", onBespoke);
   }, []);
 
   useEffect(() => {
@@ -110,12 +141,14 @@ export function SiteChrome() {
       </a>
 
       {/* Scroll progress */}
-      <div className="fixed top-0 left-0 right-0 z-[90] h-1 bg-transparent pointer-events-none" aria-hidden="true">
-        <div className="h-full transition-[width] duration-100" style={{ width: `${progress * 100}%`, background: "linear-gradient(90deg, #1ABC9C, #16A085)" }} />
-      </div>
+      {!hideChrome && (
+        <div className="fixed top-0 left-0 right-0 z-[90] h-1 bg-transparent pointer-events-none" aria-hidden="true">
+          <div className="h-full transition-[width] duration-100" style={{ width: `${progress * 100}%`, background: "linear-gradient(90deg, #1ABC9C, #16A085)" }} />
+        </div>
+      )}
 
       {/* Floating contact support */}
-      {!hideFloats && supportOpen && (
+      {showSupport && supportOpen && (
         <div className="fixed bottom-20 right-6 z-[80] w-64 rounded-2xl bg-white shadow-2xl border border-[#e8edf2] overflow-hidden">
           <p className="px-4 pt-3 pb-1 text-xs font-black uppercase tracking-wider text-[#94a3b8]">Contact support</p>
           <a
@@ -156,7 +189,7 @@ export function SiteChrome() {
           </Link>
         </div>
       )}
-      {!hideFloats && (
+      {!hideFloats && showSupport && (
       <button
         onClick={() => setSupportOpen(!supportOpen)}
         aria-label="Contact support"
@@ -187,7 +220,7 @@ export function SiteChrome() {
       )}
 
       {/* Cookie banner */}
-      {!cookieOk && (
+      {!cookieOk && !hideChrome && (
         <div className="fixed bottom-0 left-0 right-0 z-[85] px-4 pb-4">
           <div className="max-w-3xl mx-auto rounded-2xl bg-[#0D1B2A] text-white px-5 py-4 shadow-2xl flex flex-col sm:flex-row items-start sm:items-center gap-3">
             <p className="text-xs leading-relaxed text-white/80 flex-1">

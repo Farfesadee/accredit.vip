@@ -10,8 +10,9 @@ from jose import jwt, JWTError
 
 from app.core.database import get_db
 from app.core.config import settings
-from app.core.security import hash_password, verify_password
+from app.core.security import extract_token, hash_password, verify_password
 from app.models.pickup import Pickup, PickupUser
+from app.models.user import User
 from app.services.pickup_service import (
     generate_code, generate_qr_token,
     build_email_html, build_whatsapp_message, format_dt, format_dt_short,
@@ -72,21 +73,35 @@ def create_pickup_token(user_id: int, role: str) -> str:
     )
 
 
-def verify_pickup_token(request: Request) -> dict:
+async def verify_pickup_token(
+    request: Request, db: AsyncSession = Depends(get_db)
+) -> dict:
     token = request.cookies.get("pickup_token")
     if not token:
         auth = request.headers.get("Authorization", "")
         if auth.startswith("Bearer "):
             token = auth[7:]
-    if not token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    try:
-        payload = jwt.decode(token, _pickup_secret(), algorithms=[settings.ALGORITHM])
-        if not payload.get("sub", "").startswith(PICKUP_TOKEN_PREFIX):
-            raise HTTPException(status_code=401, detail="Invalid token")
-        return payload
-    except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    if token:
+        try:
+            payload = jwt.decode(token, _pickup_secret(), algorithms=[settings.ALGORITHM])
+            if payload.get("sub", "").startswith(PICKUP_TOKEN_PREFIX):
+                return payload
+        except JWTError:
+            pass
+    # Fallback: platform admins ride on their main accredit.vip session,
+    # so a second pickup login is never required for them.
+    main_token = extract_token(request)
+    if main_token:
+        try:
+            payload = jwt.decode(main_token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+            user_id = payload.get("sub")
+            result = await db.execute(select(User).where(User.id == int(user_id)))
+            user = result.scalar_one_or_none()
+            if user and user.is_active is not False and user.role in ("admin", "super_admin"):
+                return {"sub": f"{PICKUP_TOKEN_PREFIX}admin-{user.id}", "role": "super_admin"}
+        except Exception:
+            pass
+    raise HTTPException(status_code=401, detail="Not authenticated")
 
 
 AuthAdmin = Depends(verify_pickup_token)
@@ -125,6 +140,21 @@ async def pickup_login(req: PickupLoginRequest, db: AsyncSession = Depends(get_d
 @router.get("/me")
 async def pickup_me(auth=AuthAdmin, db: AsyncSession = Depends(get_db)):
     user_id_str = auth.get("sub", "").replace(PICKUP_TOKEN_PREFIX, "")
+    if user_id_str.startswith("admin-"):
+        # Platform admin riding on their main session (no PickupUser row).
+        try:
+            admin_id = int(user_id_str.replace("admin-", ""))
+        except ValueError:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        admin_user = (await db.execute(select(User).where(User.id == admin_id))).scalar_one_or_none()
+        if not admin_user or admin_user.is_active is False:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        return {
+            "id": 0,
+            "email": admin_user.email,
+            "name": admin_user.full_name or "Platform Admin",
+            "role": "super_admin",
+        }
     try:
         user_id = int(user_id_str)
     except ValueError:

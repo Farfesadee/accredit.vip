@@ -18,7 +18,12 @@ export default function PickupLoginPage() {
       .find((r) => r.startsWith("pickup_token="));
     if (token) {
       router.push("/dashboard/pickups");
+      return;
     }
+    // Platform admins are already authenticated via their main session.
+    fetch("/api/v1/pickups/me").then((res) => {
+      if (res.ok) router.push("/dashboard/pickups");
+    }).catch(() => {});
   }, [router]);
 
   const handleLogin = async (e: React.FormEvent) => {

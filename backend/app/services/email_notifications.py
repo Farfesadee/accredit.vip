@@ -133,9 +133,21 @@ async def send_guest_invitation(
     female_dress_code: Optional[str] = None,
     image_data: Optional[bytes] = None,
     message_id: Optional[int] = None,
+    theme_color: Optional[str] = None,
 ):
-    """Send invitation email to guest with RSVP link."""
+    """Send invitation email to guest with RSVP link.
+
+    The mail takes the event's theme color (brand teal fallback) so guest
+    mails always match the event's own branding. No hardcoded pink.
+    """
     from datetime import datetime as _dt
+    theme = (theme_color or "").strip() or "#1ABC9C"
+    try:
+        _tr = int(theme.lstrip("#")[0:2], 16)
+        _tg = int(theme.lstrip("#")[2:4], 16)
+        _tb = int(theme.lstrip("#")[4:6], 16)
+    except (ValueError, IndexError):
+        theme, _tr, _tg, _tb = "#1ABC9C", 26, 188, 156
     # Format date nicely
     try:
         d = _dt.strptime(event_date.strip(), "%Y-%m-%d")
@@ -221,25 +233,25 @@ async def send_guest_invitation(
             <style>
                 body {{ font-family: Arial, sans-serif; color: #333; }}
                 .container {{ max-width: 600px; margin: 0 auto; background: #f8f9fc; padding: 20px; }}
-                .header {{ background: linear-gradient(135deg, #E91E8C, #C4166F); color: white; padding: 30px; border-radius: 12px; text-align: center; }}
+                .header {{ background: linear-gradient(135deg, {theme}, {theme}); color: white; padding: 30px; border-radius: 12px; text-align: center; }}
                 .content {{ background: white; padding: 30px; margin-top: 20px; border-radius: 12px; }}
                 .event-details {{ background: #f8f9fc; padding: 20px; border-radius: 8px; margin: 20px 0; }}
                 .detail-row {{ display: flex; justify-content: space-between; padding: 8px 0; }}
                 .detail-label {{ color: #64748b; }}
                 .detail-value {{ font-weight: bold; color: #0D1B2A; }}
-                .cta-button {{ display: inline-block; background: #E91E8C; color: white; padding: 14px 40px; border-radius: 8px; text-decoration: none; margin-top: 20px; font-weight: bold; font-size: 16px; }}
+                .cta-button {{ display: inline-block; background: {theme}; color: white; padding: 14px 40px; border-radius: 8px; text-decoration: none; margin-top: 20px; font-weight: bold; font-size: 16px; }}
                 .footer {{ text-align: center; color: #94a3b8; font-size: 12px; margin-top: 30px; }}
                 .custom-message {{ background: #fff3cd; border-left: 4px solid #ffc107; padding: 15px; margin: 20px 0; border-radius: 4px; }}
                 @keyframes accredit-text {{ 0%,10% {{ opacity:1; }} 20%,70% {{ opacity:1; }} 85%,100% {{ opacity:0; }} }}
                 @keyframes accredit-btn {{ 0%,35% {{ opacity:1; }} 45%,70% {{ opacity:1; }} 85%,100% {{ opacity:0; }} }}
-                @keyframes accredit-pulse {{ 0%,100% {{ box-shadow:0 0 0 0 rgba(233,30,140,0.3); }} 50% {{ box-shadow:0 0 0 12px rgba(233,30,140,0); }} }}
+                @keyframes accredit-pulse {{ 0%,100% {{ box-shadow:0 0 0 0 rgba({_tr},{_tg},{_tb},0.3); }} 50% {{ box-shadow:0 0 0 12px rgba({_tr},{_tg},{_tb},0); }} }}
             </style>
         </head>
         <body>
             <div class="container">
                 {animated_logo_html}
 
-                <div style="background: linear-gradient(135deg, #E91E8C 0%, #C4166F 50%, #E91E8C 100%); padding: 32px 24px; text-align: center; border-radius: 12px; margin-bottom: 20px; margin-top: 20px;">
+                <div style="background: linear-gradient(135deg, #1ABC9C 0%, #16A085 50%, #1ABC9C 100%); padding: 32px 24px; text-align: center; border-radius: 12px; margin-bottom: 20px; margin-top: 20px;">
                     <div style="margin-bottom: 12px;">
                         <p style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 900; letter-spacing: 1px; font-family: Arial, sans-serif;">Join accredit.vip</p>
                         <p style="margin: 8px 0 0 0; color: rgba(255,255,255,0.85); font-size: 13px; font-weight: 500;">Premium Event Infrastructure</p>
@@ -247,7 +259,7 @@ async def send_guest_invitation(
                     <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.2);">
                         <p style="margin: 8px 0; color: rgba(255,255,255,0.9); font-size: 13px;">Ready to host your own event?</p>
                         <div style="display: inline-block; margin-top: 8px;">
-                            <a href="{settings.FRONTEND_URL}/create-event" style="display: block; background: #ffffff; color: #E91E8C; padding: 12px 32px; border-radius: 12px 12px 0 0; text-decoration: none; font-weight: bold; font-size: 14px; font-family: Arial, sans-serif; letter-spacing: 0.5px;">Create Your Event</a>
+                            <a href="{settings.FRONTEND_URL}/create-event" style="display: block; background: #ffffff; color: #1ABC9C; padding: 12px 32px; border-radius: 12px 12px 0 0; text-decoration: none; font-weight: bold; font-size: 14px; font-family: Arial, sans-serif; letter-spacing: 0.5px;">Create Your Event</a>
                             <div style="width: 0; height: 0; margin: 0 auto; border-left: 14px solid transparent; border-right: 14px solid transparent; border-top: 10px solid #ffffff;"></div>
                         </div>
                     </div>
@@ -289,17 +301,17 @@ async def send_guest_invitation(
 
                     <center>
                         <div style="display: inline-block;">
-                            <a href="{rsvp_link}" style="display: block; background: #E91E8C; color: white; padding: 14px 40px; border-radius: 8px 8px 0 0; text-decoration: none; font-weight: bold; font-size: 16px;">
+                            <a href="{rsvp_link}" style="display: block; background: {theme}; color: white; padding: 14px 40px; border-radius: 8px 8px 0 0; text-decoration: none; font-weight: bold; font-size: 16px;">
                                 RSVP Now
                             </a>
-                            <div style="width: 0; height: 0; margin: 0 auto; border-left: 16px solid transparent; border-right: 16px solid transparent; border-top: 12px solid #E91E8C;"></div>
+                            <div style="width: 0; height: 0; margin: 0 auto; border-left: 16px solid transparent; border-right: 16px solid transparent; border-top: 12px solid {theme};"></div>
                         </div>
                     </center>
 
                     <p style="margin-top: 30px; color: #64748b; font-size: 14px;">
                         Please RSVP by clicking the button above or visiting the link below:
                     </p>
-                    <p style="color: #E91E8C; word-break: break-all; font-size: 12px;">
+                    <p style="color: {theme}; word-break: break-all; font-size: 12px;">
                         {rsvp_link}
                     </p>
 

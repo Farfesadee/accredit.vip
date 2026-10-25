@@ -5,6 +5,10 @@ import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import { Calendar, Clock, MapPin, Check, X } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
+import BrandSplash from "@/components/shared/brand-splash";
+import GalaRSVP from "@/components/rsvp/GalaRSVP";
+import AnniversaryRSVP from "@/components/rsvp/AnniversaryRSVP";
+import WeddingRSVP from "@/components/rsvp/WeddingRSVP";
 
 interface RSVPData {
   event_title: string;
@@ -13,8 +17,12 @@ interface RSVPData {
   venue: string;
   host_name: string;
   guest_name: string;
+  guest_email?: string | null;
+  guest_phone?: string | null;
   cover_image: string | null;
   event_theme_color?: string;
+  event_slug?: string | null;
+  experience?: "gala" | "anniversary" | "wedding" | "standard";
   rsvp_status?: string;
   rsvp_note?: string | null;
 }
@@ -51,12 +59,45 @@ export default function RSVPPage() {
   const [selectedResponse, setSelectedResponse] = useState<"yes" | "no" | null>(null);
   const [declineNote, setDeclineNote] = useState("");
   const [showSplash, setShowSplash] = useState(true);
+  const [experienceContent, setExperienceContent] = useState<any | null>(null);
+  const [experienceError, setExperienceError] = useState(false);
   const themeColor = rsvpData?.event_theme_color || "#1ABC9C";
+  const experience =
+    rsvpData?.experience && rsvpData.experience !== "standard" && rsvpData?.event_slug
+      ? rsvpData.experience
+      : null;
 
+  // An event that opens with a film or a montage renders its own page (film,
+  // montage, invitation, RSVP). Every link we send for those events, whether a
+  // personal invite, a resend or a pass, therefore opens that page and never
+  // the generic RSVP card. Only events with no film reach the card below.
   useEffect(() => {
-    const timer = setTimeout(() => setShowSplash(false), 5500);
-    return () => { clearTimeout(timer); };
-  }, []);
+    if (!experience || experienceContent || !rsvpData?.event_slug) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await apiClient<any>(
+          `/rsvp/register/${rsvpData?.event_slug}`
+        );
+        const payload = data?.[`${experience}_content`];
+        if (cancelled) return;
+        if (payload) setExperienceContent(payload);
+        else setExperienceError(true);
+      } catch {
+        if (!cancelled) setExperienceError(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [experience, experienceContent, rsvpData?.event_slug]);
+
+  // Tell the shared chrome (progress bar, cookie banner, floating buttons) to
+  // step aside: this is a bespoke invitation, not a platform page.
+  useEffect(() => {
+    if (!experience) return;
+    try {
+      window.dispatchEvent(new Event("accredit:bespoke-invite"));
+    } catch {}
+  }, [experience]);
 
   useEffect(() => {
     const loadRsvpData = async () => {
@@ -97,25 +138,65 @@ export default function RSVPPage() {
   };
 
   if (showSplash) {
-    return (
-      <div className="min-h-screen bg-white relative overflow-hidden">
-        <iframe src="/" className="absolute inset-0 w-full h-full border-0" title="accredit.vip" />
-        <div className="absolute inset-0 bg-black/10 z-[1]" onClick={(e) => e.preventDefault()} />
-        <div className="absolute inset-0 bg-gradient-to-b from-[#0D1B2A]/90 via-[#0D1B2A]/80 to-[#0D1B2A] z-10 flex flex-col items-center justify-center px-6 text-center">
-          <Image
-            src="/logo-mark.png"
-            alt="Accredit Interactive"
-            width={260}
-            height={50}
-            className="h-10 w-auto object-contain mx-auto mb-6"
-            priority
+    return <BrandSplash onDone={() => setShowSplash(false)} />;
+  }
+
+  // Film and montage events: their own page, with this guest already known.
+  if (experience) {
+    if (experienceContent) {
+      const guestProps = {
+        name: rsvpData!.guest_name,
+        email: rsvpData!.guest_email ?? "",
+        phone: rsvpData!.guest_phone ?? "",
+        status: rsvpData!.rsvp_status ?? "pending",
+      };
+      const slug = rsvpData!.event_slug as string;
+      if (experience === "anniversary") {
+        return (
+          <AnniversaryRSVP
+            slug={slug}
+            content={experienceContent}
+            guestToken={String(token)}
+            guest={guestProps}
           />
-          <p className="text-white/50 text-xs uppercase tracking-[0.2em] font-medium mb-1">Event Invitation</p>
-          <div className="mt-8 flex flex-col items-center gap-4">
-            <div className="w-10 h-10 border-3 border-white/30 border-t-white rounded-full animate-spin" />
-            <p className="text-white/90 text-lg font-bold tracking-[0.25em]">PLEASE WAIT</p>
+        );
+      }
+      if (experience === "wedding") {
+        return (
+          <WeddingRSVP
+            slug={slug}
+            content={experienceContent}
+            guestToken={String(token)}
+            guest={guestProps}
+          />
+        );
+      }
+      return (
+        <GalaRSVP
+          slug={slug}
+          content={experienceContent}
+          guestToken={String(token)}
+          guest={guestProps}
+        />
+      );
+    }
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#070707] px-6 text-center">
+        {experienceError ? (
+          <div>
+            <p className="font-serif text-xl" style={{ color: "#F3EDE2" }}>
+              We could not open your invitation.
+            </p>
+            <p className="mt-3 text-sm" style={{ color: "#8f8778" }}>
+              Please check your connection and refresh this page.
+            </p>
           </div>
-        </div>
+        ) : (
+          <div
+            className="h-12 w-12 animate-spin rounded-full border-2"
+            style={{ borderColor: "rgba(255,255,255,0.18)", borderTopColor: themeColor }}
+          />
+        )}
       </div>
     );
   }

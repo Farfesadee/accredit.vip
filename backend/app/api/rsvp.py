@@ -25,6 +25,9 @@ router = APIRouter()
 class RSVPResponse(BaseModel):
     response: str
     note: str | None = None
+    # Event 82 (gala) only: one companion on the same pass. Ignored elsewhere.
+    plus_one: bool | None = None
+    plus_one_name: str | None = None
 
 
 async def _send_whatsapp(to: str, message: str, media_url: str | None = None) -> tuple[bool, str | None]:
@@ -74,7 +77,7 @@ async def _send_qr_after_rsvp(guest_id: int, event_id: int):
             flyer_result = await db.execute(
                 select(FlierAsset).where(FlierAsset.event_id == event_id).order_by(FlierAsset.created_at.desc())
             )
-            flyer = flyer_result.scalar_one_or_none()
+            flyer = flyer_result.scalars().first()
             flyer_url = flyer.url if flyer else event.cover_image
             qr_image_path = _upload_path_from_url(flyer_url) if flyer_url else None
             qr_image_url = qr_to_url(qr_token_url, image_path=qr_image_path, size=250)
@@ -104,7 +107,14 @@ async def _send_qr_after_rsvp(guest_id: int, event_id: int):
                         qr_media_url = _absolute_url(qr_image_url)
                         flyer_media_url = _absolute_url(flyer_url)
                         media_urls = [m for m in (flyer_media_url, qr_media_url) if m]
+                        from app.api.event_registration import is_gala_event as _is_gala
+                        if _is_gala(event) and qr_media_url:
+                            # Gala QR already embeds the poster: one media item.
+                            media_urls = [qr_media_url]
                         qr_content_sid = settings.TWILIO_WHATSAPP_QR_CONTENT_SID
+                        # The QR template (ACAMB v5) is ACAMB-specific: only use
+                        # it for event 67. Every other event stays free-form so
+                        # guests get their own event's QR, never ACAMB's.
                         # Best-effort: deliver the flyer + QR image directly (free-form).
                         # This sends the actual QR code (with flyer) whenever the 24h
                         # free-form window is open. For cold contacts it fails, so we
@@ -117,8 +127,26 @@ async def _send_qr_after_rsvp(guest_id: int, event_id: int):
                         if media_urls:
                             media_kwargs = {"media_urls": media_urls} if len(media_urls) > 1 else {"media_url": media_urls[0]}
                             ok, provider_id = await _shared_send_whatsapp(guest.phone, body, **media_kwargs)
-                        if not ok and qr_content_sid:
+                        if not ok and qr_content_sid and getattr(event, "id", None) == 67:
                             content_vars = {"1": guest.name or "", "_content_sid": qr_content_sid}
+                            ok, provider_id = await _shared_send_whatsapp(guest.phone, body, media_url=None, content_vars=content_vars)
+                        gala_qr_sid = getattr(settings, "TWILIO_WHATSAPP_GALA_QR_CONTENT_SID", "")
+                        if not ok and gala_qr_sid and _is_gala(event):
+                            # Cold contact: approved utility template (the QR
+                            # itself always travels by email).
+                            content_vars = {"1": guest.name or "", "_content_sid": gala_qr_sid}
+                            ok, provider_id = await _shared_send_whatsapp(guest.phone, body, media_url=None, content_vars=content_vars)
+                        from app.api.event_registration import is_anniversary_event as _is_anniversary
+
+                        anniv_qr_sid = getattr(settings, "TWILIO_WHATSAPP_ANNIV_QR_CONTENT_SID", "")
+                        if not ok and _is_anniversary(event) and anniv_qr_sid:
+                            # Cold contact for event 84: same approved-template
+                            # contract, with a link to the guest's own pass.
+                            content_vars = {
+                                "1": guest.name or "",
+                                "2": qr_token_url,
+                                "_content_sid": anniv_qr_sid,
+                            }
                             ok, provider_id = await _shared_send_whatsapp(guest.phone, body, media_url=None, content_vars=content_vars)
                         elif not ok:
                             ok, provider_id = await _send_whatsapp(guest.phone, body, media_url=qr_media_url)
@@ -165,6 +193,11 @@ async def get_rsvp_data(
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
+    # Events that open with a film or a montage render their own page, so the
+    # per-guest link carries the slug and the surface to show: a guest who taps
+    # any link for those events gets the same experience as the public link.
+    from app.api.event_registration import experience_for
+
     return {
         "event_title": event.title,
         "event_date": str(event.event_date),
@@ -172,8 +205,12 @@ async def get_rsvp_data(
         "venue": event.venue,
         "host_name": event.host_name,
         "guest_name": guest.name,
+        "guest_email": guest.email,
+        "guest_phone": guest.phone,
         "cover_image": event.cover_image or None,
-        "event_theme_color": getattr(event, "theme_color", "#E91E8C") or "#E91E8C",
+        "event_theme_color": getattr(event, "theme_color", "#1ABC9C") or "#1ABC9C",
+        "event_slug": event.slug,
+        "experience": experience_for(event),
         "rsvp_status": guest.rsvp_status,
         "rsvp_note": guest.rsvp_note,
         "rsvp_open": getattr(event, "rsvp_open", True),
@@ -214,6 +251,25 @@ async def submit_rsvp(
 
     if rsvp.note:
         guest.rsvp_note = rsvp.note
+
+    # Event 82 (gala) only: the personal-link page can record one companion who
+    # rides on the same pass. Every other event ignores these fields entirely.
+    if rsvp.plus_one is not None:
+        try:
+            from app.api.event_registration import is_gala_event
+        except Exception:
+            is_gala_event = None
+        if is_gala_event is not None and is_gala_event(event):
+            data = dict(guest.custom_data or {})
+            if rsvp.plus_one:
+                data["plus_one"] = True
+                data["plus_one_name"] = (rsvp.plus_one_name or "").strip()
+                data["party_size"] = 2
+            else:
+                data.pop("plus_one", None)
+                data.pop("plus_one_name", None)
+                data.pop("party_size", None)
+            guest.custom_data = data
 
     from datetime import datetime
     guest.rsvped_at = datetime.utcnow()

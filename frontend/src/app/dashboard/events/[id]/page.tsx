@@ -124,6 +124,10 @@ function EventDetailContent() {
   const [exportingMsg, setExportingMsg] = useState(false);
   const [publishChannel, setPublishChannel] = useState("email");
   const [publishing, setPublishing] = useState(false);
+  const [copiedRsvp, setCopiedRsvp] = useState(false);
+  const [asoebiOrders, setAsoebiOrders] = useState<any[]>([]);
+  const [asoebiLoading, setAsoebiLoading] = useState(false);
+  const [asoebiUpdating, setAsoebiUpdating] = useState<number | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<{ title: string; message: string; variant?: "danger" | "warning" | "default"; onConfirm: () => void } | null>(null);
   const [publishError, setPublishError] = useState("");
   const [checkinStats, setCheckinStats] = useState<{ checked_in: number; rsvp_accepted: number; total_guests: number; recent_checkins: any[] } | null>(null);
@@ -178,6 +182,14 @@ function EventDetailContent() {
       getEvent(Number(id)).then(setEvent).catch(() => {});
     }
   }, [searchParams, id]);
+
+  // Wedding-only: fetch Aso Ebi orders once the event slug is known.
+  useEffect(() => {
+    if (event?.slug === "patrick-sarah-white-wedding" && id) {
+      loadAsoebiOrders();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [event?.slug, id]);
 
   useEffect(() => {
     const tabsEl = tabsRef.current;
@@ -287,8 +299,7 @@ function EventDetailContent() {
 
   const loadPurchases = async () => {
     try {
-      const p = await apiClient<any[]>(`/tickets/events/${id}/purchases`);
-      setPurchases(p);
+      const p = await apiClient<any[]>(`/tickets/events/${id}/purchases`);      setPurchases(p);
     } catch {}
   };
 
@@ -297,6 +308,30 @@ function EventDetailContent() {
       const f = await apiClient<any[]>(`/events/${id}/fliers`);
       setFliers(f);
     } catch {}
+  };
+
+  // Wedding-only (Patrick & Sarah): Aso Ebi orders fallback list. Other events never call this.
+  const loadAsoebiOrders = async () => {
+    setAsoebiLoading(true);
+    try {
+      const res = await apiClient<{ orders: any[] }>(`/events/${id}/asoebi-orders`);
+      setAsoebiOrders(res.orders || []);
+    } catch {
+      setAsoebiOrders([]);
+    } finally {
+      setAsoebiLoading(false);
+    }
+  };
+
+  const setAsoebiStatus = async (orderId: number, status: string) => {
+    setAsoebiUpdating(orderId);
+    try {
+      await apiClient(`/events/${id}/asoebi-orders/${orderId}`, { method: "PATCH", body: { status } });
+      setAsoebiOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status } : o)));
+    } catch {}
+    finally {
+      setAsoebiUpdating(null);
+    }
   };
 
   const uploadCover = async (file: File) => {
@@ -745,6 +780,20 @@ function EventDetailContent() {
     </div>
   );
   if (!event) return <EventDetailSkeleton />;
+  // Account isolation: each dashboard opens only with its own designated login.
+  if (user && event.organizer_id && Number(event.organizer_id) !== Number(user.id)) return (
+    <div className="flex min-h-screen flex-col items-center justify-center p-4">
+      <div className="text-center space-y-4 max-w-sm">
+        <AlertTriangle className="mx-auto h-10 w-10 text-amber-500" aria-hidden="true" />
+        <h2 className="text-xl font-semibold">This dashboard belongs to another account</h2>
+        <p className="text-sm text-muted-foreground">Please log in with the email and password designated for this event to manage it.</p>
+        <button onClick={() => router.push("/dashboard")} className="rounded-lg border border-input px-4 py-2 text-sm font-medium hover:bg-accent flex items-center gap-2 justify-center">
+          <ArrowLeft className="w-4 h-4" />
+          Back to my dashboard
+        </button>
+      </div>
+    </div>
+  );
 
   const guestLimit = guestLimitFromRange(event.guest_count_range);
   const remainingGuests = guestLimit === null ? null : Math.max(guestLimit - totalGuests, 0);
@@ -1030,8 +1079,81 @@ function EventDetailContent() {
                     </div>
                   )}
 
-                  {/* Publish Section */}
-                  {event.status !== "published" && (
+                  {/* Generic RSVP link: works for anyone, even guests not on the list */}
+                  {event.slug && (
+                    <div className="rounded-xl bg-teal-50 border border-teal-200 p-4">
+                      <h3 className="text-sm font-bold text-secondary mb-2 flex items-center gap-2">
+                        <Copy className="w-4 h-4 text-teal-600" />
+                        Generic RSVP Link
+                      </h3>
+                      <p className="text-xs text-slate-500 mb-2">Send this to anyone you forgot to add. They can RSVP without being on the guest list.</p>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 bg-white rounded-lg p-3 font-mono text-xs text-slate-700 break-all border border-teal-100 select-all">
+                          {typeof window !== "undefined" ? `${window.location.origin}/rsvp/register/${event.slug}` : ""}
+                        </div>
+                        <button
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(`${window.location.origin}/rsvp/register/${event.slug}`);
+                              setCopiedRsvp(true);
+                              setTimeout(() => setCopiedRsvp(false), 2000);
+                            } catch {}
+                          }}
+                          className="flex-shrink-0 h-10 px-4 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold transition-colors"
+                        >
+                          {copiedRsvp ? "Copied!" : "Copy"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Aso Ebi orders: wedding-only fallback when WhatsApp confirmations go missing */}
+                  {event.slug === "patrick-sarah-white-wedding" && (
+                    <div className="rounded-xl bg-amber-50 border border-amber-200 p-4">
+                      <h3 className="text-sm font-bold text-secondary mb-1">Aso Ebi Orders ({asoebiOrders.length})</h3>
+                      <p className="text-xs text-slate-500 mb-3">Buyers confirm payment on WhatsApp. Confirm here as backup when a confirmation message goes missing.</p>
+                      {asoebiLoading ? (
+                        <p className="text-xs text-slate-500 flex items-center gap-2"><Loader className="w-3.5 h-3.5 animate-spin" /> Loading orders...</p>
+                      ) : asoebiOrders.length === 0 ? (
+                        <p className="text-xs text-slate-500">No Aso Ebi orders yet.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {asoebiOrders.map((o) => (
+                            <div key={o.id} className="bg-white rounded-lg border border-amber-100 p-3">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-sm font-bold text-secondary truncate">{o.buyer_name}</p>
+                                <span className={`flex-shrink-0 px-2 py-0.5 rounded text-[10px] font-bold ${o.status === "confirmed" ? "bg-emerald-100 text-emerald-700" : o.status === "cancelled" ? "bg-red-100 text-red-600" : "bg-amber-100 text-amber-700"}`}>
+                                  {o.status}
+                                </span>
+                              </div>
+                              <p className="font-mono text-[11px] text-slate-500 mt-0.5">{o.reference} · {o.quantity} pkg · ₦{(o.amount || 0).toLocaleString()}</p>
+                              <p className="text-[11px] text-slate-500 truncate">{o.phone}{o.email ? ` · ${o.email}` : ""}</p>
+                              {o.status === "submitted" && (
+                                <div className="flex gap-2 mt-2">
+                                  <button
+                                    disabled={asoebiUpdating === o.id}
+                                    onClick={() => setAsoebiStatus(o.id, "confirmed")}
+                                    className="flex-1 h-8 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors disabled:opacity-50"
+                                  >
+                                    {asoebiUpdating === o.id ? "..." : "Confirm"}
+                                  </button>
+                                  <button
+                                    disabled={asoebiUpdating === o.id}
+                                    onClick={() => setAsoebiStatus(o.id, "cancelled")}
+                                    className="flex-1 h-8 rounded-lg bg-white border border-red-200 text-red-600 text-xs font-bold hover:bg-red-50 transition-colors disabled:opacity-50"
+                                  >
+                                    Cancel
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Publish Section */}                  {event.status !== "published" && (
                     <div className="rounded-xl bg-amber-50 border border-amber-200 p-5 space-y-4">
                       <h3 className="font-bold text-secondary flex items-center gap-2">
                         <Zap className="w-5 h-5 text-amber-600" />

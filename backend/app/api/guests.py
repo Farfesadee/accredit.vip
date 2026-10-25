@@ -104,6 +104,13 @@ async def list_guests(
     offset: int = Query(0, ge=0, description="Pagination offset"),
     limit: int = Query(10, ge=1, le=1000, description="Page size"),
 ):
+    # Account isolation: only the designated organizer sees their guest list.
+    event_result = await db.execute(
+        select(Event).where(Event.id == event_id, Event.organizer_id == user.id)
+    )
+    if not event_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Event not found")
+
     base = select(Guest).where(Guest.event_id == event_id, Guest.deleted_at == None)
     count_base = select(func.count()).select_from(Guest).where(Guest.event_id == event_id, Guest.deleted_at == None)
 
@@ -207,11 +214,42 @@ async def list_guests(
             pass
 
     guest_list = []
+    # Wedding-only: attach each guest's Aso Ebi order status so the
+    # dashboard can show payment state per row. No other event is affected.
+    asoebi_map: dict = {}
+    if guests and getattr(guests[0], "event_id", None):
+        from app.api.event_registration import is_wedding_event as _is_wed
+        from app.models.guest import AsoEbiOrder as _AsoEbiOrder
+
+        ev0 = await db.get(Event, guests[0].event_id)
+        if ev0 is not None and _is_wed(ev0):
+            orows = (await db.execute(
+                select(_AsoEbiOrder).where(_AsoEbiOrder.event_id == ev0.id)
+            )).scalars().all()
+            for o in orows:
+                if o.guest_id:
+                    asoebi_map[o.guest_id] = {
+                        "reference": o.reference, "quantity": o.quantity,
+                        "amount": o.amount, "status": o.status,
+                    }
+                else:
+                    key = (o.phone or "", (o.email or "").lower())
+                    asoebi_map.setdefault(("unlinked", key), []).append({
+                        "reference": o.reference, "quantity": o.quantity,
+                        "amount": o.amount, "status": o.status,
+                        "buyer_name": o.buyer_name,
+                    })
     for g in guests:
         d = g.to_dict()
         d["communication_status"] = comm_status_map.get(g.id, {})
         d["std_count"] = std_counts.get(g.id, 0)
         d["qr_count"] = qr_counts.get(g.id, 0)
+        if g.id in asoebi_map:
+            d["asoebi"] = asoebi_map[g.id]
+        else:
+            fell = asoebi_map.get(("unlinked", ((g.phone or ""), ((g.email or "").lower()))))
+            if fell:
+                d["asoebi"] = fell[0]
         guest_list.append(d)
 
     return {

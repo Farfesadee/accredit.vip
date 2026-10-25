@@ -174,7 +174,7 @@ export function GetStartedGuide() {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
       <div className="rounded-2xl bg-white max-w-2xl w-full shadow-2xl overflow-hidden">
         {/* Header */}
-        <div className="bg-gradient-to-r from-[#1ABC9C] to-[#d0147a] px-6 py-8 text-white">
+        <div className="bg-gradient-to-r from-[#1ABC9C] to-[#16A085] px-6 py-8 text-white">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 flex items-center justify-center" style={{ color: "white" }}>
               {IconMap[currentStep.icon] || <span className="text-3xl">{currentStep.icon}</span>}
@@ -194,7 +194,7 @@ export function GetStartedGuide() {
         {/* Progress Bar */}
         <div className="h-1 bg-gray-200">
           <div
-            className="h-full bg-gradient-to-r from-[#1ABC9C] to-[#d0147a] transition-all duration-300"
+            className="h-full bg-gradient-to-r from-[#1ABC9C] to-[#16A085] transition-all duration-300"
             style={{ width: `${(step / steps.length) * 100}%` }}
           />
         </div>

@@ -154,6 +154,12 @@ async def list_fliers(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    # Account isolation: only the designated organizer lists their fliers.
+    event_result = await db.execute(
+        select(Event).where(Event.id == event_id, Event.organizer_id == user.id)
+    )
+    if not event_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Event not found")
     result = await db.execute(
         select(FlierAsset).where(FlierAsset.event_id == event_id)
     )

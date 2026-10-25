@@ -9,6 +9,7 @@ import { ChevronLeft, Search, CheckCircle2, XCircle, Eye, Trash2, Menu, X, BarCh
 import { apiClient } from "@/lib/api-client";
 import { NotificationBell } from "@/components/notification-bell";
 import { AdminLogoutButton } from "@/components/admin/logout-button";
+import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 
 function maskEmail(email: string) {
   const [local, domain] = email.split("@");
@@ -52,6 +53,19 @@ export default function AdminEventsPage() {
   const [statusSel, setStatusSel] = useState("draft");
   const [ctrlMsg, setCtrlMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [ctrlBusy, setCtrlBusy] = useState(false);
+  const [copiedAdminRsvp, setCopiedAdminRsvp] = useState(false);
+
+  // Branded in-app confirm dialog (replaces native confirm())
+  const [confirmState, setConfirmState] = useState<{
+    title: string; message: string; confirmLabel: string;
+    variant: "danger" | "warning" | "default"; action: () => void;
+  } | null>(null);
+  const [listMsg, setListMsg] = useState<string | null>(null);
+  const runConfirm = () => {
+    const action = confirmState?.action;
+    setConfirmState(null);
+    action?.();
+  };
 
   // Extended controls
   const [rsvpOpen, setRsvpOpen] = useState(true);
@@ -195,29 +209,32 @@ export default function AdminEventsPage() {
     setCtrlBusy(false);
   };
 
-  const downloadReport = async () => {
+  const openReport = () => {
     if (!ctrlEvent) return;
     setCtrlMsg(null);
-    try {
-      const res = await fetch(`/api/v1/admin/events/${ctrlEvent.id}/report-download`, { credentials: "include" });
-      if (!res.ok) throw new Error("Download failed");
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `event-${ctrlEvent.id}-report.xlsx`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-      setCtrlMsg({ ok: true, text: "Report downloaded" });
-    } catch (err: any) {
-      setCtrlMsg({ ok: false, text: err.message || "Download failed" });
+    // Designed HTML report in the event's own flyer colours. It opens in a new
+    // tab for review and offers Print / Save as PDF plus a download of the
+    // self contained .html file from its own toolbar.
+    const url = `/api/v1/admin/events/${ctrlEvent.id}/report-html`;
+    const win = window.open(url, "_blank", "noopener,noreferrer");
+    if (!win) {
+      setCtrlMsg({ ok: false, text: "Allow pop-ups for this site to open the report" });
+      return;
     }
+    setCtrlMsg({ ok: true, text: "Report opened in a new tab" });
   };
 
   const markPaidPublish = async () => {    if (!ctrlEvent) return;
-    if (!confirm(`Mark pending payments as paid and publish "${ctrlEvent.title}"? Use this when the organizer already paid offline.`)) return;
+    setConfirmState({
+      title: "Mark paid and publish?",
+      message: `Mark pending payments as paid and publish "${ctrlEvent.title}"? Use this when the organizer already paid offline.`,
+      confirmLabel: "Mark Paid",
+      variant: "warning",
+      action: doMarkPaidPublish,
+    });
+  };
+
+  const doMarkPaidPublish = async () => {    if (!ctrlEvent) return;
     setCtrlBusy(true);
     setCtrlMsg(null);
     try {
@@ -230,16 +247,6 @@ export default function AdminEventsPage() {
       setCtrlMsg({ ok: false, text: err.message || "Action failed" });
     }
     setCtrlBusy(false);
-  };
-
-  const impersonateOrganizer = async () => {    if (!ctrlEvent?.organizer_id) return;
-    if (!confirm(`Open the organizer dashboard for "${ctrlEvent.title}"? You will be logged out as admin and must log back in afterwards.`)) return;
-    try {
-      await apiClient(`/admin/users/${ctrlEvent.organizer_id}/impersonate`, { method: "POST" });
-      window.location.href = "/dashboard";
-    } catch (err: any) {
-      setCtrlMsg({ ok: false, text: err.message || "Impersonation failed" });
-    }
   };
 
   // ---- Guest manager ----
@@ -293,7 +300,18 @@ export default function AdminEventsPage() {
   };
 
   const deleteGuest = async (id: number, name: string) => {
-    if (!ctrlEvent || !confirm(`Remove ${name} from this event?`)) return;
+    if (!ctrlEvent) return;
+    setConfirmState({
+      title: "Remove guest?",
+      message: `Remove ${name} from this event?`,
+      confirmLabel: "Remove",
+      variant: "danger",
+      action: () => doDeleteGuest(id, name),
+    });
+  };
+
+  const doDeleteGuest = async (id: number, name: string) => {
+    if (!ctrlEvent) return;
     try {
       await apiClient(`/admin/events/${ctrlEvent.id}/guests/${id}`, { method: "DELETE" });
       setGuestMsg({ ok: true, text: `Removed ${name}` });
@@ -329,7 +347,16 @@ export default function AdminEventsPage() {
   };
 
   const deleteAnn = async (id: number) => {
-    if (!confirm("Delete this announcement?")) return;
+    setConfirmState({
+      title: "Delete announcement?",
+      message: "Delete this announcement? This cannot be undone.",
+      confirmLabel: "Delete",
+      variant: "danger",
+      action: () => doDeleteAnn(id),
+    });
+  };
+
+  const doDeleteAnn = async (id: number) => {
     try {
       await apiClient(`/admin/announcements/${id}`, { method: "DELETE" });
       loadAnns();
@@ -368,8 +395,14 @@ export default function AdminEventsPage() {
       } else {
         await apiClient(`/admin/events/${eventId}/${action}`, { method: "POST" });
       }
+      setListMsg(null);
       fetchEvents();
-    } catch {}
+    } catch (err: any) {
+      const msg = err?.message || "Action failed";
+      setListMsg(/401|unauthorized|not authenticated|session|token/i.test(msg)
+        ? "Your session expired. Please log out and log back in, then try again."
+        : msg);
+    }
   };
 
   const confirmReject = async () => {
@@ -508,8 +541,22 @@ export default function AdminEventsPage() {
               <div className="rounded-xl border-2 border-[#1ABC9C]/30 bg-[#f8fffe] p-4">
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-sm font-black text-[#0D1B2A]">#{ctrlEvent.id} {ctrlEvent.title}</p>
-                  <div className="flex gap-2">
-                    <button onClick={impersonateOrganizer} title="Open this organizer's dashboard as them (logged, support only)" className="text-xs font-bold text-[#1ABC9C] hover:underline">Open organizer dashboard</button>
+                  <div className="flex gap-2 items-center">
+                    {ctrlEvent.slug && (
+                      <button
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(`${window.location.origin}/rsvp/register/${ctrlEvent.slug}`);
+                            setCopiedAdminRsvp(true);
+                            setTimeout(() => setCopiedAdminRsvp(false), 2000);
+                          } catch {}
+                        }}
+                        title="Copy the generic RSVP link for this event"
+                        className="text-xs font-bold text-teal-600 hover:underline"
+                      >
+                        {copiedAdminRsvp ? "Copied!" : "Copy RSVP link"}
+                      </button>
+                    )}
                     <button onClick={() => { setCtrlEvent(null); setCtrlMsg(null); }} className="text-xs font-bold text-[#94a3b8] hover:text-[#0D1B2A]">Change event</button>
                   </div>
                 </div>
@@ -602,8 +649,8 @@ export default function AdminEventsPage() {
                 <button onClick={markPaidPublish} disabled={ctrlBusy} className="mt-2 w-full py-2.5 rounded-xl border-2 border-amber-300 text-amber-700 font-bold text-sm hover:bg-amber-50 transition-all disabled:opacity-50">
                   Mark offline payments as paid + publish
                 </button>
-                <button onClick={downloadReport} disabled={ctrlBusy} className="mt-2 w-full py-2.5 rounded-xl border-2 border-[#0D1B2A] text-[#0D1B2A] font-bold text-sm hover:bg-[#0D1B2A] hover:text-white transition-all disabled:opacity-50">
-                  Download full report (Excel)
+                <button onClick={openReport} disabled={ctrlBusy} className="mt-2 w-full py-2.5 rounded-xl border-2 border-[#0D1B2A] text-[#0D1B2A] font-bold text-sm hover:bg-[#0D1B2A] hover:text-white transition-all disabled:opacity-50">
+                  Open full report (HTML infographic)
                 </button>
               </div>
             )}
@@ -700,6 +747,11 @@ export default function AdminEventsPage() {
             </div>
           ) : (
             <div className="space-y-4">
+              {listMsg && (
+                <div className="bg-red-50 border border-red-200 text-red-700 text-sm font-medium rounded-xl p-3">
+                  {listMsg}
+                </div>
+              )}
                 {events
                   .sort((a, b) => new Date(b.created_at || b.event_date || 0).getTime() - new Date(a.created_at || a.event_date || 0).getTime())
                   .filter((e) => !searchQuery || e.title?.toLowerCase().includes(searchQuery.toLowerCase()) || e.host_name?.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -730,7 +782,7 @@ export default function AdminEventsPage() {
                               <button onClick={() => handleAction(event.id, "reject")} className="p-3 hover:bg-red-50 rounded-xl" title="Reject"><XCircle className="w-5 h-5 text-red-600" /></button>
                             </>
                           )}
-                          <button onClick={() => { if (confirm("Are you sure you want to delete this event? This action cannot be undone.")) handleAction(event.id, "delete"); }} className="p-3 hover:bg-red-50 rounded-xl" title="Delete"><Trash2 className="w-5 h-5 text-[#94a3b8]" /></button>
+                          <button onClick={() => setConfirmState({ title: "Delete this event?", message: "Are you sure you want to delete this event? This action cannot be undone.", confirmLabel: "Delete Event", variant: "danger", action: () => handleAction(event.id, "delete") })} className="p-3 hover:bg-red-50 rounded-xl" title="Delete"><Trash2 className="w-5 h-5 text-[#94a3b8]" /></button>
                         </div>
                       </div>
                     );
@@ -761,6 +813,17 @@ export default function AdminEventsPage() {
             </div>
           </div>
         </div>
+      )}
+      {confirmState && (
+        <ConfirmDialog
+          open
+          title={confirmState.title}
+          message={confirmState.message}
+          confirmLabel={confirmState.confirmLabel}
+          variant={confirmState.variant}
+          onConfirm={runConfirm}
+          onCancel={() => setConfirmState(null)}
+        />
       )}
     </div>
   );

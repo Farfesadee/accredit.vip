@@ -2,14 +2,14 @@
 
 import { useState } from "react";
 
-type Country = { code: string; iso: string; name: string };
+export type Country = { code: string; iso: string; name: string };
 
-function flagEmoji(iso: string): string {
+export function flagEmoji(iso: string): string {
   return String.fromCodePoint(...[...iso.toUpperCase()].map((c) => 127397 + c.charCodeAt(0)));
 }
 
 // Nigeria first (dominant default), then alphabetical by name.
-const COUNTRIES: Country[] = [
+export const COUNTRIES: Country[] = [
   { code: "+234", iso: "NG", name: "Nigeria" },
   { code: "+93", iso: "AF", name: "Afghanistan" },
   { code: "+355", iso: "AL", name: "Albania" },

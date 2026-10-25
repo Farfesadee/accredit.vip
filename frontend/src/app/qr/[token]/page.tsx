@@ -8,6 +8,8 @@ import { apiClient } from "@/lib/api-client";
 interface TicketData {
   guest_name: string;
   category: string | null;
+  party_size?: number | null;
+  plus_one_name?: string | null;
   event_title: string;
   event_date: string;
   event_time: string;
@@ -88,6 +90,16 @@ export default function QrTicketPage() {
               <span className="inline-block mt-2 text-xs font-black uppercase tracking-wider text-white px-3 py-1 rounded-full" style={{ background: "#1ABC9C" }}>
                 {ticket.category}
               </span>
+            )}
+            {ticket.party_size === 2 && (
+              <>
+                <span className="mt-2 block text-xs font-black uppercase tracking-wider text-white px-3 py-1 rounded-full" style={{ background: "#0D1B2A" }}>
+                  Admits 2
+                </span>
+                {ticket.plus_one_name && (
+                  <p className="mt-2 text-sm text-[#64748b]">with {ticket.plus_one_name}</p>
+                )}
+              </>
             )}
           </div>
 

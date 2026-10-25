@@ -58,6 +58,7 @@ function PickupsContent() {
   const [loading, setLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const railOpen = sidebarOpen || mobileNavOpen;
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newName, setNewName] = useState("");
@@ -87,25 +88,31 @@ function PickupsContent() {
   const [showReport, setShowReport] = useState(false);
 
   useEffect(() => {
-    const token = getCookie("pickup_token");
-    if (!token) {
-      router.push("/dashboard/pickups/login");
-      return;
-    }
-    setAuthenticated(true);
-    fetchPickups();
-    fetchMe();
+    // Platform admins ride on their main session (backend accepts it);
+    // pickup staff use the pickup_token cookie. Only bounce to the pickup
+    // login when neither works.
+    (async () => {
+      const ok = await fetchMe();
+      if (ok) {
+        setAuthenticated(true);
+        fetchPickups();
+      } else {
+        router.push("/dashboard/pickups/login");
+      }
+    })();
   }, [router]);
 
-  const fetchMe = async () => {
+  const fetchMe = async (): Promise<boolean> => {
     try {
       const res = await fetch("/api/v1/pickups/me");
       if (res.ok) {
         const data = await res.json();
         setUserRole(data.role);
         setUserName(data.name);
+        return true;
       }
     } catch {}
+    return false;
   };
 
   const fetchPickups = async () => {
@@ -350,28 +357,28 @@ function PickupsContent() {
       <aside
         className={`fixed lg:static inset-y-0 left-0 z-50 flex flex-col transition-all duration-300 ${
           mobileNavOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
-        } ${sidebarOpen ? "w-64" : "w-20"}`}
+        } ${railOpen ? "w-64" : "w-20"}`}
         style={{ background: "linear-gradient(180deg, #0D1B2A 0%, #1a2d42 100%)" }}
       >
         <div className="h-16 flex items-center justify-between px-4 flex-shrink-0" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-          {sidebarOpen && (
+          {railOpen && (
             <div className="flex items-center gap-2">
               <Package className="w-6 h-6 text-[#6F3D14]" />
               <span className="font-bold text-white text-sm">Lajokes Fashion</span>
             </div>
           )}
           <button onClick={() => { setSidebarOpen(!sidebarOpen); setMobileNavOpen(false); }} className="p-2 hover:bg-white/10 rounded-lg transition-colors" title={sidebarOpen ? "Collapse" : "Expand"}>
-            {sidebarOpen ? <X className="w-5 h-5 text-white/80" /> : <Menu className="w-5 h-5 text-white/80" />}
+            {railOpen ? <X className="w-5 h-5 text-white/80" /> : <Menu className="w-5 h-5 text-white/80" />}
           </button>
         </div>
 
         <nav className="flex-1 px-3 py-6">
-          {sidebarOpen && <p className="px-3 text-[10px] font-bold text-white/25 uppercase tracking-widest mb-3">Pickup Management</p>}
+          {railOpen && <p className="px-3 text-[10px] font-bold text-white/25 uppercase tracking-widest mb-3">Pickup Management</p>}
           <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium" style={{ background: "rgba(111,61,20,0.15)", color: "#6F3D14" }}>
             <Package className="w-4 h-4" />
-            {sidebarOpen && <span>Pickups</span>}
+            {railOpen && <span>Pickups</span>}
           </div>
-          {isSuperAdmin && sidebarOpen && (
+          {isSuperAdmin && railOpen && (
             <button onClick={handleStaffModalOpen} className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-white/70 hover:text-white hover:bg-white/5 mt-2 transition-colors">
               <UserCog className="w-4 h-4" />
               <span>Manage Staff</span>
@@ -380,7 +387,7 @@ function PickupsContent() {
         </nav>
 
         <div className="px-3 py-4 flex-shrink-0" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-          {sidebarOpen && (
+          {railOpen && (
             <p className="px-3 text-xs text-white/40 mb-2 truncate">
               {userName} ({isSuperAdmin ? "Admin" : "Staff"})
             </p>
@@ -389,7 +396,7 @@ function PickupsContent() {
             onClick={() => setShowLogoutConfirm(true)}
             className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-red-50 border-2 border-red-200 text-red-600 hover:bg-red-100 hover:border-red-400 font-bold text-sm transition-all"
           >
-            <LogOut className="w-5 h-5" /> {sidebarOpen && "Sign Out"}
+            <LogOut className="w-5 h-5" /> {railOpen && "Sign Out"}
           </button>
         </div>
       </aside>
@@ -406,16 +413,16 @@ function PickupsContent() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={() => setShowReport(true)} className="flex items-center gap-2 px-4 py-2 rounded-lg border border-[#d9e2ec] text-[#0D1B2A] text-sm font-semibold hover:bg-[#f8f9fc] transition-colors">
-              <FileText className="w-4 h-4" /> View Report
+            <button onClick={() => setShowReport(true)} className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg border border-[#d9e2ec] text-[#0D1B2A] text-sm font-semibold hover:bg-[#f8f9fc] transition-colors">
+              <FileText className="w-4 h-4" /><span className="hidden sm:inline">View Report</span>
             </button>
-            <button onClick={() => setShowAddModal(true)} className="flex items-center gap-2 px-4 py-2 rounded-lg bg-[#6F3D14] text-white text-sm font-bold hover:bg-[#5a3110] transition-colors">
-              <UserPlus className="w-4 h-4" /> Add Client
+            <button onClick={() => setShowAddModal(true)} className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg bg-[#6F3D14] text-white text-sm font-bold hover:bg-[#5a3110] transition-colors">
+              <UserPlus className="w-4 h-4" /><span className="hidden sm:inline">Add Client</span>
             </button>
           </div>
         </header>
 
-        <main className="flex-1 px-6 py-8 overflow-auto">
+        <main className="flex-1 px-4 sm:px-6 py-6 sm:py-8 overflow-auto">
           {notifMsg && (
             <div className={`mb-6 px-4 py-3 rounded-lg text-sm font-semibold ${
               notifMsg.type === "success" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-red-50 text-red-700 border border-red-200"
@@ -458,12 +465,12 @@ function PickupsContent() {
               <table className="w-full">
                 <thead>
                   <tr style={{ background: "#f8f9fc", borderBottom: "1px solid #e8edf2" }}>
-                    <th className="text-left px-4 py-3 text-xs font-bold text-[#64748b] uppercase tracking-wider">Client</th>
-                    <th className="text-left px-4 py-3 text-xs font-bold text-[#64748b] uppercase tracking-wider">Phone</th>
-                    <th className="text-left px-4 py-3 text-xs font-bold text-[#64748b] uppercase tracking-wider">Code</th>
-                    <th className="text-left px-4 py-3 text-xs font-bold text-[#64748b] uppercase tracking-wider">Status</th>
-                    <th className="text-left px-4 py-3 text-xs font-bold text-[#64748b] uppercase tracking-wider">Sent</th>
-                    <th className="text-center px-4 py-3 text-xs font-bold text-[#64748b] uppercase tracking-wider">Actions</th>
+                    <th className="text-left px-3 sm:px-4 py-3 text-xs font-bold text-[#64748b] uppercase tracking-wider whitespace-nowrap">Client</th>
+                    <th className="text-left px-3 sm:px-4 py-3 text-xs font-bold text-[#64748b] uppercase tracking-wider whitespace-nowrap">Phone</th>
+                    <th className="text-left px-3 sm:px-4 py-3 text-xs font-bold text-[#64748b] uppercase tracking-wider whitespace-nowrap">Code</th>
+                    <th className="text-left px-3 sm:px-4 py-3 text-xs font-bold text-[#64748b] uppercase tracking-wider whitespace-nowrap">Status</th>
+                    <th className="text-left px-3 sm:px-4 py-3 text-xs font-bold text-[#64748b] uppercase tracking-wider whitespace-nowrap">Sent</th>
+                    <th className="text-center px-3 sm:px-4 py-3 text-xs font-bold text-[#64748b] uppercase tracking-wider whitespace-nowrap">Actions</th>
                   </tr>
                 </thead>
                 <tbody>

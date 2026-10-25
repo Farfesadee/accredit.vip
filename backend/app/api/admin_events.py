@@ -1,6 +1,8 @@
 """Admin endpoints for event approval and management"""
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+import os
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func, or_
 from pydantic import BaseModel
@@ -270,7 +272,7 @@ async def delete_event(
         raise HTTPException(status_code=404, detail="Event not found")
 
     # Delete the event
-    db.delete(event)
+    await db.delete(event)
     await db.commit()
 
     await log_action(
@@ -325,6 +327,7 @@ def _controls_dict(event: Event) -> dict:
         "spotlight": getattr(event, "spotlight", False),
         "invite_subject": event.invite_subject,
         "invite_body": event.invite_body,
+        "slug": event.slug,
     }
 
 
@@ -731,9 +734,71 @@ async def admin_download_event_report(
     )
 
 
+@router.get("/admin/events/{event_id}/report-html")
+async def admin_event_report_html(
+    event_id: int,
+    download: bool = Query(False),
+    admin: User = Depends(check_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Designed HTML report (infographic) in the event's own flyer colours.
+
+    Opens in the browser for review and prints to PDF from the toolbar; the
+    same page with `?download=1` saves a self contained .html file.
+    """
+    from fastapi.responses import HTMLResponse
+
+    from app.models.checkin import CheckIn
+    from app.models.flier import FlierAsset
+    from app.models.ticket_purchase import TicketPurchase
+    from app.services.event_report import build_event_report_html
+
+    upload_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")
+
+    event = await _admin_get_event(db, event_id)
+    guests = (await db.execute(
+        select(Guest).where(Guest.event_id == event_id, Guest.deleted_at == None).order_by(Guest.id)  # noqa: E711
+    )).scalars().all()
+    checked_in = {
+        row[0]
+        for row in (await db.execute(select(CheckIn.guest_id).where(CheckIn.event_id == event_id))).all()
+    }
+    purchases = (await db.execute(
+        select(TicketPurchase).where(
+            TicketPurchase.event_id == event_id, TicketPurchase.status == "completed"
+        ).order_by(TicketPurchase.created_at.desc())
+    )).scalars().all()
+
+    # Artwork: newest flyer, falling back to the event cover.
+    flyer_bytes: bytes | None = None
+    try:
+        flier = (await db.execute(
+            select(FlierAsset).where(FlierAsset.event_id == event_id).order_by(FlierAsset.created_at.desc())
+        )).scalars().first()
+        artwork_url = (flier.url if flier else None) or event.cover_image
+        if artwork_url:
+            path = os.path.join(upload_dir, os.path.basename(artwork_url))
+            if os.path.exists(path):
+                with open(path, "rb") as fh:
+                    flyer_bytes = fh.read()
+    except Exception:
+        flyer_bytes = None
+
+    html = build_event_report_html(event, list(guests), checked_in, list(purchases), flyer_bytes)
+
+    await log_action(db=db, user_id=admin.id, action="event_report_viewed",
+                     resource_type="event", resource_id=event_id,
+                     description=f"Viewed designed event report ({len(guests)} guests)")
+
+    headers = {}
+    if download:
+        safe_title = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in (event.title or "event"))[:40]
+        headers["Content-Disposition"] = f'attachment; filename="event-{event_id}-{safe_title}-report.html"'
+    return HTMLResponse(content=html, headers=headers)
+
+
 class MarkPaidPublishRequest(BaseModel):
     make_public: bool = True
-
 
 @router.post("/admin/events/{event_id}/mark-paid-publish")
 async def admin_mark_paid_publish(
@@ -824,35 +889,6 @@ async def admin_suspend_user(
                      resource_type="user", resource_id=user_id,
                      description=f"{target.email} {'suspended' if req.suspended else 'unsuspended'} by admin")
     return {"id": target.id, "email": target.email, "is_active": target.is_active}
-
-
-@router.post("/admin/users/{user_id}/impersonate")
-async def admin_impersonate_user(
-    user_id: int,
-    response: Response,
-    admin: User = Depends(check_admin),
-    db: AsyncSession = Depends(get_db),
-):
-    """Support login: swap the admin's session for the organizer's dashboard.
-
-    Audited. Cannot target other admins. The admin must log back in
-    afterwards to restore their own session.
-    """
-    from app.core.security import create_access_token
-    from app.api.auth import set_auth_cookie
-
-    target = (await db.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
-    if not target:
-        raise HTTPException(status_code=404, detail="User not found")
-    if target.role in ("admin", "super_admin"):
-        raise HTTPException(status_code=403, detail="Cannot impersonate another admin")
-    token = create_access_token({"sub": str(target.id)})
-    set_auth_cookie(response, token)
-    await log_action(db=db, user_id=admin.id, action="admin_impersonate",
-                     resource_type="user", resource_id=user_id,
-                     description=f"Admin {admin.email} opened organizer dashboard of {target.email}")
-    return {"user": {"id": target.id, "email": target.email, "full_name": target.full_name},
-            "message": f"Now viewing as {target.email}. Log back in to restore admin session."}
 
 
 @router.get("/admin/events/{event_id}/review-details")

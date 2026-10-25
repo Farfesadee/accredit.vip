@@ -75,7 +75,9 @@ async def send_invites(
                 await db.flush()
 
                 if channel == "email":
-                    rsvp_link = f"{settings.FRONTEND_URL}/rsvp/{guest.rsvp_token}"
+                    from app.api.messaging import invite_link_for
+
+                    rsvp_link = invite_link_for(event, guest)
 
                     # Create InviteMessage record for tracking
                     msg = InviteMessage(batch_id=batch.id, guest_id=guest.id, channel="email")
@@ -108,6 +110,7 @@ async def send_invites(
                         female_dress_code=event.female_dress_code,
                         image_data=image_data,
                         message_id=msg.id,
+                        theme_color=getattr(event, "theme_color", None) or "#1ABC9C",
                     )
                     if ok:
                         msg.status = "delivered"

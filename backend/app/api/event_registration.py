@@ -16,9 +16,11 @@ from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.security import get_current_user
 from app.models.event import Event
-from app.models.guest import Guest
+from app.models.guest import AsoEbiOrder, Guest
 from app.models.flier import FlierAsset
+from app.models.user import User
 
 router = APIRouter()
 
@@ -31,6 +33,267 @@ class RegistrationRequest(BaseModel):
     organization: str = ""
     sub_department: str = ""
     category: str = ""
+    # Event 82 (gala) only: one companion on the same pass. Ignored elsewhere.
+    plus_one: bool = False
+    plus_one_name: str = ""
+
+
+# Wedding experience (Patrick & Sarah, Dec 19 2026). Everything gated on
+# this slug so no other event's flow, templates or behavior change.
+WEDDING_SLUGS = ("patrick-sarah-white-wedding",)
+
+
+def is_wedding_event(event: Event) -> bool:
+    return (event.slug or "") in WEDDING_SLUGS
+
+
+ASOEBI_PRICE = 100000
+ASOEBI_BANK = {"bank": "Zenith Bank", "number": "2051777597", "name": "Anadoo Ayegh"}
+ASOEBI_WHATSAPP = "+2349046751511"
+
+
+def wedding_content() -> dict:
+    from urllib.parse import quote
+
+    return {
+        "groom": "Patrick Ekperikpe Ekpo",
+        "bride": "Sarah Ekene Elumeze",
+        "hashtag": "#HeavyOnTheEkpos",
+        "countdown_to": "2026-12-19T12:00:00+01:00",
+        "ceremony": {
+            "label": "White Wedding Ceremony",
+            "venue": "Church of the Assumption",
+            "location": "No. 2 Kwame Nkrumah Cres, Asokoro Abuja",
+            "date": "Saturday, December 19, 2026",
+            "time": "12:00 PM",
+        },
+        "reception": {
+            "venue": "Los Angeles Event Center, Kado, Abuja",
+            "time": "3:00 PM",
+        },
+        "dress_code": {
+            "label": "White Wedding Dress Code",
+            "theme": "Black Tie",
+            "message": "We invite you to celebrate with us in an elegant palette of soft, sophisticated pastel tones.",
+            "style": "Black Tie | Pastel Elegance",
+            "note": "Guests are encouraged to embrace refined black-tie silhouettes while incorporating one or more of the above pastel shades.",
+            "colors": [
+                {"name": "Blush Pink", "hex": "#F5C6D0"},
+                {"name": "Powder Blue", "hex": "#B9D2E8"},
+                {"name": "Lavender", "hex": "#D3C6E8"},
+                {"name": "Sage Green", "hex": "#AEBD9D"},
+                {"name": "Soft Peach", "hex": "#F9CFB4"},
+                {"name": "Butter Yellow", "hex": "#F7E8A4"},
+                {"name": "Dusty Rose", "hex": "#D29B9B"},
+            ],
+        },
+        "video_url": "/uploads/wedding-0cd6a8bc64df.mp4",
+        # Opening curtain the client supplied (their montage). Silent clip: the
+        # music below plays over it. reveal_at is the moment the curtain has
+        # fully left the frame, so the invitation photo takes over instead of
+        # sitting on the black tail of the clip.
+        "invite_video_url": "/uploads/patrick-sarah-opening.mp4",
+        "invite_poster_url": "/uploads/patrick-sarah-opening-poster.jpg",
+        "reveal_at": 2.4,
+        "hero_image": "/uploads/wedding-7e961344fddf.jpg",
+        "hero_line": "To join in the celebration of love at their White Wedding, Abuja, Saturday 19 December 2026.",
+        "music_url": "/uploads/wedding-music.mp3",
+        "photos": [
+            "/uploads/wedding-313c597dfe3a.jpg",
+            "/uploads/wedding-7e961344fddf.jpg",
+            "/uploads/wedding-476c3bda1342.jpg",
+        ],
+        "monogram_url": "/uploads/wedding-crest-cream.png",
+        "hotels_note": "For our guests coming from outside Nigeria or far from Abuja who need a place to stay before the wedding.",
+        "hotels": [
+            {"name": "Fraser Suites", "address": "Plot 294, Leventis Close, Central Business District, Abuja"},
+            {"name": "Transcorp Hilton", "address": "1 Aguiyi Ironsi Street, Maitama District, Abuja"},
+            {"name": "Summerset Continental Hotels", "address": "73 Usuma St, Maitama, Abuja 900271, FCT"},
+            {"name": "John Woods", "address": "6 Sokode Crescent, Wuse Zone 5, Abuja, FCT"},
+            {"name": "Bolton White", "address": "7 Gwandu Street, Area 11, Garki, opposite Sahad Stores, Abuja, FCT"},
+            {"name": "Belanova Apartment", "address": "Plot 3349 Lualaba Close, Off Madeira Street, Maitama District, Abuja"},
+            {"name": "The Palms Hotel", "address": "Plot 269, Muhammadu Buhari Way, Central Business District, Abuja"},
+        ],
+        "asoebi": {
+            "price": ASOEBI_PRICE,
+            "items": ["3 yards of lace", "3 yards of lining", "Gele", "Souvenir from the couple"],
+            "bank": ASOEBI_BANK,
+            "whatsapp": ASOEBI_WHATSAPP,
+            "whatsapp_link": "https://wa.me/2349046751511?text=" + quote("Hello, I just paid for the Aso Ebi package. Please confirm my payment."),
+        },
+    }
+
+
+# Nelkon & Blessing Obi-Uzu 30th Wedding Anniversary (event 84).
+# Everything gated on this slug so no other event's flow, templates or
+# behavior change.
+ANNIVERSARY_SLUGS = ("nelkon-blessing-30th-anniversary",)
+
+
+def is_anniversary_event(event: Event) -> bool:
+    return (event.slug or "") in ANNIVERSARY_SLUGS
+
+
+def anniversary_content() -> dict:
+    return {
+        "groom": "Nelkon",
+        "bride": "Blessing",
+        "surname": "Obi-Uzu",
+        "hashtag": "#NelkonBlessing30",
+        "since": "December 1996",
+        "countdown_to": "2026-12-15T15:00:00+01:00",
+        "ceremony": {
+            "label": "30th Wedding Anniversary",
+            "venue": "Landmark Centre, Hall 2",
+            "location": "Plot 3 & 4, Water Corporation Road, Victoria Island, Lagos",
+            "date": "Tuesday, December 15, 2026",
+            "time": "3:00 PM",
+        },
+        "dress_code": {
+            "label": "Dress Code",
+            "theme": "Elegant",
+            "note": "Come dressed to celebrate thirty years with us.",
+            "colors": [],
+        },
+        # Short montage of the client's own artwork, set to "Ordinary".
+        "video_url": "/uploads/anniversary-montage.mp4",
+        "invite_video_url": "/uploads/anniversary-montage.mp4",
+        "invite_poster_url": "/uploads/photo_2026-10-21_17-48-21.jpg",
+        "hero_image": "/uploads/photo_2026-10-21_17-48-21.jpg",
+        "hero_line": "Celebrating 30 beautiful years of love, laughter and lifelong companionship.",
+        "collage_url": "/uploads/anniversary-collage.jpg",
+        # The couple's own photographs, recovered from the client's PDF at
+        # full size, carry the gallery and the opening film.
+        "photos": [
+            {
+                "url": "/uploads/anniv-studio.jpg",
+                "caption": "Nelkon & Blessing",
+                "note": "Today",
+            },
+            {
+                "url": "/uploads/anniv-traditional.jpg",
+                "caption": "The beginning",
+                "note": "December 1996",
+            },
+            {
+                "url": "/uploads/anniv-garden.jpg",
+                "caption": "Still smiling",
+                "note": "Thirty years later",
+            },
+            {
+                "url": "/uploads/anniv-outdoor.jpg",
+                "caption": "The family",
+                "note": "All of us",
+            },
+        ],
+        "music_url": "/uploads/anniversary-ordinary.mp3",
+    }
+
+
+# The Art of Attention (exclusive lifestyle gala dinner + book launch).
+# Everything gated on this slug so no other event's flow, templates or
+# behavior change.
+GALA_SLUGS = ("the-art-of-attention",)
+
+
+def is_gala_event(event: Event) -> bool:
+    return (event.slug or "") in GALA_SLUGS
+
+
+def experience_for(event: Event) -> str:
+    """Which cinematic page an event opens with.
+
+    "wedding", "anniversary" and "gala" are the events that open with a film
+    and a montage, so every RSVP link they send (invite, pass, resend, host
+    link) has to land on that page. "standard" means the event has no film at
+    all, and the generic RSVP page is the right surface for it.
+    """
+    if is_wedding_event(event):
+        return "wedding"
+    if is_anniversary_event(event):
+        return "anniversary"
+    if is_gala_event(event):
+        return "gala"
+    return "standard"
+
+
+def gala_content() -> dict:
+    from urllib.parse import quote
+
+    venue_query = "Federal Palace Hotel and Casino, Victoria Island, Lagos"
+    after_query = "Proxy Lagos"
+
+    return {
+        # Client direction (Oct 2026): the invitation leads with the gala dinner
+        # experience. The Art of Attention and its book launch stay present, but
+        # only as a quiet part of the evening, never the headline.
+        "title": "A Gala Dinner Experience",
+        "title_lines": ["A Gala Dinner", "Experience"],
+        "kicker": "An Exclusive Lifestyle Gala",
+        "line": "An evening of fine dining, presence and quiet power.",
+        "book_launch": {
+            "title": "The Art of Attention",
+            "note": "The evening will also mark the launch of The Art of Attention, with a short reading from the author.",
+        },
+        "plus_one": {
+            "allowed": True,
+            "note": "Your invitation admits two: you and one companion.",
+        },
+        "host": "The Iconic Lifestyle Connoisseur",
+        "countdown_to": "2026-12-02T17:00:00+01:00",
+        "date": {
+            "full": "Wednesday, 2 December 2026",
+            "weekday": "Wednesday",
+            "day": "2",
+            "month": "December",
+            "year": "2026",
+        },
+        "red_carpet": "5:00 PM prompt",
+        "venue": {
+            "name": "Federal Palace Hotel",
+            "room": "Balmoral Convention Centre",
+            "location": "Victoria Island, Lagos",
+            "map_url": "https://www.google.com/maps/dir/?api=1&destination=" + quote(venue_query),
+        },
+        "after_party": {
+            "venue": "Proxy Lagos",
+            "note": "Immediately after the gala",
+            "map_url": "https://www.google.com/maps/dir/?api=1&destination=" + quote(after_query),
+        },
+        "dress_code": {
+            "style": "Stylish in All Black",
+            "note": "Strictly all black, elegantly executed. A touch of gold is welcome.",
+        },
+        "evening": [
+            {"time": "5:00 PM", "title": "Red Carpet", "detail": "Arrival, cocktails and portraits"},
+            {
+                "time": "To follow",
+                "title": "Gala Dinner",
+                "detail": "The heart of the evening: a seated dinner in the Balmoral Convention Centre, with wine and conversation",
+            },
+            {
+                "time": "After dinner",
+                "title": "A short reading",
+                "detail": "A few words from the author to mark the launch of The Art of Attention",
+            },
+            {"time": "Late", "title": "After Party", "detail": "Proxy Lagos"},
+        ],
+        "quote": {
+            "text": "Good company, good wine, good welcome, can make good people.",
+            "author": "William Shakespeare",
+        },
+        # Versioned URLs so the replaced poster, banner and films load fresh
+        # for everyone instead of a cached copy of the old artwork.
+        "poster_url": "/uploads/gala-poster.jpg?v=2",
+        "emblem_url": "/uploads/gala-emblem.jpg",
+        "portrait_url": "/uploads/gala-portrait.jpg",
+        "film_url": "/uploads/gala-film.mp4?v=3",
+        "film_poster_url": "/uploads/gala-poster.jpg?v=2",
+        # Phones get a dedicated 9:16 cut so the film fills the screen and the
+        # type stays readable (a 16:9 film shrinks to a stamp on a handset).
+        "film_vertical_url": "/uploads/gala-film-vertical.mp4?v=3",
+        "film_vertical_poster_url": "/uploads/gala-film-vertical-poster.jpg?v=2",
+    }
 
 
 def _normalize_phone(phone: str) -> str:
@@ -40,6 +303,9 @@ def _normalize_phone(phone: str) -> str:
     # Explicit country code supplied (e.g. "+1 2025550123" or "+234 8012345678")
     if phone.startswith('+'):
         digits = ''.join(c for c in phone if c.isdigit())
+        # Drop a Nigerian trunk zero typed after the country code ("+2340810..." -> "+234810...")
+        if digits.startswith('2340') and len(digits) > 4:
+            digits = '234' + digits[4:]
         return '+' + digits
 
     digits_only = ''.join(c for c in phone if c.isdigit())
@@ -114,7 +380,13 @@ async def get_registration_event_info(
 
     # Event 67 (ACAMB) and event 72 (Annette's BIG 40) use a two-step procedure:
     # the attendance question is shown first, then a details form only for "Yes".
-    is_two_step = event.id in (67, 72)
+    # The Art of Attention (gala) uses the same two-step logic.
+    is_two_step = (
+        event.id in (67, 72) or is_gala_event(event) or is_anniversary_event(event)
+    )
+
+    wedding = is_wedding_event(event)
+    gala = is_gala_event(event)
 
     flyer_result = await db.execute(
         select(FlierAsset).where(FlierAsset.event_id == event.id).order_by(FlierAsset.created_at.desc())
@@ -134,12 +406,18 @@ async def get_registration_event_info(
             "state": event.state,
             "cover_image": event.cover_image,
             "flyer_url": flyer_url,
-            "theme_color": getattr(event, "theme_color", "#E91E8C") or "#E91E8C",
+            "theme_color": getattr(event, "theme_color", "#1ABC9C") or "#1ABC9C",
             "host_name": event.host_name,
             "dress_code": event.dress_code,
             "registration_open": _registration_effectively_open(event),
         },
         "two_step": is_two_step,
+        "wedding": wedding,
+        "wedding_content": wedding_content() if wedding else None,
+        "anniversary": is_anniversary_event(event),
+        "anniversary_content": anniversary_content() if is_anniversary_event(event) else None,
+        "gala": gala,
+        "gala_content": gala_content() if gala else None,
         "extra_fields": ["organization", "sub_department"] if event.id == 67 else ["category"] if event.id == 74 else [],
     }
 
@@ -154,7 +432,9 @@ async def submit_registration(
     event = await _get_event_by_slug(event_slug, db)
     _raise_if_registration_closed(event)
 
-    is_two_step = event.id in (67, 72)
+    is_two_step = (
+        event.id in (67, 72) or is_gala_event(event) or is_anniversary_event(event)
+    )
     response_lower = req.response.lower()
     if response_lower not in ("accepted", "yes", "declined", "no"):
         raise HTTPException(status_code=400, detail="Please choose whether you will attend")
@@ -174,6 +454,9 @@ async def submit_registration(
     organization = req.organization.strip()
     sub_department = req.sub_department.strip()
     category = req.category.strip()
+    # Event 82 only: one companion rides on the guest's own pass.
+    plus_one = bool(req.plus_one) and is_gala_event(event)
+    plus_one_name = req.plus_one_name.strip() if plus_one else ""
 
     if event.id == 67:
         if not (name and email and phone and organization and sub_department):
@@ -188,6 +471,9 @@ async def submit_registration(
             raise HTTPException(status_code=400, detail="Category must be either Student or Professional")
     elif not (name and email and phone):
         raise HTTPException(status_code=400, detail="Name, email and phone number are required")
+
+    if is_gala_event(event) and plus_one and not plus_one_name:
+        raise HTTPException(status_code=400, detail="Please provide the name of your plus one")
 
     existing_guest = None
     if phone:
@@ -241,7 +527,7 @@ async def submit_registration(
         if event.id != 67:
             from app.api.guests import ensure_guest_capacity
 
-            await ensure_guest_capacity(db, event, 1)
+            await ensure_guest_capacity(db, event, 2 if plus_one else 1)
         guest = Guest(
             event_id=event.id,
             name=name,
@@ -268,6 +554,16 @@ async def submit_registration(
         }
         guest.category = category
 
+    if is_gala_event(event) and (organization or plus_one):
+        data = {**(guest.custom_data or {})}
+        if organization:
+            data["organization"] = organization
+        if plus_one:
+            data["plus_one"] = True
+            data["plus_one_name"] = plus_one_name
+            data["party_size"] = 2
+        guest.custom_data = data
+
     await db.commit()
     await db.refresh(guest)
 
@@ -293,3 +589,139 @@ async def submit_registration(
         "response": guest.rsvp_status,
         "message": message,
     }
+
+
+class AsoEbiRequest(BaseModel):
+    name: str = ""
+    phone: str = ""
+    email: str = ""
+    quantity: int = 1
+
+
+@router.post("/rsvp/asoebi/{event_slug}")
+async def submit_asoebi_order(
+    event_slug: str,
+    req: AsoEbiRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Aso Ebi package order (bank-transfer flow). Records the order, links
+    it to a guest when phone/email match, and returns receipt details plus
+    the WhatsApp confirmation link. Scoped to wedding events only."""
+    from urllib.parse import quote
+
+    event = await _get_event_by_slug(event_slug, db)
+    if not is_wedding_event(event):
+        raise HTTPException(status_code=404, detail="Aso Ebi is not available for this event")
+
+    name = req.name.strip()
+    phone = _normalize_phone(req.phone)
+    email = req.email.strip().lower()
+    quantity = max(1, min(int(req.quantity or 1), 50))
+    if not (name and phone and email):
+        raise HTTPException(status_code=400, detail="Please provide your full name, phone number and email address")
+
+    guest = None
+    if phone:
+        guest = (await db.execute(
+            select(Guest).where(and_(Guest.event_id == event.id, Guest.phone == phone))
+        )).scalars().first()
+    if not guest and email:
+        guest = (await db.execute(
+            select(Guest).where(and_(Guest.event_id == event.id, func.lower(Guest.email) == email))
+        )).scalars().first()
+
+    reference = "ASO-" + uuid.uuid4().hex[:8].upper()
+    order = AsoEbiOrder(
+        event_id=event.id,
+        guest_id=guest.id if guest else None,
+        buyer_name=name,
+        phone=phone,
+        email=email or None,
+        quantity=quantity,
+        amount=ASOEBI_PRICE * quantity,
+        reference=reference,
+        status="submitted",
+    )
+    db.add(order)
+    await db.commit()
+    await db.refresh(order)
+
+    wa_text = quote(
+        f"Hello, I just paid ₦{order.amount:,} for {quantity} Aso Ebi package(s). "
+        f"My name is {name} and my receipt reference is {reference}. Please confirm my payment."
+    )
+    return {
+        "status": "success",
+        "reference": reference,
+        "buyer_name": name,
+        "quantity": quantity,
+        "amount": order.amount,
+        "bank": ASOEBI_BANK,
+        "whatsapp": ASOEBI_WHATSAPP,
+        "whatsapp_link": f"https://wa.me/2349046751511?text={wa_text}",
+        "guest_linked": bool(guest),
+    }
+
+
+@router.get("/events/{event_id}/asoebi-orders")
+async def list_asoebi_orders(
+    event_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Organizer view of Aso Ebi orders (fallback when WhatsApp confirmations go missing)."""
+    result = await db.execute(
+        select(Event).where(Event.id == event_id, Event.organizer_id == user.id)
+    )
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Event not found")
+    orders = (await db.execute(
+        select(AsoEbiOrder).where(AsoEbiOrder.event_id == event_id).order_by(AsoEbiOrder.id.desc())
+    )).scalars().all()
+    return {
+        "orders": [
+            {
+                "id": o.id,
+                "buyer_name": o.buyer_name,
+                "phone": o.phone,
+                "email": o.email,
+                "quantity": o.quantity,
+                "amount": o.amount,
+                "reference": o.reference,
+                "status": o.status,
+                "guest_id": o.guest_id,
+                "created_at": o.created_at.isoformat() if o.created_at else None,
+            }
+            for o in orders
+        ]
+    }
+
+
+class AsoEbiStatusUpdate(BaseModel):
+    status: str
+
+
+@router.patch("/events/{event_id}/asoebi-orders/{order_id}")
+async def update_asoebi_order(
+    event_id: int,
+    order_id: int,
+    req: AsoEbiStatusUpdate,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Organizer confirms (or cancels) an Aso Ebi order."""
+    result = await db.execute(
+        select(Event).where(Event.id == event_id, Event.organizer_id == user.id)
+    )
+    if not result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Event not found")
+    order = (await db.execute(
+        select(AsoEbiOrder).where(AsoEbiOrder.id == order_id, AsoEbiOrder.event_id == event_id)
+    )).scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if req.status not in ("submitted", "confirmed", "cancelled"):
+        raise HTTPException(status_code=400, detail="Invalid status")
+    order.status = req.status
+    await db.commit()
+    return {"status": order.status, "reference": order.reference}

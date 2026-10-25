@@ -79,6 +79,12 @@ async def get_guest_qr(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    # Account isolation: QR tokens are entry passes, owner only.
+    event_result = await db.execute(
+        select(Event).where(Event.id == event_id, Event.organizer_id == user.id)
+    )
+    if not event_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="Event not found")
     result = await db.execute(
         select(QRCode).where(
             QRCode.guest_id == guest_id,

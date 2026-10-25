@@ -27,6 +27,16 @@ def _event_has_passed(event) -> bool:
     return event_end < datetime.now(timezone.utc)
 
 
+def _party_fields(guest) -> dict:
+    """Party size for events that allow a companion (event 82). Other events
+    carry no party data, so these come back as None and nothing changes."""
+    data = getattr(guest, "custom_data", None) or {}
+    return {
+        "party_size": data.get("party_size"),
+        "plus_one_name": data.get("plus_one_name"),
+    }
+
+
 def _get_client_info(request: Request) -> tuple[str | None, str | None]:
     ip = request.client.host if request.client else None
     ua = request.headers.get("user-agent")
@@ -102,6 +112,7 @@ async def verify_qr(req: ScanRequest, request: Request, db: AsyncSession = Depen
                 "phone": guest.phone,
                 "email": guest.email,
                 "invited_by": guest.invited_by,
+                **_party_fields(guest),
             },
             "event": {
                 "id": event.id,
@@ -127,6 +138,7 @@ async def verify_qr(req: ScanRequest, request: Request, db: AsyncSession = Depen
                 "phone": guest.phone,
                 "email": guest.email,
                 "invited_by": guest.invited_by,
+                **_party_fields(guest),
             },
             "event": {
                 "id": event.id,
@@ -153,6 +165,7 @@ async def verify_qr(req: ScanRequest, request: Request, db: AsyncSession = Depen
             "email": guest.email,
             "rsvp_status": guest.rsvp_status,
             "invited_by": guest.invited_by,
+            **_party_fields(guest),
         },
         "event": {
             "id": event.id,
@@ -198,6 +211,7 @@ async def qr_token_info(
         "valid": not is_used and not is_expired and not event_passed,
         "guest_name": guest.name,
         "category": guest.category,
+        **_party_fields(guest),
         "event_title": event.title,
         "event_date": str(event.event_date),
         "event_time": str(event.event_time),

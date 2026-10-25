@@ -78,6 +78,8 @@ interface GuestResult {
   checked_in: boolean;
   invited_by?: string | null;
   category?: string | null;
+  party_size?: number | null;
+  plus_one_name?: string | null;
 }
 
 interface ActivityItem {
@@ -813,6 +815,14 @@ export function AccreditationScanClient() {
                         <div>
                           <p className="text-xs text-white/50 uppercase tracking-wide">Category</p>
                           <p className="text-sm font-bold text-teal-300">{scanResult.guest.category}</p>
+                        </div>
+                      )}
+                      {scanResult.guest.party_size === 2 && (
+                        <div>
+                          <p className="text-xs text-white/50 uppercase tracking-wide">Party</p>
+                          <p className="text-sm font-bold text-amber-300">
+                            Admits 2{scanResult.guest.plus_one_name ? ` · ${scanResult.guest.plus_one_name}` : ""}
+                          </p>
                         </div>
                       )}
                       <div className="flex items-center justify-between pt-2 border-t border-white/10">

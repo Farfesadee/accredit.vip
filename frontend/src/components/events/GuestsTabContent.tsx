@@ -26,6 +26,7 @@ type Guest = {
   qr_count?: number;
   communication_status?: Record<string, { status: string; sent_at?: string; delivered_at?: string; opened_at?: string; error?: string }>;
   category?: string | null;
+  asoebi?: { status?: string; quantity?: number; reference?: string } | null;
 };
 
 type CustomField = {
@@ -873,6 +874,19 @@ export default function GuestsTabContent({
                             {eventId === 77 && guest.custom_data?.organization && (
                               <p className="text-xs text-slate-500 mt-1"><span className="font-medium text-slate-400">Org:</span> {guest.custom_data.organization}</p>
                             )}
+                            {eventId === 82 && guest.custom_data?.party_size === 2 && (
+                              <p className="text-xs text-amber-600 mt-1">
+                                <span className="font-medium">Plus one:</span> {guest.custom_data?.plus_one_name || "Companion"} (pass admits 2)
+                              </p>
+                            )}
+                            {guest.asoebi && (
+                              <p className="text-xs mt-1">
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${guest.asoebi.status === "confirmed" ? "bg-emerald-100 text-emerald-700" : guest.asoebi.status === "cancelled" ? "bg-red-100 text-red-600" : "bg-amber-100 text-amber-700"}`}>
+                                  Aso Ebi: {guest.asoebi.status} ({guest.asoebi.quantity} pkg{guest.asoebi.quantity !== 1 ? "s" : ""})
+                                </span>
+                                <span className="block font-mono text-[10px] text-slate-400 mt-0.5" title="Aso Ebi receipt reference">{guest.asoebi.reference}</span>
+                              </p>
+                            )}
                           </td>
                           <td className="px-4 py-4">
                             <div className="space-y-1">
@@ -1086,6 +1100,18 @@ export default function GuestsTabContent({
                             )}
                             {eventId === 77 && guest.custom_data?.organization && (
                               <p className="text-xs text-slate-500 mt-0.5"><span className="font-medium text-slate-400">Org:</span> {guest.custom_data.organization}</p>
+                            )}
+                            {eventId === 82 && guest.custom_data?.party_size === 2 && (
+                              <p className="text-xs text-amber-600 mt-0.5">
+                                <span className="font-medium">Plus one:</span> {guest.custom_data?.plus_one_name || "Companion"} (admits 2)
+                              </p>
+                            )}
+                            {guest.asoebi && (
+                              <p className="mt-0.5">
+                                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${guest.asoebi.status === "confirmed" ? "bg-emerald-100 text-emerald-700" : guest.asoebi.status === "cancelled" ? "bg-red-100 text-red-600" : "bg-amber-100 text-amber-700"}`}>
+                                  Aso Ebi: {guest.asoebi.status} ({guest.asoebi.quantity})
+                                </span>
+                              </p>
                             )}
                             <div className="text-xs text-slate-500 space-y-0.5 mt-0.5">
                             {guest.email && <p className="truncate">{guest.email}</p>}

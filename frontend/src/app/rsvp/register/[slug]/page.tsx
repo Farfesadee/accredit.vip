@@ -2,10 +2,13 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
-import Image from "next/image";
 import { Calendar, Clock, MapPin, Check, X, Loader, User, Building, Briefcase } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
+import BrandSplash from "@/components/shared/brand-splash";
 import EnvelopeSplash from "@/components/rsvp/EnvelopeSplash";
+import WeddingRSVP from "@/components/rsvp/WeddingRSVP";
+import GalaRSVP from "@/components/rsvp/GalaRSVP";
+import AnniversaryRSVP from "@/components/rsvp/AnniversaryRSVP";
 
 interface RegistrationEvent {
   id: number;
@@ -28,6 +31,9 @@ interface RegistrationData {
   event: RegistrationEvent;
   two_step?: boolean;
   extra_fields?: string[];
+  wedding_content?: any | null;
+  gala_content?: any | null;
+  anniversary_content?: any | null;
 }
 
 function formatDate(dateStr: string) {
@@ -73,6 +79,11 @@ function fullPhoneNumber(countryCode: string, local: string) {
 export default function EventRegistrationPage() {
   const params = useParams();
   const slug = params?.slug as string;
+  // Every RSVP link opens on the accredit.vip welcome screen (standing
+  // directive): the platform is shown, with a please wait spinner, before the
+  // guest's own invitation appears.
+  const isGalaSlug = slug === "the-art-of-attention";
+  const isAnniversarySlug = slug === "nelkon-blessing-30th-anniversary";
 
   const [showSplash, setShowSplash] = useState(true);
   const [showEnvelope, setShowEnvelope] = useState(false);
@@ -180,22 +191,15 @@ export default function EventRegistrationPage() {
   const isTwoStep = !!rsvpData?.two_step;
   const isNFW = rsvpData?.event.id === 74;
 
+  // Load the invitation while the welcome screen is up, so the guest lands on
+  // a ready page the moment it lifts.
   useEffect(() => {
-    const timer = setTimeout(() => setShowSplash(false), 5000);
-    return () => clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
-    if (showSplash) return;
     const load = async () => {
       if (!slug) return;
       try {
         const data = await apiClient<RegistrationData>(`/rsvp/register/${slug}`);
         setRsvpData(data);
-        if (data.two_step) {
-          setShowSplash(false);
-          if (data.event.id === 72) setShowEnvelope(true);
-        }
+        if (data.event.id === 72) setShowEnvelope(true);
       } catch (err: any) {
         setError(err.detail || err.message || "Could not load event details");
       } finally {
@@ -203,7 +207,7 @@ export default function EventRegistrationPage() {
       }
     };
     load();
-  }, [slug, showSplash]);
+  }, [slug]);
 
   const submitRsvp = async () => {
     if (!name.trim() || !phone.trim() || !email.trim() || !response || (isNFW && !category)) return;
@@ -265,25 +269,18 @@ export default function EventRegistrationPage() {
 
   if (showSplash) {
     return (
-      <div className="min-h-screen bg-white relative overflow-hidden">
-        <iframe src="/" className="absolute inset-0 w-full h-full border-0" title="accredit.vip" />
-        <div className="absolute inset-0 bg-black/10 z-[1]" onClick={(e) => e.preventDefault()} />
-        <div className="absolute inset-0 bg-gradient-to-b from-[#0D1B2A]/90 via-[#0D1B2A]/80 to-[#0D1B2A] z-10 flex flex-col items-center justify-center px-6 text-center">
-          <Image
-            src="/logo-mark.png"
-            alt="Accredit Interactive"
-            width={260}
-            height={50}
-            className="h-10 w-auto object-contain mx-auto mb-6"
-            priority
-          />
-          <p className="text-white/50 text-xs uppercase tracking-[0.2em] font-medium mb-1">Event Invitation</p>
-          <div className="mt-8 flex flex-col items-center gap-4">
-            <div className="w-10 h-10 border-3 border-white/30 border-t-white rounded-full animate-spin" />
-            <p className="text-white/90 text-lg font-bold tracking-[0.25em]">PLEASE WAIT</p>
-          </div>
-        </div>
-      </div>
+      <>
+        {/* The client's typefaces start downloading under the welcome screen,
+            so the cover never re-flows when they arrive. */}
+        {isAnniversarySlug && (
+          <>
+            <link rel="preload" href="/fonts/urbanist.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+            <link rel="preload" href="/fonts/yellowtail.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+            <link rel="preload" href="/fonts/greatvibes.woff2" as="font" type="font/woff2" crossOrigin="anonymous" />
+          </>
+        )}
+        <BrandSplash onDone={() => setShowSplash(false)} />
+      </>
     );
   }
 
@@ -302,6 +299,33 @@ export default function EventRegistrationPage() {
   }
 
   if (loading) {
+    if (isGalaSlug) {
+      return (
+        <div className="flex min-h-screen items-center justify-center" style={{ background: "#070707" }}>
+          <div className="text-center">
+            <Loader className="mx-auto mb-5 h-7 w-7 animate-spin" style={{ color: "#C9A227" }} />
+            <p className="text-[10px] uppercase" style={{ color: "#8f8778", letterSpacing: "0.32em" }}>
+              A Gala Dinner Experience
+            </p>
+          </div>
+        </div>
+      );
+    }
+    if (isAnniversarySlug) {
+      return (
+        <div className="flex min-h-screen items-center justify-center" style={{ background: "#241B33" }}>
+          <div className="text-center">
+            <Loader className="mx-auto mb-6 h-8 w-8 animate-spin" style={{ color: "#C3B2DE" }} />
+            <p className="text-[10px] uppercase" style={{ color: "#C3B2DE", letterSpacing: "0.32em" }}>
+              Thirty Years
+            </p>
+            <p className="mt-3 text-[11px]" style={{ color: "rgba(250,246,239,0.55)" }}>
+              Please wait while the invitation opens
+            </p>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#0D1B2A]">
         <div className="text-center">
@@ -352,6 +376,21 @@ export default function EventRegistrationPage() {
     );
   }
 
+  // ---------- The Art of Attention (gala dinner + book launch, standalone) ----------
+  if (rsvpData.gala_content) {
+    return <GalaRSVP slug={slug} content={rsvpData.gala_content} />;
+  }
+
+  // ---------- Wedding experience (Patrick & Sarah, event 80, standalone) ----------
+  if (rsvpData.wedding_content) {
+    return <WeddingRSVP slug={slug} content={rsvpData.wedding_content} />;
+  }
+
+  // ---------- Anniversary experience (Nelkon & Blessing, event 84, standalone) ----------
+  if (rsvpData.anniversary_content) {
+    return <AnniversaryRSVP slug={slug} content={rsvpData.anniversary_content} />;
+  }
+
   // ---------- Two-step flow (ACAMB event 67 / Annette event 72) ----------
   if (isTwoStep) {
     const event = rsvpData!.event;
@@ -377,11 +416,11 @@ export default function EventRegistrationPage() {
                         style={{ borderColor: themeColor }}
                       />
                     )}
-                    <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-50">
-                      <Check className="w-8 h-8 text-blue-600" />
+                    <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full" style={{ background: `${themeColor}1A` }}>
+                      <Check className="w-8 h-8" style={{ color: themeColor }} />
                     </div>
                     <h1 className="text-2xl font-bold text-[#0D1B2A]">Registration Received</h1>
-                    <div className="mt-6 bg-rose-50 border border-rose-200 rounded-xl p-5 text-left">
+                    <div className="mt-6 rounded-xl p-5 text-left" style={{ background: `${themeColor}0D`, border: `1px solid ${themeColor}30` }}>
                       <p className="text-sm font-semibold text-slate-800 mb-2">What happens next?</p>
                       <ul className="text-sm text-slate-700 space-y-2 list-disc list-inside leading-relaxed">
                         <li>Your registration details have been received and your event access is being processed.</li>
@@ -411,8 +450,8 @@ export default function EventRegistrationPage() {
                   </>
                 ) : (
                   <>
-                    <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-rose-50">
-                      <X className="w-8 h-8 text-rose-500" />
+                    <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full" style={{ background: `${themeColor}1A` }}>
+                      <X className="w-8 h-8" style={{ color: themeColor }} />
                     </div>
                     <h1 className="text-2xl font-bold text-[#0D1B2A]">Thank You For Your Response</h1>
                     <p className="mt-3 text-slate-600 leading-relaxed">

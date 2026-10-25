@@ -12,6 +12,7 @@ type SavedLineupPerson = {
 
 export type EventData = {
   id: number;
+  organizer_id: number;
   title: string;
   event_type: string;
   host_name: string;

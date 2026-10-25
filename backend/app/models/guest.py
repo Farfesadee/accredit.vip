@@ -54,3 +54,25 @@ class Guest(Base):
             "qr_token": qr.token if qr else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
+
+
+class AsoEbiOrder(Base):
+    """Aso Ebi package orders (bank-transfer flow, confirmed over WhatsApp).
+
+    Scoped by event_id. Linked to a Guest when the buyer matches by phone or
+    email; otherwise guest_id stays null and the order still records.
+    """
+
+    __tablename__ = "asoebi_orders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    event_id = Column(Integer, ForeignKey("events.id"), nullable=False)
+    guest_id = Column(Integer, ForeignKey("guests.id"), nullable=True)
+    buyer_name = Column(String, nullable=False)
+    phone = Column(String, nullable=False)
+    email = Column(String, nullable=True)
+    quantity = Column(Integer, default=1)
+    amount = Column(Integer, nullable=False)
+    reference = Column(String, unique=True, index=True, nullable=False)
+    status = Column(String, default="submitted")
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

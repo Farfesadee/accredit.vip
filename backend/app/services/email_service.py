@@ -5,6 +5,7 @@ import ssl
 from email.mime.image import MIMEImage
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.utils import formatdate, make_msgid
 import httpx
 from app.core.config import settings
 
@@ -121,7 +122,15 @@ async def _send_smtp(to: str, subject: str, html: str, from_addr: str, host: str
     msg["Subject"] = subject
     msg["From"] = from_addr
     msg["To"] = to
-    msg.attach(MIMEText(html, "html"))
+    # Explicit Date + Message-ID: HTML-only mail without them reads as bulk to
+    # Gmail, which is how a designed invite ends up in Spam while a short
+    # receipt-style pass lands in the inbox.
+    msg["Date"] = formatdate(localtime=True)
+    msg["Message-ID"] = make_msgid(domain="wristbandsng.com")
+    plain = _html_to_text(html)
+    if plain:
+        msg.attach(MIMEText(plain, "plain", "utf-8"))
+    msg.attach(MIMEText(html, "html", "utf-8"))
     size_kb = len(msg.as_string()) / 1024
     print(f"[{label}] Sending {size_kb:.1f}KB email to {to} via {host}...")
     envelope_from = _extract_email(from_addr) or from_addr
@@ -134,6 +143,24 @@ async def _send_smtp(to: str, subject: str, html: str, from_addr: str, host: str
     except asyncio.TimeoutError:
         print(f"[{label} Error] Timed out after 60s")
         return False
+
+
+def _html_to_text(html: str) -> str:
+    """Readable plain-text twin of a designed HTML email (deliverability)."""
+    import html as _html
+    import re
+
+    text = re.sub(r"(?is)<(script|style)[^>]*>.*?</\1>", "", html)
+    text = re.sub(r"(?i)<br\s*/?>", "\n", text)
+    text = re.sub(r"(?i)</(p|div|tr|h[1-6]|li|table)>", "\n\n", text)
+    text = re.sub(r"(?i)</td>", "  ", text)
+    text = re.sub(r'(?i)<img[^>]*alt="([^"]*)"[^>]*>', r"\1", text)
+    text = re.sub(r"(?s)<[^>]+>", "", text)
+    text = _html.unescape(text)
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r" *\n *", "\n", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
 
 
 def _extract_email(addr: str) -> str | None:
@@ -210,7 +237,10 @@ async def _send_sendgrid(to: str, subject: str, html: str, from_addr: str) -> bo
                     "personalizations": [{"to": [{"email": to}]}],
                     "from": sender_obj,
                     "subject": subject,
-                    "content": [{"type": "text/html", "value": html}],
+                    "content": [
+                        {"type": "text/plain", "value": _html_to_text(html) or subject},
+                        {"type": "text/html", "value": html},
+                    ],
                 },
             )
             return res.is_success
@@ -310,6 +340,7 @@ async def _send_resend(to: str, subject: str, html: str, from_addr: str) -> bool
                     "to": [to],
                     "subject": subject,
                     "html": html,
+                    "text": _html_to_text(html) or subject,
                 },
             )
             return res.is_success

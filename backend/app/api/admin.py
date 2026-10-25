@@ -860,7 +860,10 @@ async def admin_process_withdrawal(
     w = result.scalar_one_or_none()
     if not w:
         raise HTTPException(404, detail="Withdrawal not found")
-    if w.status != "pending":
+    if action == "unflag":
+        if w.status != "flagged":
+            raise HTTPException(400, detail="Only flagged withdrawals can be unflagged")
+    elif w.status != "pending":
         raise HTTPException(400, detail="Withdrawal is not pending")
 
     if action == "approve":
@@ -874,6 +877,9 @@ async def admin_process_withdrawal(
     elif action == "flag":
         w.status = "flagged"
         w.is_aml_flagged = True
+    elif action == "unflag":
+        w.status = "pending"
+        w.is_aml_flagged = False
     else:
         raise HTTPException(400, detail="Invalid action")
     w.updated_at = datetime.now(timezone.utc)

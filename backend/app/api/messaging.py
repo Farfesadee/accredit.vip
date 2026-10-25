@@ -120,6 +120,22 @@ def _absolute_url(url: str | None) -> str | None:
     return url
 
 
+def invite_link_for(event: Event, guest: Guest) -> str:
+    """Where an invitation link takes the guest.
+
+    Events that open with a film or a montage (the anniversary, the gala and the
+    wedding) present themselves on their public invitation page, so their
+    invites send guests to that page rather than to a bare personal RSVP card.
+    Every other event keeps the personal guest link, and QR passes always stay
+    personal.
+    """
+    from app.api.event_registration import experience_for
+
+    if event.slug and experience_for(event) != "standard":
+        return f"{settings.FRONTEND_URL}/rsvp/register/{event.slug}"
+    return f"{settings.FRONTEND_URL}/rsvp/{guest.rsvp_token}"
+
+
 def _upload_path_from_url(url: str) -> str:
     upload_base = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")
     if "/uploads/" in url:
@@ -206,6 +222,431 @@ def _build_media_invite_message(guest: Guest, event: Event) -> tuple[str, str, s
     return subject, body, html
 
 
+def _gala_shell(inner: str, tracking_pixel: str = "") -> str:
+    """Black and gold email shell for The Art of Attention (event-scoped)."""
+    return (
+        '<div style="margin:0;padding:0;background:#050505">'
+        '<div style="max-width:600px;margin:0 auto;background:#070707;'
+        "font-family:Georgia,'Times New Roman',serif;color:#F3EDE2\">"
+        '<div style="padding:30px 26px 20px;text-align:center;border-bottom:1px solid #3a3016">'
+        '<p style="margin:0 0 8px;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
+        'letter-spacing:4px;color:#C9A227;text-transform:uppercase">'
+        "An Exclusive Lifestyle Gala</p>"
+        '<p style="margin:0;font-size:24px;letter-spacing:7px;color:#F3EDE2">A GALA DINNER</p>'
+        '<p style="margin:2px 0 0;font-size:24px;letter-spacing:7px;color:#F3EDE2">EXPERIENCE</p>'
+        "</div>"
+        f"{inner}"
+        '<div style="background:#0b0b0b;padding:24px 26px;text-align:center;border-top:1px solid #3a3016">'
+        '<p style="margin:0 0 6px;font-family:Arial,Helvetica,sans-serif;font-size:9px;'
+        'letter-spacing:3px;color:#C9A227;text-transform:uppercase">Hosted by</p>'
+        '<p style="margin:0 0 12px;font-size:14px;letter-spacing:2px;color:#F3EDE2">The Iconic Lifestyle Connoisseur</p>'
+        '<p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
+        'letter-spacing:2px;color:#8d8271">ACCREDIT INTERACTIVE - Premium Event Infrastructure</p>'
+        "</div>"
+        f"{tracking_pixel}"
+        "</div></div>"
+    )
+
+
+def _gala_details_rows(content: dict, rows: list[tuple[str, str]]) -> str:
+    cells = ""
+    for label, value in rows:
+        cells += (
+            "<tr>"
+            f'<td style="padding:7px 0;width:96px;vertical-align:top;font-family:Arial,Helvetica,sans-serif;'
+            f'font-size:10px;letter-spacing:2px;color:#C9A227;text-transform:uppercase">{label}</td>'
+            f'<td style="padding:7px 0;font-size:14px;color:#F3EDE2;line-height:1.5">{value}</td>'
+            "</tr>"
+        )
+    return f'<table style="width:100%;border-collapse:collapse;margin:0 0 6px">{cells}</table>'
+
+
+def _build_gala_invite_message(
+    guest: Guest,
+    event: Event,
+    flyer_url: str | None,
+    qr_image_url: str | None = None,
+    qr_url: str | None = None,
+    message_id: int | None = None,
+) -> tuple[str, str, str]:
+    from app.api.event_registration import gala_content
+
+    content = gala_content()
+    venue = content["venue"]
+    after = content["after_party"]
+    dress = content["dress_code"]
+    rsvp_link = invite_link_for(event, guest)
+    banner = _absolute_url("/uploads/gala-banner.jpg")
+    tracking_pixel = (
+        f'<img src="{settings.FRONTEND_URL}/api/v1/track/open/{message_id}" alt="" width="1" height="1" style="display:none" />'
+        if message_id
+        else ""
+    )
+
+    subject = "You are invited: A Gala Dinner Experience"
+    # One blank line between every block: WhatsApp collapses single newlines
+    # into one paragraph, which is what stacked the details before.
+    body = (
+        f"Dear {guest.name},\n\n"
+        "It is our pleasure to invite you to A Gala Dinner Experience at the Federal "
+        "Palace Hotel: an evening of fine dining, live conversation and quiet power.\n\n"
+        "Date: Wednesday, 2nd December, 2026\n\n"
+        "Red Carpet: 5:00 PM prompt\n\n"
+        f"Venue: {venue['name']}, {venue['room']}, {venue['location']}\n\n"
+        f"Dress Code: {dress['style']}\n\n"
+        f"After Party: {after['venue']}\n\n"
+        "After dinner, a short reading marks the launch of The Art of Attention.\n\n"
+        "Your invitation admits two: you and one companion.\n\n"
+        f"Kindly reserve your seat: {rsvp_link}\n\n"
+        f"Hosted by: {content['host']}"
+    )
+
+    rows = _gala_details_rows(
+        content,
+        [
+            ("Date", "Wednesday, 2nd December, 2026"),
+            ("Red Carpet", "5:00 PM prompt"),
+            ("Venue", f"{venue['name']}<br/>{venue['room']}<br/>{venue['location']}"),
+            ("Dress Code", dress["style"]),
+            ("After Party", after["venue"]),
+        ],
+    )
+
+    inner = (
+        f'<img src="{banner}" alt="A Gala Dinner Experience" width="600" '
+        'style="width:100%;max-width:600px;height:auto;display:block;border:0" />'
+        '<div style="padding:30px 28px 8px">'
+        f'<p style="margin:0 0 14px;font-size:16px;line-height:1.6;color:#F3EDE2">Dear {guest.name},</p>'
+        '<p style="margin:0 0 16px;font-size:15px;line-height:1.75;color:#cfc6b6">'
+        "It is our pleasure to invite you to <span style=\"color:#F3EDE2\">A Gala Dinner Experience</span> "
+        "at the Federal Palace Hotel: an evening of fine dining, live conversation and quiet power."
+        "</p>"
+        '<p style="margin:0 0 22px;font-size:15px;line-height:1.75;color:#cfc6b6">'
+        "A seated dinner in the Balmoral Convention Centre, a room of good company, "
+        "and a night that continues at Proxy Lagos."
+        "</p>"
+        '<div style="height:1px;background:#3a3016;margin:0 0 18px"></div>'
+        f"{rows}"
+        '<p style="margin:14px 0 0;font-size:13px;line-height:1.7;color:#8d8271;font-style:italic">'
+        "After dinner, a short reading marks the launch of The Art of Attention."
+        "</p>"
+        '<p style="margin:14px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
+        'letter-spacing:2px;color:#C9A227;text-transform:uppercase">'
+        "Your invitation admits two: you and one companion"
+        "</p>"
+        '<div style="text-align:center;margin:26px 0 8px">'
+        f'<a href="{rsvp_link}" style="display:inline-block;background:#C9A227;color:#0a0a0a;'
+        "padding:15px 46px;text-decoration:none;font-family:Arial,Helvetica,sans-serif;"
+        'font-size:12px;font-weight:bold;letter-spacing:3px;text-transform:uppercase">RSVP</a>'
+        "</div>"
+        '<p style="margin:0 0 24px;text-align:center;font-family:Arial,Helvetica,sans-serif;'
+        'font-size:10px;letter-spacing:2px;color:#8d8271">KINDLY RESERVE YOUR SEAT</p>'
+        "</div>"
+    )
+
+    return subject, body, _gala_shell(inner, tracking_pixel)
+
+
+def _build_gala_qr_message(
+    guest: Guest,
+    event: Event,
+    qr_image_url: str | None,
+    flyer_url: str | None = None,
+) -> tuple[str, str, str]:
+    from app.api.event_registration import gala_content
+
+    content = gala_content()
+    venue = content["venue"]
+    dress = content["dress_code"]
+    after = content["after_party"]
+    rsvp_link = f"{settings.FRONTEND_URL}/rsvp/{guest.rsvp_token}"
+
+    # A gala guest may bring one companion on the same pass, so the pass wording
+    # follows the guest's own registration instead of a fixed "admits one".
+    party = getattr(guest, "custom_data", None) or {}
+    if isinstance(party, str):
+        try:
+            import json as _json
+            party = _json.loads(party)
+        except Exception:
+            party = {}
+    if not isinstance(party, dict):
+        party = {}
+    companion = (party.get("plus_one_name") or "").strip()
+    admits_two = bool(party.get("plus_one")) or party.get("party_size") == 2
+    admits_label = "THIS PASS ADMITS TWO GUESTS" if admits_two else "THIS PASS ADMITS ONE GUEST"
+    if admits_two and companion:
+        admits_line = f"This pass admits two guests: you and {companion}."
+    elif admits_two:
+        admits_line = "This pass admits two guests: you and one companion."
+    else:
+        admits_line = "This pass admits one guest."
+
+    subject = "Your Entry Pass: A Gala Dinner Experience"
+    body = (
+        f"Dear {guest.name},\n\n"
+        "Your entry pass for A Gala Dinner Experience is enclosed. Please present the QR code "
+        "at the red carpet for accreditation.\n\n"
+        "Date: Wednesday, 2nd December, 2026\n\n"
+        "Red Carpet: 5:00 PM prompt\n\n"
+        f"Venue: {venue['name']}, {venue['room']}, {venue['location']}.\n\n"
+        f"Dress Code: {dress['style']}\n\n"
+        f"After Party: {after['venue']}\n\n"
+        f"{admits_line}\n\n"
+        f"View your pass: {rsvp_link}\n\n"
+        f"Hosted by: {content['host']}"
+    )
+
+    absolute_qr = _absolute_url(qr_image_url) if qr_image_url else None
+    if absolute_qr:
+        qr_block = (
+            '<div style="text-align:center;padding:8px 0 18px">'
+            '<div style="display:inline-block;background:#F3EDE2;padding:18px;border:1px solid #C9A227">'
+            f'<img src="{absolute_qr}" alt="Entry QR Code" width="220" height="220" '
+            'style="width:220px;height:220px;display:block;border:0" />'
+            '<p style="margin:10px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:9px;'
+            'letter-spacing:2px;color:#6b5c3a;text-transform:uppercase">Scan at the red carpet</p>'
+            "</div>"
+            f'<p style="margin:12px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
+            f'letter-spacing:2px;color:#8d8271">{admits_label}</p>'
+            + (
+                '<p style="margin:6px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
+                f'letter-spacing:2px;color:#C9A227;text-transform:uppercase">WITH {companion}</p>'
+                if admits_two and companion
+                else ""
+            )
+            + "</div>"
+        )
+    else:
+        qr_block = (
+            '<p style="padding:14px;border:1px dashed #C9A227;text-align:center;color:#F3EDE2;'
+            'font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:1px">'
+            "Your QR entry pass is attached to this email</p>"
+        )
+
+    rows = _gala_details_rows(
+        content,
+        [
+            ("Date", "Wednesday, 2nd December, 2026"),
+            ("Red Carpet", "5:00 PM prompt"),
+            ("Venue", f"{venue['name']}<br/>{venue['room']}<br/>{venue['location']}"),
+            ("Dress Code", dress["style"]),
+            ("After Party", after["venue"]),
+        ],
+    )
+
+    inner = (
+        '<div style="padding:30px 28px 8px">'
+        '<p style="margin:0 0 6px;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
+        'letter-spacing:4px;color:#C9A227;text-transform:uppercase;text-align:center">Your Entry Pass</p>'
+        f'<p style="margin:0 0 16px;text-align:center;font-size:22px;letter-spacing:2px;color:#F3EDE2">{guest.name}</p>'
+        f"{qr_block}"
+        '<div style="height:1px;background:#3a3016;margin:6px 0 18px"></div>'
+        f"{rows}"
+        '<p style="margin:16px 0 26px;font-size:14px;line-height:1.7;color:#cfc6b6">'
+        "We look forward to welcoming you at the red carpet. Please arrive promptly."
+        "</p>"
+        "</div>"
+    )
+
+    return subject, body, _gala_shell(inner)
+
+
+# ── Nelkon & Blessing 30th anniversary (event 84 only) ──
+# Aubergine, lavender and cream taken from the client's own flier, with the
+# client's banner as the header image. Scoped to the anniversary slug.
+
+ANNIV_INK = "#171021"
+ANNIV_AUBERGINE = "#241B33"
+ANNIV_LAV = "#C3B2DE"
+ANNIV_CREAM = "#FAF6EF"
+
+
+def _anniv_shell(inner: str, tracking_pixel: str = "") -> str:
+    return (
+        f'<div style="margin:0;padding:0;background:{ANNIV_INK}">'
+        f'<div style="max-width:600px;margin:0 auto;background:{ANNIV_AUBERGINE};'
+        "font-family:Georgia,'Times New Roman',serif;color:" + ANNIV_CREAM + '">'
+        '<div style="padding:28px 26px 20px;text-align:center;border-bottom:1px solid rgba(195,178,222,0.28)">'
+        '<p style="margin:0 0 10px;font-family:Arial,Helvetica,sans-serif;font-size:9px;'
+        f'letter-spacing:5px;color:{ANNIV_LAV};text-transform:uppercase">Together since December 1996</p>'
+        f'<p style="margin:0;font-size:26px;letter-spacing:2px;color:{ANNIV_CREAM}">Nelkon &amp; Blessing</p>'
+        '<p style="margin:6px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
+        f'letter-spacing:4px;color:{ANNIV_LAV};text-transform:uppercase">30th Wedding Anniversary</p>'
+        "</div>"
+        f"{inner}"
+        '<div style="background:#1B1526;padding:22px 26px;text-align:center;border-top:1px solid rgba(195,178,222,0.22)">'
+        '<p style="margin:0 0 6px;font-family:Arial,Helvetica,sans-serif;font-size:9px;'
+        f'letter-spacing:4px;color:{ANNIV_LAV};text-transform:uppercase">With love</p>'
+        f'<p style="margin:0 0 14px;font-size:15px;letter-spacing:1px;color:{ANNIV_CREAM}">The Obi-Uzu Family</p>'
+        '<p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
+        f'letter-spacing:2px;color:#8b7fa3">ACCREDIT INTERACTIVE - Premium Event Infrastructure</p>'
+        "</div>"
+        f"{tracking_pixel}"
+        "</div></div>"
+    )
+
+
+def _anniv_details_rows(rows: list[tuple[str, str]]) -> str:
+    cells = ""
+    for label, value in rows:
+        cells += (
+            "<tr>"
+            f'<td style="padding:7px 0;width:96px;vertical-align:top;font-family:Arial,Helvetica,sans-serif;'
+            f'font-size:10px;letter-spacing:2px;color:{ANNIV_LAV};text-transform:uppercase">{label}</td>'
+            f'<td style="padding:7px 0;font-size:14px;color:{ANNIV_CREAM};line-height:1.5">{value}</td>'
+            "</tr>"
+        )
+    return f'<table style="width:100%;border-collapse:collapse;margin:0 0 6px">{cells}</table>'
+
+
+def _anniv_rows(content: dict) -> list[tuple[str, str]]:
+    ceremony = content["ceremony"]
+    dress = content["dress_code"]
+    return [
+        ("Date", ceremony["date"]),
+        ("Time", f"{ceremony['time']} (WAT)"),
+        ("Venue", f"{ceremony['venue']}<br/>{ceremony['location']}"),
+        ("Dress", dress.get("theme") or "Elegant"),
+    ]
+
+
+def _build_anniv_invite_message(
+    guest: Guest,
+    event: Event,
+    flyer_url: str | None,
+    qr_image_url: str | None = None,
+    qr_url: str | None = None,
+    message_id: int | None = None,
+) -> tuple[str, str, str]:
+    from app.api.event_registration import anniversary_content
+
+    content = anniversary_content()
+    ceremony = content["ceremony"]
+    dress = content["dress_code"]
+    rsvp_link = invite_link_for(event, guest)
+    banner = _absolute_url("/uploads/anniversary-banner.jpg")
+    tracking_pixel = (
+        f'<img src="{settings.FRONTEND_URL}/api/v1/track/open/{message_id}" alt="" width="1" height="1" style="display:none" />'
+        if message_id
+        else ""
+    )
+
+    subject = "You are invited: Nelkon & Blessing 30th Wedding Anniversary"
+    body = (
+        f"Dear {guest.name},\n\n"
+        "With hearts full of gratitude, Nelkon and Blessing Obi-Uzu invite you to "
+        "celebrate thirty years of love, laughter and lifelong companionship.\n\n"
+        f"Date: {ceremony['date']}\n\n"
+        f"Time: {ceremony['time']} (WAT)\n\n"
+        f"Venue: {ceremony['venue']}, {ceremony['location']}\n\n"
+        f"Dress Code: {dress.get('theme') or 'Elegant'}\n\n"
+        f"Kindly confirm your seat: {rsvp_link}\n\n"
+        "With love,\nThe Obi-Uzu Family"
+    )
+
+    rows = _anniv_details_rows(_anniv_rows(content))
+
+    inner = (
+        f'<img src="{banner}" alt="Nelkon and Blessing, thirty years" width="600" '
+        'style="width:100%;max-width:600px;height:auto;display:block;border:0" />'
+        '<div style="padding:30px 28px 8px">'
+        f'<p style="margin:0 0 14px;font-size:16px;line-height:1.6;color:{ANNIV_CREAM}">Dear {guest.name},</p>'
+        '<p style="margin:0 0 16px;font-size:15px;line-height:1.75;color:#cfc6d9">'
+        "With hearts full of gratitude, we invite you to celebrate "
+        f'<span style="color:{ANNIV_CREAM}">thirty years of love, laughter and lifelong companionship</span> '
+        "with Nelkon and Blessing Obi-Uzu."
+        "</p>"
+        '<p style="margin:0 0 22px;font-size:15px;line-height:1.75;color:#cfc6d9">'
+        "An afternoon of thanksgiving, good food and the company of family and friends, "
+        "marking three decades since they said I do."
+        "</p>"
+        '<div style="height:1px;background:rgba(195,178,222,0.28);margin:0 0 18px"></div>'
+        f"{rows}"
+        '<p style="margin:16px 0 0;font-size:13px;line-height:1.7;color:#a396bd;font-style:italic">'
+        f"{dress.get('note') or 'Come dressed to celebrate thirty years with us.'}"
+        "</p>"
+        '<div style="text-align:center;margin:26px 0 8px">'
+        f'<a href="{rsvp_link}" style="display:inline-block;background:{ANNIV_LAV};color:#241B33;'
+        "padding:15px 44px;text-decoration:none;font-family:Arial,Helvetica,sans-serif;"
+        'font-size:12px;font-weight:bold;letter-spacing:3px;text-transform:uppercase">RSVP</a>'
+        "</div>"
+        '<p style="margin:0 0 24px;text-align:center;font-family:Arial,Helvetica,sans-serif;'
+        'font-size:10px;letter-spacing:2px;color:#8b7fa3">KINDLY CONFIRM YOUR SEAT</p>'
+        "</div>"
+    )
+
+    return subject, body, _anniv_shell(inner, tracking_pixel)
+
+
+def _build_anniv_qr_message(
+    guest: Guest,
+    event: Event,
+    qr_image_url: str | None,
+    flyer_url: str | None = None,
+) -> tuple[str, str, str]:
+    from app.api.event_registration import anniversary_content
+
+    content = anniversary_content()
+    ceremony = content["ceremony"]
+    dress = content["dress_code"]
+    rsvp_link = f"{settings.FRONTEND_URL}/rsvp/{guest.rsvp_token}"
+
+    subject = "Your Entry Pass: Nelkon & Blessing 30th Wedding Anniversary"
+    body = (
+        f"Dear {guest.name},\n\n"
+        "Your entry pass for the Nelkon and Blessing Obi-Uzu 30th Wedding Anniversary "
+        "is enclosed. Please present the QR code at the door for accreditation.\n\n"
+        f"Date: {ceremony['date']}\n\n"
+        f"Time: {ceremony['time']} (WAT)\n\n"
+        f"Venue: {ceremony['venue']}, {ceremony['location']}\n\n"
+        f"Dress Code: {dress.get('theme') or 'Elegant'}\n\n"
+        "This pass admits one guest.\n\n"
+        f"View your pass: {rsvp_link}\n\n"
+        "With love,\nThe Obi-Uzu Family"
+    )
+
+    absolute_qr = _absolute_url(qr_image_url) if qr_image_url else None
+    if absolute_qr:
+        qr_block = (
+            '<div style="text-align:center;padding:8px 0 18px">'
+            f'<div style="display:inline-block;background:{ANNIV_CREAM};padding:18px;'
+            f'border:1px solid {ANNIV_LAV}">'
+            f'<img src="{absolute_qr}" alt="Entry QR Code" width="220" height="220" '
+            'style="width:220px;height:220px;display:block;border:0" />'
+            '<p style="margin:10px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:9px;'
+            'letter-spacing:2px;color:#5d4b7a;text-transform:uppercase">Scan at the door</p>'
+            "</div>"
+            '<p style="margin:12px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
+            f'letter-spacing:2px;color:#8b7fa3">THIS PASS ADMITS ONE GUEST</p>'
+            "</div>"
+        )
+    else:
+        qr_block = (
+            f'<p style="padding:14px;border:1px dashed {ANNIV_LAV};text-align:center;color:{ANNIV_CREAM};'
+            'font-family:Arial,Helvetica,sans-serif;font-size:11px;letter-spacing:1px">'
+            "Your QR entry pass is attached to this email</p>"
+        )
+
+    rows = _anniv_details_rows(_anniv_rows(content))
+
+    inner = (
+        '<div style="padding:30px 28px 8px">'
+        '<p style="margin:0 0 6px;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
+        f'letter-spacing:4px;color:{ANNIV_LAV};text-transform:uppercase;text-align:center">Your Entry Pass</p>'
+        f'<p style="margin:0 0 16px;text-align:center;font-size:22px;letter-spacing:1px;color:{ANNIV_CREAM}">{guest.name}</p>'
+        f"{qr_block}"
+        '<div style="height:1px;background:rgba(195,178,222,0.28);margin:6px 0 18px"></div>'
+        f"{rows}"
+        '<p style="margin:16px 0 26px;font-size:14px;line-height:1.7;color:#cfc6d9">'
+        "We look forward to welcoming you. Please arrive promptly and have this pass ready at the door."
+        "</p>"
+        "</div>"
+    )
+
+    return subject, body, _anniv_shell(inner)
+
+
 def _build_invite_message(
     guest: Guest, event: Event,
     qr_url: str | None = None,
@@ -223,7 +664,31 @@ def _build_invite_message(
     )
     if _is_bm and (guest.category or "").strip().lower() == "media" and not custom_subject and not custom_body:
         return _build_media_invite_message(guest, event)
-    rsvp_link = f"{settings.FRONTEND_URL}/rsvp/{guest.rsvp_token}"
+    from app.api.event_registration import is_gala_event as _is_gala, is_anniversary_event as _is_anniv
+
+    if _is_anniv(event) and not custom_subject and not custom_body:
+        return _build_anniv_invite_message(
+            guest, event, flyer_url, qr_image_url=qr_image_url, qr_url=qr_url, message_id=message_id
+        )
+    if _is_gala(event) and not custom_subject and not custom_body:
+        return _build_gala_invite_message(
+            guest, event, flyer_url, qr_image_url=qr_image_url, qr_url=qr_url, message_id=message_id
+        )
+    # Mobola's BIG 10 (event 78 only): designed cream and gold reminder with the
+    # estate gate code lifted into its own block. Her saved copy still drives the
+    # words; only the presentation is event specific.
+    if getattr(event, "id", None) == 78:
+        return _build_mobola_invite_message(
+            guest,
+            event,
+            flyer_url,
+            qr_image_url=qr_image_url,
+            qr_url=qr_url,
+            message_id=message_id,
+            custom_subject=custom_subject,
+            custom_body=custom_body,
+        )
+    rsvp_link = invite_link_for(event, guest)
     subject = custom_subject or event.invite_subject or f"You're Invited: {event.title}"
     invitation_text = custom_body or event.invite_body or event.description or "You're invited!"
     from datetime import date as dt_date, time as dt_time
@@ -283,6 +748,7 @@ def _build_invite_message(
     female_row = ''
     male_row = ''
     tracking_pixel = f'<img src="{settings.FRONTEND_URL}/api/v1/track/open/{message_id}" alt="" width="1" height="1" style="display:none" />' if message_id else ''
+    rsvp_btn_color = getattr(event, "theme_color", None) or "#1ABC9C"
     html = (
         '<div style="max-width:600px;margin:0 auto;font-family:Georgia,serif;color:#1a1a2e">'
         f'{flyer_html}'
@@ -296,7 +762,7 @@ def _build_invite_message(
         f'{dress_code_section}'
         '</table>'
         f'<div style="text-align:center;margin:24px 0">'
-        f'<a href="{rsvp_link}" style="display:inline-block;background:#E91E8C;color:#fff;padding:14px 40px;border-radius:50px;text-decoration:none;font-weight:bold;font-size:15px;font-family:Arial,sans-serif">RSVP NOW</a>'
+        f'<a href="{rsvp_link}" style="display:inline-block;background:{rsvp_btn_color};color:#fff;padding:14px 40px;border-radius:50px;text-decoration:none;font-weight:bold;font-size:15px;font-family:Arial,sans-serif">RSVP NOW</a>'
         '</div>'
         f'{qr_html}'
         '</div>'
@@ -306,6 +772,216 @@ def _build_invite_message(
         '</div>'
         f'{tracking_pixel}'
         '</div>'
+    )
+    return subject, body, html
+
+
+MOBOLA_GOLD = "#C9A227"
+MOBOLA_CREAM = "#FFF7EC"
+MOBOLA_COCOA = "#2E2013"
+MOBOLA_BROWN = "#5A4632"
+
+
+def _mobola_copy_blocks(event: Event, custom_body: str | None = None) -> tuple[list[str], str, str]:
+    """Split the organizer's saved reminder into prose, gate code and gate note.
+
+    Date/time/venue lines, the greeting and the sign-off are lifted out of the
+    prose because the designed template renders them as a details table, its own
+    greeting and its own signature. The gate code line becomes a standalone
+    block so guests read it as the real code and not as part of a sentence.
+    """
+    raw = (custom_body or event.invite_body or "").strip()
+    gate_code = ""
+    gate_note = ""
+    paragraphs: list[str] = []
+
+    for block in [b.strip() for b in raw.replace("\r\n", "\n").split("\n\n") if b.strip()]:
+        kept: list[str] = []
+        for line in [ln.strip() for ln in block.split("\n") if ln.strip()]:
+            upper = line.upper()
+            if upper.startswith("DEAR "):
+                continue
+            if upper.startswith("DATE:") or upper.startswith("TIME:") or upper.startswith("VENUE:"):
+                continue
+            if upper.startswith("ESTATE GATE CODE:"):
+                gate_code = line.split(":", 1)[1].strip()
+                continue
+            if gate_code and not gate_note and upper.startswith("PLEASE MENTION"):
+                gate_note = line
+                continue
+            if line.lower().rstrip(",") in ("with love", "team mobola"):
+                continue
+            kept.append(line)
+        if kept:
+            paragraphs.append(" ".join(kept))
+
+    if not gate_code:
+        gate_code = "Mobola's party"
+    if not gate_note:
+        gate_note = f'Please mention "{gate_code}" at the estate gate to be let in. Keep the code handy!'
+    if not paragraphs:
+        paragraphs = [
+            "The countdown is officially OVER! This is your big reminder that MOBOLA'S BIG 10 "
+            "birthday party is happening THIS Saturday, and you do not want to miss it!",
+            "Come ready to eat, dance, and celebrate our birthday girl in grand style. See you on Saturday!",
+        ]
+    return paragraphs, gate_code, gate_note
+
+
+def _build_mobola_invite_message(
+    guest: Guest,
+    event: Event,
+    flyer_url: str | None,
+    qr_image_url: str | None = None,
+    qr_url: str | None = None,
+    message_id: int | None = None,
+    custom_subject: str | None = None,
+    custom_body: str | None = None,
+) -> tuple[str, str, str]:
+    """Designed cream and gold reminder for Mobola's BIG 10 (event 78 only).
+
+    The organizer's saved reminder stays editable in the dashboard: whatever she
+    writes is rendered inside this designed shell, with the estate gate code
+    always pulled out into its own high contrast block.
+    """
+    rsvp_link = f"{settings.FRONTEND_URL}/rsvp/{guest.rsvp_token}"
+    formatted_date = _format_date(event.event_date)
+    formatted_time = _format_time(event.event_time, event.timezone or "WAT")
+    # Match the client's copy: "Saturday, October 24, 2026" and "1:00 PM (WAT)".
+    date_parts = str(formatted_date).split(" ", 1)
+    if len(date_parts) == 2 and date_parts[0].endswith("day"):
+        formatted_date = f"{date_parts[0]}, {date_parts[1]}"
+    time_parts = str(formatted_time).split(" ", 1)
+    if len(time_parts) == 2 and time_parts[0].isdigit():
+        formatted_time = f"{time_parts[0]}:00 {time_parts[1]}"
+    venue = event.venue or ""
+
+    def _fill(text: str) -> str:
+        return (
+            text.replace("{{ guest_name }}", guest.name or "")
+            .replace("{{ event_title }}", event.title or "")
+            .replace("{{ event_date }}", str(formatted_date))
+            .replace("{{ event_time }}", str(formatted_time))
+            .replace("{{ venue }}", venue)
+            .replace("{{ rsvp_link }}", rsvp_link)
+            .replace("{{ host_name }}", event.host_name or "")
+            .replace("{{ dress_code }}", event.dress_code or "")
+            .replace("{guest name}", guest.name or "")
+        )
+
+    subject = _fill(custom_subject or event.invite_subject or f"Reminder: {event.title}")
+    paragraphs, gate_code, gate_note = _mobola_copy_blocks(event, custom_body)
+    paragraphs = [_fill(p) for p in paragraphs]
+    gate_code = _fill(gate_code)
+    gate_note = _fill(gate_note)
+
+    body = (
+        f"Dear {guest.name},\n\n"
+        + "\n\n".join(paragraphs)
+        + "\n\n"
+        f"Date: {formatted_date}\n"
+        f"Time: {formatted_time}\n"
+        f"Venue: {venue}\n\n"
+        f"ESTATE GATE CODE: {gate_code}\n\n"
+        f"{gate_note}\n\n"
+        f"RSVP: {rsvp_link}\n\n"
+        "With love,\nTeam Mobola"
+    )
+
+    absolute_flyer = _absolute_url(flyer_url) if flyer_url else None
+    photo_html = (
+        f'<img src="{absolute_flyer}" alt="Mobola\'s BIG 10" width="600" '
+        'style="width:100%;max-width:600px;height:auto;display:block;border:0" />'
+        if absolute_flyer
+        else ""
+    )
+    paras_html = "".join(
+        '<p style="margin:0 0 16px;font-size:15px;line-height:1.8;'
+        f'color:{MOBOLA_BROWN}">{p}</p>'
+        for p in paragraphs
+    )
+    rows_html = "".join(
+        "<tr>"
+        f'<td style="padding:9px 0;width:86px;vertical-align:top;font-family:Arial,Helvetica,sans-serif;'
+        f'font-size:10px;letter-spacing:2px;color:{MOBOLA_GOLD};text-transform:uppercase">{label}</td>'
+        f'<td style="padding:9px 0;font-size:15px;color:{MOBOLA_COCOA};line-height:1.5;font-weight:bold">{value}</td>'
+        "</tr>"
+        for label, value in (
+            ("Date", formatted_date),
+            ("Time", formatted_time),
+            ("Venue", venue),
+        )
+        if value
+    )
+    gate_html = (
+        f'<div style="margin:0 28px 26px;padding:26px 22px;border:2px solid {MOBOLA_GOLD};'
+        f'border-radius:14px;background:{MOBOLA_COCOA};text-align:center">'
+        f'<p style="margin:0 0 12px;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
+        f'letter-spacing:4px;color:{MOBOLA_GOLD};text-transform:uppercase">ESTATE GATE CODE</p>'
+        f'<p style="margin:0;font-size:30px;line-height:1.2;color:{MOBOLA_CREAM};letter-spacing:1px">'
+        f"{gate_code}</p>"
+        f'<p style="margin:14px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;'
+        f'line-height:1.7;color:#E4D2AE">{gate_note}</p>'
+        "</div>"
+    )
+    qr_html = ""
+    if qr_image_url:
+        absolute_qr = _absolute_url(qr_image_url)
+        if absolute_qr:
+            qr_html = (
+                '<div style="text-align:center;padding:18px;margin:0 28px 24px;'
+                f'background:#ffffff;border:1px solid {MOBOLA_GOLD};border-radius:12px">'
+                f'<p style="margin:0 0 12px;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
+                f'letter-spacing:3px;color:{MOBOLA_GOLD};text-transform:uppercase">Your entry code</p>'
+                f'<img src="{absolute_qr}" alt="Entry QR Code" width="180" height="180" '
+                'style="display:block;margin:0 auto;width:180px;height:180px" />'
+                "</div>"
+            )
+    tracking_pixel = (
+        f'<img src="{settings.FRONTEND_URL}/api/v1/track/open/{message_id}" alt="" width="1" height="1" style="display:none" />'
+        if message_id
+        else ""
+    )
+
+    html = (
+        f'<div style="margin:0;padding:0;background:{MOBOLA_CREAM}">'
+        f'<div style="max-width:600px;margin:0 auto;background:{MOBOLA_CREAM};'
+        "font-family:Georgia,'Times New Roman',serif\">"
+        f"{photo_html}"
+        f'<div style="background:{MOBOLA_COCOA};padding:26px 26px 24px;text-align:center">'
+        f'<p style="margin:0 0 10px;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
+        f'letter-spacing:4px;color:{MOBOLA_GOLD};text-transform:uppercase">You are invited</p>'
+        f'<p style="margin:0;font-size:34px;line-height:1.1;letter-spacing:3px;color:{MOBOLA_CREAM}">'
+        "MOBOLA'S</p>"
+        f'<p style="margin:4px 0 0;font-size:19px;letter-spacing:7px;color:{MOBOLA_GOLD}">BIG 10</p>'
+        "</div>"
+        '<div style="padding:30px 28px 6px">'
+        f'<p style="margin:0 0 18px;font-size:17px;color:{MOBOLA_COCOA}">Dear {guest.name},</p>'
+        f"{paras_html}"
+        "</div>"
+        f'<div style="margin:0 28px 22px;padding:18px 22px;background:#FFFFFF;'
+        f'border-left:3px solid {MOBOLA_GOLD};border-radius:8px">'
+        f'<table style="width:100%;border-collapse:collapse">{rows_html}</table>'
+        "</div>"
+        f"{gate_html}"
+        '<div style="text-align:center;padding:0 28px 6px">'
+        f'<a href="{rsvp_link}" style="display:inline-block;background:{MOBOLA_GOLD};color:{MOBOLA_COCOA};'
+        "padding:15px 44px;text-decoration:none;font-family:Arial,Helvetica,sans-serif;"
+        'font-size:12px;font-weight:bold;letter-spacing:3px;text-transform:uppercase">Reserve your seat</a>'
+        "</div>"
+        f"{qr_html}"
+        '<div style="padding:26px 28px 30px;text-align:center">'
+        f'<p style="margin:0 0 4px;font-size:13px;color:{MOBOLA_BROWN}">With love,</p>'
+        f'<p style="margin:0;font-size:19px;color:{MOBOLA_COCOA}">Team Mobola</p>'
+        "</div>"
+        f'<div style="background:{MOBOLA_COCOA};padding:22px;text-align:center">'
+        f'<p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
+        f'letter-spacing:3px;color:{MOBOLA_GOLD}">ACCREDIT INTERACTIVE</p>'
+        '<p style="margin:7px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:10px;color:#8B7A5F">'
+        "Premium Event Infrastructure</p>"
+        "</div>"
+        f"{tracking_pixel}"
+        "</div></div>"
     )
     return subject, body, html
 
@@ -328,7 +1004,7 @@ async def _send_to_guest(
     guest.invite_attempts += 1
 
     flyer_result = await db.execute(select(FlierAsset).where(FlierAsset.event_id == event.id).order_by(FlierAsset.created_at.desc()))
-    flyer = flyer_result.scalar_one_or_none()
+    flyer = flyer_result.scalars().first()
     flyer_url = flyer.url if flyer else event.cover_image
 
     include_qr = event.qr_delivery == "with_qr"
@@ -351,19 +1027,49 @@ async def _send_to_guest(
             from_addr = f"{event.title} <noreply@wristbandsng.com>"
             ok = await asyncio.wait_for(send_email(guest.email, subject, html, from_addr=from_addr), timeout=15)
         elif channel == "whatsapp" and guest.phone:
+            from app.api.event_registration import is_wedding_event as _is_wedding, is_gala_event as _is_gala
+
             invite_content_sid = settings.TWILIO_WHATSAPP_INVITE_CONTENT_SID
+            # The configured invite template (ACAMB v4) carries ACAMB's flyer
+            # image + ACAMB wording, so it must only ever fire for event 67.
+            # Every other event sends its own flyer + text free-form.
+            use_invite_template = getattr(event, "id", None) == 67 and bool(invite_content_sid)
+            if _is_wedding(event) and getattr(settings, "TWILIO_WHATSAPP_WEDDING_INVITE_CONTENT_SID", ""):
+                # Wedding invite template (couple monogram header + {{1}}=name,
+                # {{2}}=per-guest RSVP link). Falls back to free-form below.
+                invite_content_sid = settings.TWILIO_WHATSAPP_WEDDING_INVITE_CONTENT_SID
+                use_invite_template = True
+            if getattr(event, "id", None) == 78 and getattr(settings, "TWILIO_WHATSAPP_MOBOLA_INVITE_CONTENT_SID", ""):
+                # Mobola BIG 10 reminder template (event flyer header +
+                # {{1}}=name). Template first, free-form fallback below.
+                invite_content_sid = settings.TWILIO_WHATSAPP_MOBOLA_INVITE_CONTENT_SID
+                use_invite_template = True
+            if _is_gala(event) and getattr(settings, "TWILIO_WHATSAPP_GALA_INVITE_CONTENT_SID", ""):
+                # The Art of Attention invite template (gala poster header +
+                # {{1}}=name, {{2}}=per-guest RSVP link). Falls back to the
+                # free-form flyer + text below until Meta approves it.
+                invite_content_sid = settings.TWILIO_WHATSAPP_GALA_INVITE_CONTENT_SID
+                use_invite_template = True
+            from app.api.event_registration import is_anniversary_event as _is_anniversary
+
+            if _is_anniversary(event) and getattr(settings, "TWILIO_WHATSAPP_ANNIV_INVITE_CONTENT_SID", ""):
+                # Nelkon & Blessing 30th anniversary invite template (client
+                # banner header + {{1}}=name, {{2}}=per-guest RSVP link).
+                # Template first, free-form flyer + text as the fallback.
+                invite_content_sid = settings.TWILIO_WHATSAPP_ANNIV_INVITE_CONTENT_SID
+                use_invite_template = True
             media_to_send = _absolute_url(flyer_url) if flyer_url else None
             if include_qr:
+                # Single media item on WhatsApp: the QR (flyer embedded in it).
                 qr_media_url = _absolute_url(qr_image_url) if qr_image_url else None
-                media_urls = [m for m in (media_to_send, qr_media_url) if m]
-                if len(media_urls) > 1:
-                    ok, provider_id = await _send_whatsapp(guest.phone, body, media_urls=media_urls)
-                else:
-                    ok, provider_id = await _send_whatsapp(guest.phone, body, media_url=qr_media_url or media_to_send)
-            elif invite_content_sid:
-                # Twilio WhatsApp template (fixed flyer header + {{1}}=name, {{2}}=per-guest RSVP link)
-                rsvp_link = f"{settings.FRONTEND_URL}/rsvp/{guest.rsvp_token}"
-                content_vars = {"1": guest.name or "", "2": rsvp_link, "_content_sid": invite_content_sid}
+                ok, provider_id = await _send_whatsapp(guest.phone, body, media_url=qr_media_url or media_to_send)
+            elif use_invite_template:
+                # Twilio WhatsApp template (fixed flyer header + {{1}}=name; ACAMB
+                # and wedding templates also take {{2}}=per-guest RSVP link)
+                rsvp_link = invite_link_for(event, guest)
+                content_vars = {"1": guest.name or "", "_content_sid": invite_content_sid}
+                if getattr(event, "id", None) == 67 or _is_wedding(event) or _is_gala(event) or _is_anniversary(event):
+                    content_vars["2"] = rsvp_link
                 ok, provider_id = await _send_whatsapp(guest.phone, body, media_url=None, content_vars=content_vars)
                 if not ok and media_to_send:
                     # Fallback to free-form (flyer + text) until template is Meta-approved
@@ -410,6 +1116,12 @@ def _build_qr_message(guest: Guest, event: Event, qr_image_url: str | None = Non
     )
     if _bm and message_type == "qr_only" and not custom_message and not qr_message:
         return _build_bm_qr_message(guest, event, qr_image_url)
+    from app.api.event_registration import is_gala_event as _is_gala, is_anniversary_event as _is_anniv
+
+    if _is_anniv(event) and message_type == "qr_only" and not custom_message and not qr_message:
+        return _build_anniv_qr_message(guest, event, qr_image_url, flyer_url)
+    if _is_gala(event) and message_type == "qr_only" and not custom_message and not qr_message:
+        return _build_gala_qr_message(guest, event, qr_image_url, flyer_url)
     subject = f"Your QR Access Code: {event.title}"
     body = custom_message or (
         f"==============================\n"
@@ -436,9 +1148,14 @@ def _build_qr_message(guest: Guest, event: Event, qr_image_url: str | None = Non
     bm_event = (getattr(event, "id", None) == 77) or (
         event.title == "BLACK MARKET Movie World Record Attempt"
     )
-    accent = "#C2410C" if bm_event else "#1ABC9C"
-    accent_light = "#FDBA74" if bm_event else "#5eead4"
-    pulse_rgb = "194,65,12" if bm_event else "26,188,156"
+    _theme = (getattr(event, "theme_color", None) or "").strip() or "#1ABC9C"
+    try:
+        _pr, _pg, _pb = (int(_theme.lstrip("#")[i:i+2], 16) for i in (0, 2, 4))
+    except (ValueError, IndexError):
+        _theme, _pr, _pg, _pb = "#1ABC9C", 26, 188, 156
+    accent = "#C2410C" if bm_event else _theme
+    accent_light = "#FDBA74" if bm_event else _theme
+    pulse_rgb = "194,65,12" if bm_event else f"{_pr},{_pg},{_pb}"
     category_html = ""
     if cat:
         badge = "★ VVIP ★" if is_vvip else ("★ PREMIUM VIP ★" if is_premium else cat.upper())
@@ -542,7 +1259,7 @@ async def _send_qr_to_guest(
     qr_token_url = f"{settings.FRONTEND_URL}/qr/{qr.token}"
 
     flyer_result = await db.execute(select(FlierAsset).where(FlierAsset.event_id == event.id).order_by(FlierAsset.created_at.desc()))
-    flyer = flyer_result.scalar_one_or_none()
+    flyer = flyer_result.scalars().first()
     flyer_url = flyer.url if flyer else event.cover_image
     qr_image_path = _upload_path_from_url(flyer_url) if flyer_url else None
     qr_image_url = qr_to_url(qr_token_url, image_path=qr_image_path, size=250)
@@ -597,13 +1314,31 @@ async def _send_qr_to_guest(
             else:
                 ok = await asyncio.wait_for(send_email(guest.email, subject, html, from_addr=from_addr), timeout=15)
         elif channel == "whatsapp" and guest.phone:
+            # WhatsApp free-form carries a single media item: send the QR
+            # image (the event flyer is already embedded inside it). Fall
+            # back to the flyer alone only if QR generation failed.
             qr_media_url = _absolute_url(qr_image_url)
             flyer_media_url = _absolute_url(flyer_url)
-            media_urls = [m for m in (flyer_media_url, qr_media_url) if m]
-            if len(media_urls) > 1:
-                ok, provider_id = await _send_whatsapp(guest.phone, body, media_urls=media_urls)
-            else:
-                ok, provider_id = await _send_whatsapp(guest.phone, body, media_url=qr_media_url)
+            ok, provider_id = await _send_whatsapp(guest.phone, body, media_url=qr_media_url or flyer_media_url)
+            if not ok:
+                from app.api.event_registration import is_gala_event as _is_gala, is_anniversary_event as _is_anniversary
+
+                gala_qr_sid = getattr(settings, "TWILIO_WHATSAPP_GALA_QR_CONTENT_SID", "")
+                if _is_gala(event) and gala_qr_sid:
+                    # Cold contact (outside the 24h free-form window): the
+                    # approved utility template confirms the pass was emailed.
+                    content_vars = {"1": guest.name or "", "_content_sid": gala_qr_sid}
+                    ok, provider_id = await _send_whatsapp(guest.phone, body, media_url=None, content_vars=content_vars)
+                anniv_qr_sid = getattr(settings, "TWILIO_WHATSAPP_ANNIV_QR_CONTENT_SID", "")
+                if not ok and _is_anniversary(event) and anniv_qr_sid:
+                    # Same contract for event 84: the template confirms the pass
+                    # and links to it, the QR image itself travels by email.
+                    content_vars = {
+                        "1": guest.name or "",
+                        "2": qr_token_url,
+                        "_content_sid": anniv_qr_sid,
+                    }
+                    ok, provider_id = await _send_whatsapp(guest.phone, body, media_url=None, content_vars=content_vars)
             if not ok and settings.EVOLUTION_API_URL:
                 from app.services.evolution_service import send_evolution_whatsapp
                 ok2, evolution_id = await send_evolution_whatsapp(guest.phone, body, media_url=qr_media_url)
@@ -1160,7 +1895,7 @@ async def export_rocket(
     writer = csv.writer(output)
     writer.writerow(["Name", "Phone", "Invite Link"])
     for g in guests:
-        link = f"{settings.FRONTEND_URL}/rsvp/{g.rsvp_token}"
+        link = invite_link_for(event, g)
         writer.writerow([g.name, g.phone or "", link])
 
     filename = f"rocket-sender-event-{event_id}.csv"

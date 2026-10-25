@@ -7,7 +7,7 @@ from datetime import date, time, datetime, timezone
 from typing import Any
 
 from app.core.database import get_db
-from app.core.security import get_current_user
+from app.core.security import get_current_user, get_optional_current_user
 from app.models.user import User
 from app.models.event import Event
 from app.models.guest import Guest
@@ -305,11 +305,16 @@ async def list_public_events(
 async def get_event_by_slug(
     slug: str,
     db: AsyncSession = Depends(get_db),
+    user: User | None = Depends(get_optional_current_user),
 ):
     result = await db.execute(select(Event).where(Event.slug == slug))
     event = result.scalar_one_or_none()
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
+    if user is None or event.organizer_id != user.id:
+        # Public view: the organizer's saved invite message stays private.
+        event.invite_subject = None
+        event.invite_body = None
     return event
 
 
@@ -317,11 +322,16 @@ async def get_event_by_slug(
 async def get_event(
     event_id: int,
     db: AsyncSession = Depends(get_db),
+    user: User | None = Depends(get_optional_current_user),
 ):
     result = await db.execute(select(Event).where(Event.id == event_id))
     event = result.scalar_one_or_none()
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
+    if user is None or event.organizer_id != user.id:
+        # Public/ticket view: the organizer's saved invite message stays private.
+        event.invite_subject = None
+        event.invite_body = None
     return event
 
 

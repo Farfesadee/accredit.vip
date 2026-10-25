@@ -248,6 +248,9 @@ async def use_trial(
             raise HTTPException(status_code=400, detail="Email address required for invite test")
 
         title = req.payload.get("title", "Our Special Event")
+        # Trial mails follow the same theme rule: event color when set,
+        # brand teal otherwise. Never hardcoded pink.
+        trial_theme = req.payload.get("theme_color") or "#1ABC9C"
         host_name = req.payload.get("host_name", "") or ""
         event_date = req.payload.get("event_date", "TBD")
         event_time = req.payload.get("event_time", "TBD")
@@ -331,7 +334,7 @@ async def use_trial(
             if animated_qr_url:
                 absolute_qr = f"{settings.BACKEND_URL}{animated_qr_url}" if animated_qr_url.startswith("/") else animated_qr_url
                 qr_section = f"""
-                <div style="text-align: center; padding: 20px; background: #f0f0f0; border-top: 2px solid #E91E8C;">
+                <div style="text-align: center; padding: 20px; background: #f0f0f0; border-top: 2px solid {trial_theme};">
                     <p style="color: #666; font-size: 14px; margin: 0 0 15px 0; font-weight: bold;">YOUR UNIQUE ENTRY CODE</p>
                     <img src="{absolute_qr}" alt="Entry QR Code" style="width: 250px; height: 250px;" />
                     <p style="color: #999; font-size: 12px; margin: 15px 0 0 0;">Show this code at the gate to enter</p>
@@ -359,7 +362,7 @@ async def use_trial(
                         {dc_rows}
                     </table>
                     <div style="text-align:center;margin:24px 0">
-                        <a href="{rsvp_link_url}" style="display:inline-block;background:#E91E8C;color:#fff;padding:14px 40px;border-radius:50px;text-decoration:none;font-weight:bold;font-size:15px;font-family:Arial,sans-serif">RSVP NOW</a>
+                        <a href="{rsvp_link_url}" style="display:inline-block;background:{trial_theme};color:#fff;padding:14px 40px;border-radius:50px;text-decoration:none;font-weight:bold;font-size:15px;font-family:Arial,sans-serif">RSVP NOW</a>
                     </div>
                     {qr_section}
                 </div>
@@ -372,7 +375,7 @@ async def use_trial(
                         <span style="color:#ffffff80;font-size:12px;font-weight:600;letter-spacing:2px;text-transform:uppercase">JOIN</span>
                         <img src="{logo_url}" alt="accredit.vip" style="height:20px;width:auto;opacity:0.8" />
                     </div>
-                    <div style="display:inline-block"><a href="https://accredit.vip" style="display:block;background-color:#E91E8C;color:#fff;padding:12px 32px;text-decoration:none;font-weight:bold;font-size:14px;font-family:Arial,sans-serif;border-radius:12px 12px 0 0">Create Event →</a><div style="width:0;height:0;margin:0 auto;border-left:14px solid transparent;border-right:14px solid transparent;border-top:10px solid #E91E8C"></div></div>
+                    <div style="display:inline-block"><a href="https://accredit.vip" style="display:block;background-color:#1ABC9C;color:#fff;padding:12px 32px;text-decoration:none;font-weight:bold;font-size:14px;font-family:Arial,sans-serif;border-radius:12px 12px 0 0">Create Event →</a><div style="width:0;height:0;margin:0 auto;border-left:14px solid transparent;border-right:14px solid transparent;border-top:10px solid #1ABC9C"></div></div>
                 </div>"""
 
             brand_html = _brand_banner()

@@ -112,6 +112,19 @@ export default function EditEventPage() {
     </div>
   );
   if (!event) return null;
+  // Account isolation: each dashboard opens only with its own designated login.
+  // (Also protects the organizer's saved invite message, which the API hides
+  // from non-owners, from being overwritten with blanks.)
+  if (user && event.organizer_id && Number(event.organizer_id) !== Number(user.id)) return (
+    <div className="flex min-h-screen flex-col items-center justify-center p-4">
+      <div className="text-center space-y-4 max-w-sm">
+        <AlertTriangle className="mx-auto h-10 w-10 text-amber-500" aria-hidden="true" />
+        <h2 className="text-xl font-semibold">This dashboard belongs to another account</h2>
+        <p className="text-sm text-muted-foreground">Please log in with the email and password designated for this event to manage it.</p>
+        <button onClick={() => router.push("/dashboard")} className="rounded-lg border border-input px-4 py-2 text-sm font-medium hover:bg-accent">Back to my dashboard</button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
