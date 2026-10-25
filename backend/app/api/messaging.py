@@ -664,6 +664,21 @@ def _build_invite_message(
     )
     if _is_bm and (guest.category or "").strip().lower() == "media" and not custom_subject and not custom_body:
         return _build_media_invite_message(guest, event)
+
+    # Post-event thank you (opt in per event). Checked before every invite shell
+    # because an invite design carries a date table, an entry code and an RSVP
+    # call to action, none of which make sense once the event has happened.
+    if getattr(event, "thank_you_mode", False):
+        if getattr(event, "id", None) == 78:
+            return _build_mobola_thankyou_message(
+                guest, event, flyer_url, message_id=message_id,
+                custom_subject=custom_subject, custom_body=custom_body,
+            )
+        return _build_thankyou_message(
+            guest, event, flyer_url, message_id=message_id,
+            custom_subject=custom_subject, custom_body=custom_body,
+        )
+
     from app.api.event_registration import is_gala_event as _is_gala, is_anniversary_event as _is_anniv
 
     if _is_anniv(event) and not custom_subject and not custom_body:
@@ -986,6 +1001,205 @@ def _build_mobola_invite_message(
     return subject, body, html
 
 
+# ── Post-event thank you (opt in per event via events.thank_you_mode) ──
+# Once an event is over the invite shell is wrong: a date and venue table, an
+# entry code block and a "reserve your seat" button all ask the guest to do
+# something that already happened. When an event is flagged thank_you_mode the
+# organizer's saved message is rendered as a plain note of thanks instead, in
+# the same palette as the rest of that event's mail.
+
+MOBOLA_THANKS_SIGNOFF = "Team Mobola 🎂💕"
+
+MOBOLA_THANKS_FALLBACK = [
+    "Thank you for joining us to celebrate Mobola's BIG 10! 🥳",
+    "Your presence, love, and energy made her day extra special. "
+    "We're grateful you shared this beautiful moment with us. ❤️",
+]
+
+
+def _thank_you_paragraphs(raw_body: str | None, fallback: list[str]) -> list[str]:
+    """Turn a saved thank you note into paragraphs of prose.
+
+    The greeting and the sign off are dropped because each design prints its own
+    "Dear {name}," and its own signature underneath. Everything the organizer
+    writes in between survives word for word, emoji included.
+    """
+    raw = (raw_body or "").strip()
+    if not raw:
+        return list(fallback)
+    paragraphs: list[str] = []
+    for block in [b.strip() for b in raw.replace("\r\n", "\n").split("\n\n") if b.strip()]:
+        kept: list[str] = []
+        for line in [ln.strip() for ln in block.split("\n") if ln.strip()]:
+            low = line.lower().rstrip(",").strip()
+            if line.upper().startswith("DEAR "):
+                continue
+            if low in ("with love", "with gratitude") or low.startswith("team "):
+                continue
+            kept.append(line)
+        if kept:
+            paragraphs.append(" ".join(kept))
+    return paragraphs or list(fallback)
+
+
+def _build_mobola_thankyou_message(
+    guest: Guest,
+    event: Event,
+    flyer_url: str | None,
+    message_id: int | None = None,
+    custom_subject: str | None = None,
+    custom_body: str | None = None,
+) -> tuple[str, str, str]:
+    """Cream and gold thank you for Mobola's BIG 10 (event 78 only).
+
+    Same identity as her invitation: her photograph, the cocoa and gold name
+    block, Georgia body copy. Nothing to RSVP to, no entry code, no addresses.
+    """
+
+    def _fill(text: str) -> str:
+        return (
+            text.replace("{{ guest_name }}", guest.name or "")
+            .replace("{guest name}", guest.name or "")
+            .replace("{{ event_title }}", event.title or "")
+            .replace("{{ host_name }}", event.host_name or "")
+        )
+
+    subject = _fill(custom_subject or event.invite_subject or "Thank you for celebrating Mobola's BIG 10")
+    paragraphs = [_fill(p) for p in _thank_you_paragraphs(custom_body or event.invite_body, MOBOLA_THANKS_FALLBACK)]
+    celebrated_on = str(_format_date(event.event_date))
+    parts = celebrated_on.split(" ", 1)
+    if len(parts) == 2 and parts[0].endswith("day"):
+        celebrated_on = f"{parts[0]}, {parts[1]}"
+
+    body = (
+        f"Dear {guest.name},\n\n"
+        + "\n\n".join(paragraphs)
+        + f"\n\nWith love,\n{MOBOLA_THANKS_SIGNOFF}"
+    )
+
+    absolute_flyer = _absolute_url(flyer_url) if flyer_url else None
+    photo_html = (
+        f'<img src="{absolute_flyer}" alt="Mobola\'s BIG 10" width="600" '
+        'style="width:100%;max-width:600px;height:auto;display:block;border:0" />'
+        if absolute_flyer
+        else ""
+    )
+    paras_html = "".join(
+        '<p style="margin:0 0 16px;font-size:15px;line-height:1.8;'
+        f'color:{MOBOLA_BROWN}">{p}</p>'
+        for p in paragraphs
+    )
+    tracking_pixel = (
+        f'<img src="{settings.FRONTEND_URL}/api/v1/track/open/{message_id}" alt="" width="1" height="1" style="display:none" />'
+        if message_id
+        else ""
+    )
+
+    html = (
+        f'<div style="margin:0;padding:0;background:{MOBOLA_CREAM}">'
+        f'<div style="max-width:600px;margin:0 auto;background:{MOBOLA_CREAM};'
+        "font-family:Georgia,'Times New Roman',serif\">"
+        f"{photo_html}"
+        f'<div style="background:{MOBOLA_COCOA};padding:26px 26px 24px;text-align:center">'
+        f'<p style="margin:0 0 10px;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
+        f'letter-spacing:4px;color:{MOBOLA_GOLD};text-transform:uppercase">Thank you for celebrating</p>'
+        f'<p style="margin:0;font-size:34px;line-height:1.1;letter-spacing:3px;color:{MOBOLA_CREAM}">'
+        "MOBOLA'S</p>"
+        f'<p style="margin:4px 0 0;font-size:19px;letter-spacing:7px;color:{MOBOLA_GOLD}">BIG 10</p>'
+        "</div>"
+        '<div style="padding:30px 28px 4px">'
+        f'<p style="margin:0 0 18px;font-size:17px;color:{MOBOLA_COCOA}">Dear {guest.name},</p>'
+        f"{paras_html}"
+        "</div>"
+        f'<div style="margin:10px 28px 0;border-top:1px solid {MOBOLA_GOLD}"></div>'
+        '<div style="padding:16px 28px 2px;text-align:center">'
+        f'<p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
+        f'letter-spacing:3px;color:{MOBOLA_BROWN};text-transform:uppercase">Celebrated on {celebrated_on}</p>'
+        "</div>"
+        '<div style="padding:14px 28px 30px;text-align:center">'
+        f'<p style="margin:0 0 4px;font-size:13px;color:{MOBOLA_BROWN}">With love,</p>'
+        f'<p style="margin:0;font-size:19px;color:{MOBOLA_COCOA}">{MOBOLA_THANKS_SIGNOFF}</p>'
+        "</div>"
+        f'<div style="background:{MOBOLA_COCOA};padding:22px;text-align:center">'
+        f'<p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
+        f'letter-spacing:3px;color:{MOBOLA_GOLD}">ACCREDIT INTERACTIVE</p>'
+        '<p style="margin:7px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:10px;color:#8B7A5F">'
+        "Premium Event Infrastructure</p>"
+        "</div>"
+        f"{tracking_pixel}"
+        "</div></div>"
+    )
+    return subject, body, html
+
+
+def _build_thankyou_message(
+    guest: Guest,
+    event: Event,
+    flyer_url: str | None,
+    message_id: int | None = None,
+    custom_subject: str | None = None,
+    custom_body: str | None = None,
+) -> tuple[str, str, str]:
+    """Plain thank you for any other event flagged thank_you_mode.
+
+    Takes its accent from the event's own theme colour, the same way the invite
+    and QR mails do, so a thank you never arrives in another event's palette.
+    """
+    accent = getattr(event, "theme_color", None) or "#1ABC9C"
+    subject = custom_subject or event.invite_subject or f"Thank you from {event.title}"
+    paragraphs = _thank_you_paragraphs(
+        custom_body or event.invite_body,
+        ["Thank you for celebrating with us. Your presence made the day what it was."],
+    )
+    body = f"Dear {guest.name},\n\n" + "\n\n".join(paragraphs) + f"\n\nWith love,\n{event.host_name or event.title}"
+
+    absolute_flyer = _absolute_url(flyer_url) if flyer_url else None
+    photo_html = (
+        f'<img src="{absolute_flyer}" alt="{event.title}" width="600" '
+        'style="width:100%;max-width:600px;height:auto;display:block;border:0" />'
+        if absolute_flyer
+        else ""
+    )
+    paras_html = "".join(
+        f'<p style="margin:0 0 16px;font-size:15px;line-height:1.8;color:#4A5568">{p}</p>'
+        for p in paragraphs
+    )
+    tracking_pixel = (
+        f'<img src="{settings.FRONTEND_URL}/api/v1/track/open/{message_id}" alt="" width="1" height="1" style="display:none" />'
+        if message_id
+        else ""
+    )
+
+    html = (
+        '<div style="margin:0;padding:0;background:#F4F6F8">'
+        '<div style="max-width:600px;margin:0 auto;background:#ffffff;'
+        "font-family:Georgia,'Times New Roman',serif\">"
+        f"{photo_html}"
+        f'<div style="background:{accent};padding:26px;text-align:center">'
+        '<p style="margin:0 0 8px;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
+        'letter-spacing:4px;color:#ffffff;text-transform:uppercase">With gratitude</p>'
+        f'<p style="margin:0;font-size:24px;line-height:1.25;color:#ffffff">{event.title}</p>'
+        "</div>"
+        '<div style="padding:30px 28px 8px">'
+        f'<p style="margin:0 0 18px;font-size:17px;color:#1a1a2e">Dear {guest.name},</p>'
+        f"{paras_html}"
+        "</div>"
+        '<div style="padding:6px 28px 30px">'
+        '<p style="margin:0 0 4px;font-size:13px;color:#718096">With love,</p>'
+        f'<p style="margin:0;font-size:17px;color:#1a1a2e">{event.host_name or event.title}</p>'
+        "</div>"
+        '<div style="background:#0D1B2A;padding:22px;text-align:center">'
+        '<p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
+        f'letter-spacing:3px;color:{accent}">ACCREDIT INTERACTIVE</p>'
+        '<p style="margin:7px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:10px;color:#94a3b8">'
+        "Premium Event Infrastructure</p>"
+        "</div>"
+        f"{tracking_pixel}"
+        "</div></div>"
+    )
+    return subject, body, html
+
+
 MAX_INVITE_ATTEMPTS = 999
 
 
@@ -1039,11 +1253,19 @@ async def _send_to_guest(
                 # {{2}}=per-guest RSVP link). Falls back to free-form below.
                 invite_content_sid = settings.TWILIO_WHATSAPP_WEDDING_INVITE_CONTENT_SID
                 use_invite_template = True
-            if getattr(event, "id", None) == 78 and getattr(settings, "TWILIO_WHATSAPP_MOBOLA_INVITE_CONTENT_SID", ""):
-                # Mobola BIG 10 reminder template (event flyer header +
-                # {{1}}=name). Template first, free-form fallback below.
-                invite_content_sid = settings.TWILIO_WHATSAPP_MOBOLA_INVITE_CONTENT_SID
-                use_invite_template = True
+            if getattr(event, "id", None) == 78:
+                # Mobola's BIG 10 has two approved shapes: the "this Saturday"
+                # reminder while the party is coming, and a thank you once the
+                # event is flagged thank_you_mode. Both take {{1}} = guest name;
+                # free-form flyer plus text stays as the fallback.
+                thanks_sid = getattr(settings, "TWILIO_WHATSAPP_MOBOLA_THANKS_CONTENT_SID", "")
+                reminder_sid = getattr(settings, "TWILIO_WHATSAPP_MOBOLA_INVITE_CONTENT_SID", "")
+                if getattr(event, "thank_you_mode", False) and thanks_sid:
+                    invite_content_sid = thanks_sid
+                    use_invite_template = True
+                elif reminder_sid and not getattr(event, "thank_you_mode", False):
+                    invite_content_sid = reminder_sid
+                    use_invite_template = True
             if _is_gala(event) and getattr(settings, "TWILIO_WHATSAPP_GALA_INVITE_CONTENT_SID", ""):
                 # The Art of Attention invite template (gala poster header +
                 # {{1}}=name, {{2}}=per-guest RSVP link). Falls back to the

@@ -48,6 +48,10 @@ class Event(Base):
     rsvp_open = Column(Boolean, default=True)
     registration_close_at = Column(DateTime(timezone=True), nullable=True)
     spotlight = Column(Boolean, default=False)
+    # Set once an event is over and the organizer switches the saved message to a
+    # post-event thank you. Invite-style sends then drop the date/venue table, the
+    # entry code block and the RSVP call to action, which no longer make sense.
+    thank_you_mode = Column(Boolean, default=False)
     review_status = Column(String, default="auto_approved")
     review_note = Column(Text, nullable=True)
     flagged_keywords = Column(JSON, nullable=True)
