@@ -162,52 +162,61 @@ def anniversary_content() -> dict:
         },
         # Short montage cut from the couple's own photographs, set to "Ordinary".
         # Versioned so a replaced cut is never served from cache.
-        "video_url": "/uploads/anniversary-montage.mp4?v=3",
-        "invite_video_url": "/uploads/anniversary-montage.mp4?v=3",
+        "video_url": "/uploads/anniversary-montage.mp4?v=4",
+        "invite_video_url": "/uploads/anniversary-montage.mp4?v=4",
         # The opening carries their traditional attire portrait (red cap, white
         # agbada, red lace), which the client chose by name, so the names and
-        # "Together since December 1996" read at a glance on a phone.
+        # "Together since December 1996" read at a glance on a phone. The page
+        # shows the whole frame, never a crop, so both of them stay in view.
         "invite_poster_url": "/uploads/anniv-hero.jpg?v=3",
         "hero_image": "/uploads/anniv-hero.jpg?v=3",
         "hero_line": "Celebrating 30 beautiful years of love, laughter and lifelong companionship.",
-        # Gallery: five frames from the photographs the client sent in October
-        # 2026. width/height travel with each one so the boxes hold their shape
-        # before the bytes arrive (no layout shift while a guest scrolls).
+        # Gallery: six whole frames from the photographs the client sent in
+        # October 2026. Nothing is cropped, so no one is ever cut at the edge of
+        # a frame. width/height travel with each one so the boxes hold their
+        # shape before the bytes arrive (no layout shift while a guest scrolls).
         "photos": [
             {
-                "url": "/uploads/anniv-g1.jpg",
+                "url": "/uploads/anniv-g1.jpg?v=3",
                 "caption": "Still them",
                 "note": "Thirty years on",
                 "width": 900,
-                "height": 1125,
+                "height": 1200,
             },
             {
-                "url": "/uploads/anniv-g2.jpg",
+                "url": "/uploads/anniv-g2.jpg?v=3",
                 "caption": "Black tie",
                 "note": "An evening out",
                 "width": 900,
-                "height": 1125,
+                "height": 1200,
             },
             {
-                "url": "/uploads/anniv-g3.jpg",
+                "url": "/uploads/anniv-g3.jpg?v=3",
                 "caption": "Out and about",
                 "note": "Somewhere warm",
                 "width": 900,
-                "height": 1125,
+                "height": 1200,
             },
             {
-                "url": "/uploads/anniv-g4.jpg",
-                "caption": "An ordinary day",
-                "note": "The best ones",
-                "width": 900,
-                "height": 1125,
-            },
-            {
-                "url": "/uploads/anniv-g5.jpg?v=2",
+                "url": "/uploads/anniv-g4.jpg?v=3",
                 "caption": "Laughing",
                 "note": "Still",
                 "width": 900,
-                "height": 1125,
+                "height": 1200,
+            },
+            {
+                "url": "/uploads/anniv-g5.jpg?v=3",
+                "caption": "Dressed up",
+                "note": "Ready to celebrate",
+                "width": 900,
+                "height": 1200,
+            },
+            {
+                "url": "/uploads/anniv-g6.jpg?v=3",
+                "caption": "The family",
+                "note": "All of us, together",
+                "width": 900,
+                "height": 1200,
             },
         ],
         "music_url": "/uploads/anniversary-ordinary.mp3",
@@ -311,12 +320,16 @@ def gala_content() -> dict:
         "poster_url": "/uploads/gala-poster.jpg?v=2",
         "emblem_url": "/uploads/gala-emblem.jpg",
         "portrait_url": "/uploads/gala-portrait.jpg",
-        "film_url": "/uploads/gala-film.mp4?v=3",
+        "film_url": "/uploads/gala-film.mp4?v=4",
         "film_poster_url": "/uploads/gala-poster.jpg?v=2",
         # Phones get a dedicated 9:16 cut so the film fills the screen and the
         # type stays readable (a 16:9 film shrinks to a stamp on a handset).
-        "film_vertical_url": "/uploads/gala-film-vertical.mp4?v=3",
+        "film_vertical_url": "/uploads/gala-film-vertical.mp4?v=4",
         "film_vertical_poster_url": "/uploads/gala-film-vertical-poster.jpg?v=2",
+        # The client's score, extracted from the approved film. One audio
+        # element owns it for the whole visit (standing montage rule): the
+        # montage itself is silent and the music plays on past the film.
+        "music_url": "/uploads/gala-score.mp3?v=1",
     }
 
 

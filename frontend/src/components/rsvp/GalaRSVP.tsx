@@ -46,6 +46,8 @@ interface GalaContent {
   film_poster_url: string;
   film_vertical_url: string;
   film_vertical_poster_url: string;
+  /** The client's score, owned by one audio element for the whole visit. */
+  music_url?: string;
 }
 
 interface GalaRSVPProps {
@@ -274,7 +276,18 @@ export default function GalaRSVP({ slug, content, guestToken, guest }: GalaRSVPP
     }
   });
   const [filmOpen, setFilmOpen] = useState(false);
-  const [muted, setMuted] = useState(true);
+  // Music is ON by default. One audio element owns the client's score for the
+  // whole visit, the montage itself is silent, and the score carries straight
+  // through the film into the invitation without ever restarting. Only the
+  // guest can stop it.
+  const [musicOn, setMusicOn] = useState(false);
+  const [musicSilent, setMusicSilent] = useState(false);
+  const [musicBlocked, setMusicBlocked] = useState(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Set only when the guest themselves turns the sound off, so no other
+  // gesture or timer can start it again behind their back.
+  const userMutedRef = useRef(false);
+  const music: string = content.music_url || "";
   const [filmStalled, setFilmStalled] = useState(false);
   const [filmFallback, setFilmFallback] = useState(false);
   const [filmLoading, setFilmLoading] = useState(false);
@@ -335,34 +348,139 @@ export default function GalaRSVP({ slug, content, guestToken, guest }: GalaRSVPP
     }
   }, [slug]);
 
-  // The film always starts MUTED. Mobile browsers only allow a programmatic
-  // video to start without a fresh gesture when it is muted, so starting with
-  // sound left the first tap on a frozen poster. Guests can turn sound on with
-  // the pill in the header, which is a real gesture and always works.
+  // The invitation opens itself: a short beat on the gate, then the film.
   const openFilm = useCallback(() => {
-    setMuted(true);
     setFilmStalled(false);
     setFilmFallback(false);
     setFilmLoading(true);
     setFilmOpen(true);
   }, []);
 
+  /* ------------------------------------------------------------- music */
+
+  const startMusic = useCallback(() => {
+    const a = audioRef.current;
+    if (!a || userMutedRef.current) return;
+    a.volume = 0.62;
+    a.muted = false;
+    a.play()
+      .then(() => {
+        setMusicOn(true);
+        setMusicSilent(false);
+        setMusicBlocked(false);
+      })
+      .catch(() => {
+        // Phones refuse to start a page with sound. Keep the score running
+        // silently and in time, so the guest's first touch only has to raise
+        // the volume: no second press, no restart.
+        a.muted = true;
+        a.play()
+          .then(() => {
+            setMusicOn(true);
+            setMusicSilent(true);
+            setMusicBlocked(true);
+          })
+          .catch(() => {
+            setMusicOn(false);
+            setMusicSilent(false);
+            setMusicBlocked(true);
+          });
+      });
+  }, []);
+
+  // Coming back with the film already seen: the score starts on arrival.
+  useEffect(() => {
+    if (!entered) return;
+    startMusic();
+  }, [entered, startMusic]);
+
+  // From the moment the montage starts, the first gesture of any kind releases
+  // the sound if the browser was holding it back. This stays armed through the
+  // invitation, so a guest on a silent phone only ever has to tap once.
+  // Only the Sound control pauses it.
+  useEffect(() => {
+    if (!filmOpen && !entered) return;
+
+    const wake = () => {
+      const a = audioRef.current;
+      if (!a || userMutedRef.current) return;
+      if (!a.paused) {
+        // Already running silently: raise the volume. iOS will not give sound
+        // to an element it allowed to autoplay muted unless play() is called
+        // again inside the gesture.
+        if (a.muted) {
+          a.muted = false;
+          a.volume = 0.62;
+          setMusicSilent(false);
+          setMusicBlocked(false);
+          setMusicOn(true);
+          a.play().catch(() => {
+            a.muted = true;
+            setMusicSilent(true);
+            setMusicBlocked(true);
+            a.play().catch(() => {});
+          });
+        }
+        return;
+      }
+      startMusic();
+    };
+    const events: (keyof WindowEventMap)[] = [
+      "pointerdown",
+      "pointerup",
+      "touchstart",
+      "touchend",
+      "click",
+      "wheel",
+      "keydown",
+    ];
+    events.forEach((event) => window.addEventListener(event, wake, { passive: true }));
+    return () => events.forEach((event) => window.removeEventListener(event, wake));
+  }, [filmOpen, entered, startMusic]);
+
+  const toggleMusic = () => {
+    const a = audioRef.current;
+    if (!a) return;
+    if (!a.paused && a.muted) {
+      // playing silently, waiting for exactly this press
+      a.muted = false;
+      a.volume = 0.62;
+      userMutedRef.current = false;
+      setMusicSilent(false);
+      setMusicBlocked(false);
+      setMusicOn(true);
+      a.play().catch(() => {
+        a.muted = true;
+        setMusicSilent(true);
+        setMusicBlocked(true);
+        a.play().catch(() => {});
+      });
+      return;
+    }
+    if (!a.paused) {
+      userMutedRef.current = true;
+      a.pause();
+      setMusicOn(false);
+      setMusicSilent(false);
+      setMusicBlocked(false);
+      return;
+    }
+    userMutedRef.current = false;
+    startMusic();
+  };
+
+  const soundLabel = !musicOn ? "Sound off" : musicSilent ? "Tap for sound" : "Sound on";
+  const soundAction = !musicOn || musicSilent ? "Turn the music on" : "Turn the music off";
+
   const startFilm = useCallback(() => {
     const v = filmRef.current;
     if (!v) return;
-    // Sound on by default: try with audio first, and only fall back to the
-    // muted start when the browser blocks programmatic playback.
-    v.muted = false;
+    // The montage is silent by design: the score is owned by the audio
+    // element, so the video never carries sound and can always start itself.
+    v.muted = true;
     v.play()
-      .then(() => {
-        setMuted(false);
-        setFilmStalled(false);
-      })
-      .catch(() => {
-        v.muted = true;
-        setMuted(true);
-        v.play().then(() => setFilmStalled(false)).catch(() => setFilmStalled(true));
-      });
+      .then(() => setFilmStalled(false))
+      .catch(() => setFilmStalled(true));
   }, []);
 
   // The invitation opens itself: a short beat on the gate, then the film.
@@ -390,15 +508,6 @@ export default function GalaRSVP({ slug, content, guestToken, guest }: GalaRSVPP
     }, 1600);
     return () => clearTimeout(guard);
   }, [filmOpen, phoneView, filmFallback, startFilm]);
-
-  const toggleMute = () => {
-    const v = filmRef.current;
-    if (!v) return;
-    v.muted = !v.muted;
-    setMuted(v.muted);
-    if (!v.paused) return;
-    v.play().catch(() => {});
-  };
 
   const scrollTo = (id: string) => {
     setMenuOpen(false);
@@ -512,6 +621,13 @@ export default function GalaRSVP({ slug, content, guestToken, guest }: GalaRSVPP
         from { opacity: 0; }
         to { opacity: 1; }
       }
+      @keyframes galaSoundPulse {
+        0%, 100% { opacity: 0.75; transform: translate(-50%, 0); }
+        50% { opacity: 1; transform: translate(-50%, -3px); }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .gala-sound-hint { animation: none !important; }
+      }
     `}</style>
   );
 
@@ -549,7 +665,6 @@ export default function GalaRSVP({ slug, content, guestToken, guest }: GalaRSVPP
           if (phoneView && !filmFallback) setFilmFallback(true);
           else enter();
         }}
-        onClick={toggleMute}
         onLoadedData={() => {
           const v = filmRef.current;
           if (v && v.paused) startFilm();
@@ -561,6 +676,9 @@ export default function GalaRSVP({ slug, content, guestToken, guest }: GalaRSVPP
         onPlaying={() => {
           setFilmStalled(false);
           setFilmLoading(false);
+          // Start the score on the film's first real frame, so the music is in
+          // step with the picture instead of running a second ahead of it.
+          startMusic();
         }}
       />
 
@@ -581,7 +699,6 @@ export default function GalaRSVP({ slug, content, guestToken, guest }: GalaRSVPP
             const v = filmRef.current;
             if (v) {
               v.muted = true;
-              setMuted(true);
               v.play().then(() => setFilmStalled(false)).catch(() => {});
             }
           }}
@@ -615,9 +732,9 @@ export default function GalaRSVP({ slug, content, guestToken, guest }: GalaRSVPP
         </p>
         <div className="flex items-center gap-3">
           <button
-            onClick={toggleMute}
-            aria-label={muted ? "Turn film sound on" : "Mute film"}
-            className="flex items-center gap-2 rounded-full border px-3 py-2.5"
+            onClick={toggleMusic}
+            aria-label={soundAction}
+            className="flex shrink-0 items-center gap-2 rounded-full border px-3 py-2.5"
             style={{
               borderColor: "rgba(201,162,39,0.55)",
               color: GOLD,
@@ -625,9 +742,12 @@ export default function GalaRSVP({ slug, content, guestToken, guest }: GalaRSVPP
               backdropFilter: "blur(6px)",
             }}
           >
-            {muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
-            <span className="text-[10.5px] uppercase" style={{ letterSpacing: "0.16em" }}>
-              {muted ? "Sound on" : "Sound off"}
+            {musicOn && !musicSilent ? <Volume2 size={16} /> : <VolumeX size={16} />}
+            <span
+              className="hidden whitespace-nowrap text-[10.5px] uppercase sm:inline"
+              style={{ letterSpacing: "0.16em" }}
+            >
+              {soundLabel}
             </span>
           </button>
         </div>
@@ -635,9 +755,12 @@ export default function GalaRSVP({ slug, content, guestToken, guest }: GalaRSVPP
     </div>
   ) : null;
 
-  if (!entered) {
-    return (
-      <>{filmOverlay}{galaStyles}
+  /* ----------------------------------------------------------------- gate */
+
+  // The gate is a branch, never an early return: the audio element and the
+  // film overlay have to survive the handover from the gate to the invitation,
+  // otherwise the score restarts the moment the film ends.
+  const gate = (
       <div className="fixed inset-0 z-40 overflow-y-auto" style={{ background: "#050505" }}>
         {/* Mobile: the invitation words, then it opens on its own */}
         <div className="flex min-h-full flex-col md:hidden">
@@ -713,18 +836,12 @@ export default function GalaRSVP({ slug, content, guestToken, guest }: GalaRSVPP
           </div>
         </div>
       </div>
-      </>
-    );
-  }
+  );
 
   /* -------------------------------------------------------------- invitation */
 
-  return (
+  const invitation = (
     <div className="min-h-screen" style={{ background: INK, color: IVORY }}>
-      {/* film overlay */}
-      {filmOverlay}
-      {galaStyles}
-
       {/* nav */}
       <header
         className="fixed inset-x-0 top-0 z-30 transition-all duration-500"
@@ -765,14 +882,32 @@ export default function GalaRSVP({ slug, content, guestToken, guest }: GalaRSVPP
             </button>
           </nav>
 
-          <button
-            onClick={() => setMenuOpen((o) => !o)}
-            aria-label="Menu"
-            className="flex h-10 w-10 items-center justify-center lg:hidden"
-            style={{ color: GOLD }}
-          >
-            {menuOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
+          <div className="flex items-center gap-2 sm:gap-3">
+            {music && (
+              <button
+                onClick={toggleMusic}
+                aria-label={soundAction}
+                className="flex h-10 items-center gap-2 rounded-full border px-2.5 sm:px-3"
+                style={{ borderColor: "rgba(201,162,39,0.45)", color: GOLD }}
+              >
+                {musicOn && !musicSilent ? <Volume2 size={15} /> : <VolumeX size={15} />}
+                <span
+                  className="hidden text-[9.5px] uppercase sm:inline"
+                  style={{ letterSpacing: "0.18em" }}
+                >
+                  {soundLabel}
+                </span>
+              </button>
+            )}
+            <button
+              onClick={() => setMenuOpen((o) => !o)}
+              aria-label="Menu"
+              className="flex h-10 w-10 items-center justify-center lg:hidden"
+              style={{ color: GOLD }}
+            >
+              {menuOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
+          </div>
         </div>
 
         {menuOpen && (
@@ -1476,5 +1611,39 @@ export default function GalaRSVP({ slug, content, guestToken, guest }: GalaRSVPP
         </p>
       </footer>
     </div>
+  );
+
+  /* ------------------------------------------------------------------ page */
+
+  return (
+    <>
+      {galaStyles}
+      {filmOverlay}
+
+      {/* One audio element for the whole visit. The montage is silent, so the
+          score starts with it and keeps playing through the invitation; nothing
+          on the page pauses it except the guest. */}
+      {music && <audio ref={audioRef} src={music} loop preload="auto" />}
+
+      {entered ? invitation : gate}
+
+      {/* Only while the browser is still holding the sound back. Any tap or
+          scroll releases it, so the guest never has to hunt for the control. */}
+      {music && (musicSilent || (musicBlocked && !musicOn)) && (
+        <div
+          className="gala-sound-hint pointer-events-none fixed left-1/2 z-[60] -translate-x-1/2 whitespace-nowrap rounded-full border px-4 py-2 text-[10px] uppercase"
+          style={{
+            bottom: "calc(1.2rem + env(safe-area-inset-bottom))",
+            letterSpacing: "0.22em",
+            borderColor: "rgba(201,162,39,0.55)",
+            background: "rgba(0,0,0,0.85)",
+            color: IVORY,
+            animation: "galaSoundPulse 2.4s ease-in-out infinite",
+          }}
+        >
+          Tap anywhere for sound
+        </div>
+      )}
+    </>
   );
 }

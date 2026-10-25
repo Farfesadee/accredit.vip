@@ -286,11 +286,12 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
     c.photos && c.photos.length
       ? c.photos
       : [
-          { url: "/uploads/anniv-g1.jpg", caption: "Still them", note: "Thirty years on" },
-          { url: "/uploads/anniv-g2.jpg", caption: "Black tie", note: "An evening out" },
-          { url: "/uploads/anniv-g3.jpg", caption: "Out and about", note: "Somewhere warm" },
-          { url: "/uploads/anniv-g4.jpg", caption: "An ordinary day", note: "The best ones" },
-          { url: "/uploads/anniv-g5.jpg?v=2", caption: "Laughing", note: "Still" },
+          { url: "/uploads/anniv-g1.jpg?v=3", caption: "Still them", note: "Thirty years on" },
+          { url: "/uploads/anniv-g2.jpg?v=3", caption: "Black tie", note: "An evening out" },
+          { url: "/uploads/anniv-g3.jpg?v=3", caption: "Out and about", note: "Somewhere warm" },
+          { url: "/uploads/anniv-g4.jpg?v=3", caption: "Laughing", note: "Still" },
+          { url: "/uploads/anniv-g5.jpg?v=3", caption: "Dressed up", note: "Ready to celebrate" },
+          { url: "/uploads/anniv-g6.jpg?v=3", caption: "The family", note: "All of us, together" },
         ];
 
   // One companion rides on the guest's own pass (same rule as the gala).
@@ -678,7 +679,7 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
                 aria-hidden
                 className="anniv-cover-half"
                 style={{
-                  background: PURPLE,
+                  background: `linear-gradient(to bottom, ${PURPLE} 0%, #5A5BEA 100%)`,
                   clipPath: side === "left" ? "inset(0 50% 0 0)" : "inset(0 0 0 50%)",
                   transform: opening
                     ? `translateX(${side === "left" ? "-100%" : "100%"})`
@@ -688,28 +689,32 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
                 }}
               >
                 <div className="absolute inset-0 flex flex-col md:block">
-                  <div className="relative h-[50svh] w-full flex-none overflow-hidden md:absolute md:inset-y-0 md:left-auto md:right-0 md:h-full md:w-[54%]">
+                  <div className="relative flex h-[50svh] w-full flex-none items-center justify-center overflow-hidden px-4 md:absolute md:inset-y-0 md:left-auto md:right-0 md:h-full md:w-[54%] md:px-8">
                     {poster && (
                       <img
                         src={poster}
-                        alt=""
-                        className="h-full w-full object-cover"
-                        style={{ objectPosition: "center top" }}
+                        alt={`${groom} and ${bride}`}
+                        width={1200}
+                        height={1500}
+                        className="h-auto w-auto max-h-full max-w-full"
+                        style={{
+                          // The whole photograph, never a crop. A cover crop put
+                          // the edge of the frame through the man, so the picture
+                          // now sits complete on the purple field at every width.
+                          objectFit: "contain",
+                          boxShadow: "0 30px 80px rgba(20,15,60,0.45)",
+                          border: "1px solid rgba(230,230,250,0.22)",
+                        }}
                       />
                     )}
-                    {/* Soft hand-off into the purple panel on a phone. */}
-                    <div
-                      className="pointer-events-none absolute inset-x-0 bottom-0 h-32 md:hidden"
-                      style={{
-                        background: `linear-gradient(to bottom, rgba(110,111,250,0), rgba(110,111,250,0.55) 62%, ${PURPLE})`,
-                      }}
-                    />
                   </div>
 
                   <div
                     className="relative z-10 flex flex-1 flex-col items-center justify-center px-6 pb-8 pt-2 text-center md:absolute md:inset-y-0 md:left-0 md:right-[54%] md:px-12 md:pb-0 md:pt-0 md:text-left"
                     style={{
-                      background: `linear-gradient(to bottom, ${PURPLE} 0%, #5A5BEA 100%)`,
+                      // One gradient for the whole cover, so the photograph and
+                      // the words share the same field with no seam between them.
+                      background: "transparent",
                       opacity: opening ? 0 : 1,
                       transition: "opacity 380ms ease",
                     }}
