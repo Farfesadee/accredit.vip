@@ -17,6 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
+import { useInviteMusic } from "@/lib/invite-music";
 import { COUNTRIES, flagEmoji } from "@/components/shared/phone-input";
 
 const GOLD = "#C9A227";
@@ -276,18 +277,12 @@ export default function GalaRSVP({ slug, content, guestToken, guest }: GalaRSVPP
     }
   });
   const [filmOpen, setFilmOpen] = useState(false);
-  // Music is ON by default. One audio element owns the client's score for the
-  // whole visit, the montage itself is silent, and the score carries straight
-  // through the film into the invitation without ever restarting. Only the
-  // guest can stop it.
-  const [musicOn, setMusicOn] = useState(false);
-  const [musicSilent, setMusicSilent] = useState(false);
-  const [musicBlocked, setMusicBlocked] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  // Set only when the guest themselves turns the sound off, so no other
-  // gesture or timer can start it again behind their back.
-  const userMutedRef = useRef(false);
-  const music: string = content.music_url || "";
+  // Music is ON by default and belongs to the visit, not to this component.
+  // `invite-music` holds one audio element for the whole page: it starts on the
+  // welcome screen (before this component even mounts), keeps playing across the
+  // film and into the invitation, and is stopped only by the guest.
+  const music = useInviteMusic(content.music_url);
+  const musicUrl: string = content.music_url || "";
   const [filmStalled, setFilmStalled] = useState(false);
   const [filmFallback, setFilmFallback] = useState(false);
   const [filmLoading, setFilmLoading] = useState(false);
@@ -358,119 +353,9 @@ export default function GalaRSVP({ slug, content, guestToken, guest }: GalaRSVPP
 
   /* ------------------------------------------------------------- music */
 
-  const startMusic = useCallback(() => {
-    const a = audioRef.current;
-    if (!a || userMutedRef.current) return;
-    a.volume = 0.62;
-    a.muted = false;
-    a.play()
-      .then(() => {
-        setMusicOn(true);
-        setMusicSilent(false);
-        setMusicBlocked(false);
-      })
-      .catch(() => {
-        // Phones refuse to start a page with sound. Keep the score running
-        // silently and in time, so the guest's first touch only has to raise
-        // the volume: no second press, no restart.
-        a.muted = true;
-        a.play()
-          .then(() => {
-            setMusicOn(true);
-            setMusicSilent(true);
-            setMusicBlocked(true);
-          })
-          .catch(() => {
-            setMusicOn(false);
-            setMusicSilent(false);
-            setMusicBlocked(true);
-          });
-      });
-  }, []);
-
-  // Coming back with the film already seen: the score starts on arrival.
-  useEffect(() => {
-    if (!entered) return;
-    startMusic();
-  }, [entered, startMusic]);
-
-  // From the moment the montage starts, the first gesture of any kind releases
-  // the sound if the browser was holding it back. This stays armed through the
-  // invitation, so a guest on a silent phone only ever has to tap once.
-  // Only the Sound control pauses it.
-  useEffect(() => {
-    if (!filmOpen && !entered) return;
-
-    const wake = () => {
-      const a = audioRef.current;
-      if (!a || userMutedRef.current) return;
-      if (!a.paused) {
-        // Already running silently: raise the volume. iOS will not give sound
-        // to an element it allowed to autoplay muted unless play() is called
-        // again inside the gesture.
-        if (a.muted) {
-          a.muted = false;
-          a.volume = 0.62;
-          setMusicSilent(false);
-          setMusicBlocked(false);
-          setMusicOn(true);
-          a.play().catch(() => {
-            a.muted = true;
-            setMusicSilent(true);
-            setMusicBlocked(true);
-            a.play().catch(() => {});
-          });
-        }
-        return;
-      }
-      startMusic();
-    };
-    const events: (keyof WindowEventMap)[] = [
-      "pointerdown",
-      "pointerup",
-      "touchstart",
-      "touchend",
-      "click",
-      "wheel",
-      "keydown",
-    ];
-    events.forEach((event) => window.addEventListener(event, wake, { passive: true }));
-    return () => events.forEach((event) => window.removeEventListener(event, wake));
-  }, [filmOpen, entered, startMusic]);
-
-  const toggleMusic = () => {
-    const a = audioRef.current;
-    if (!a) return;
-    if (!a.paused && a.muted) {
-      // playing silently, waiting for exactly this press
-      a.muted = false;
-      a.volume = 0.62;
-      userMutedRef.current = false;
-      setMusicSilent(false);
-      setMusicBlocked(false);
-      setMusicOn(true);
-      a.play().catch(() => {
-        a.muted = true;
-        setMusicSilent(true);
-        setMusicBlocked(true);
-        a.play().catch(() => {});
-      });
-      return;
-    }
-    if (!a.paused) {
-      userMutedRef.current = true;
-      a.pause();
-      setMusicOn(false);
-      setMusicSilent(false);
-      setMusicBlocked(false);
-      return;
-    }
-    userMutedRef.current = false;
-    startMusic();
-  };
-
-  const soundLabel = !musicOn ? "Sound off" : musicSilent ? "Tap for sound" : "Sound on";
-  const soundAction = !musicOn || musicSilent ? "Turn the music on" : "Turn the music off";
+  // The song is already running from the welcome screen. Nothing here starts or
+  // resumes it on a timer: the only control is the guest's own Sound button.
+  const soundAction = music.audible ? "Turn the music off" : "Turn the music on";
 
   const startFilm = useCallback(() => {
     const v = filmRef.current;
@@ -621,13 +506,6 @@ export default function GalaRSVP({ slug, content, guestToken, guest }: GalaRSVPP
         from { opacity: 0; }
         to { opacity: 1; }
       }
-      @keyframes galaSoundPulse {
-        0%, 100% { opacity: 0.75; transform: translate(-50%, 0); }
-        50% { opacity: 1; transform: translate(-50%, -3px); }
-      }
-      @media (prefers-reduced-motion: reduce) {
-        .gala-sound-hint { animation: none !important; }
-      }
     `}</style>
   );
 
@@ -676,9 +554,6 @@ export default function GalaRSVP({ slug, content, guestToken, guest }: GalaRSVPP
         onPlaying={() => {
           setFilmStalled(false);
           setFilmLoading(false);
-          // Start the score on the film's first real frame, so the music is in
-          // step with the picture instead of running a second ahead of it.
-          startMusic();
         }}
       />
 
@@ -732,9 +607,9 @@ export default function GalaRSVP({ slug, content, guestToken, guest }: GalaRSVPP
         </p>
         <div className="flex items-center gap-3">
           <button
-            onClick={toggleMusic}
+            onClick={music.toggle}
             aria-label={soundAction}
-            className="flex shrink-0 items-center gap-2 rounded-full border px-3 py-2.5"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border"
             style={{
               borderColor: "rgba(201,162,39,0.55)",
               color: GOLD,
@@ -742,13 +617,7 @@ export default function GalaRSVP({ slug, content, guestToken, guest }: GalaRSVPP
               backdropFilter: "blur(6px)",
             }}
           >
-            {musicOn && !musicSilent ? <Volume2 size={16} /> : <VolumeX size={16} />}
-            <span
-              className="hidden whitespace-nowrap text-[10.5px] uppercase sm:inline"
-              style={{ letterSpacing: "0.16em" }}
-            >
-              {soundLabel}
-            </span>
+            {music.audible ? <Volume2 size={16} /> : <VolumeX size={16} />}
           </button>
         </div>
       </div>
@@ -883,20 +752,14 @@ export default function GalaRSVP({ slug, content, guestToken, guest }: GalaRSVPP
           </nav>
 
           <div className="flex items-center gap-2 sm:gap-3">
-            {music && (
+            {musicUrl && (
               <button
-                onClick={toggleMusic}
+                onClick={music.toggle}
                 aria-label={soundAction}
-                className="flex h-10 items-center gap-2 rounded-full border px-2.5 sm:px-3"
+                className="flex h-10 w-10 items-center justify-center rounded-full border"
                 style={{ borderColor: "rgba(201,162,39,0.45)", color: GOLD }}
               >
-                {musicOn && !musicSilent ? <Volume2 size={15} /> : <VolumeX size={15} />}
-                <span
-                  className="hidden text-[9.5px] uppercase sm:inline"
-                  style={{ letterSpacing: "0.18em" }}
-                >
-                  {soundLabel}
-                </span>
+                {music.audible ? <Volume2 size={15} /> : <VolumeX size={15} />}
               </button>
             )}
             <button
@@ -1620,30 +1483,7 @@ export default function GalaRSVP({ slug, content, guestToken, guest }: GalaRSVPP
       {galaStyles}
       {filmOverlay}
 
-      {/* One audio element for the whole visit. The montage is silent, so the
-          score starts with it and keeps playing through the invitation; nothing
-          on the page pauses it except the guest. */}
-      {music && <audio ref={audioRef} src={music} loop preload="auto" />}
-
       {entered ? invitation : gate}
-
-      {/* Only while the browser is still holding the sound back. Any tap or
-          scroll releases it, so the guest never has to hunt for the control. */}
-      {music && (musicSilent || (musicBlocked && !musicOn)) && (
-        <div
-          className="gala-sound-hint pointer-events-none fixed left-1/2 z-[60] -translate-x-1/2 whitespace-nowrap rounded-full border px-4 py-2 text-[10px] uppercase"
-          style={{
-            bottom: "calc(1.2rem + env(safe-area-inset-bottom))",
-            letterSpacing: "0.22em",
-            borderColor: "rgba(201,162,39,0.55)",
-            background: "rgba(0,0,0,0.85)",
-            color: IVORY,
-            animation: "galaSoundPulse 2.4s ease-in-out infinite",
-          }}
-        >
-          Tap anywhere for sound
-        </div>
-      )}
     </>
   );
 }

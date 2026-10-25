@@ -12,6 +12,7 @@ import {
   VolumeX,
 } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
+import { useInviteMusic } from "@/lib/invite-music";
 import { COUNTRIES, flagEmoji } from "@/components/shared/phone-input";
 
 /**
@@ -51,7 +52,6 @@ const FONT_CSS = `
 @keyframes annivFill{from{transform:scaleX(0)}to{transform:scaleX(1)}}
 @keyframes annivRise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:translateY(0)}}
 @keyframes annivFade{from{opacity:0}to{opacity:1}}
-@keyframes annivFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
 .anniv-rise{animation:annivRise 900ms cubic-bezier(0.22,1,0.36,1) both}
 /* Page-level wrapper: opacity only. A transform here would become the
    containing block for the fixed header and drag it along on scroll. */
@@ -276,7 +276,6 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
   const c = content || {};
   const poster: string = c.invite_poster_url || c.hero_image || "";
   const film: string = c.invite_video_url || c.video_url || "";
-  const music: string = c.music_url || "";
   const groom: string = c.groom || "Nelkon";
   const bride: string = c.bride || "Blessing";
   const surname: string = c.surname || "Obi-Uzu";
@@ -315,17 +314,15 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
   });
   const [opening, setOpening] = useState(false);
   const [filmStalled, setFilmStalled] = useState(false);
-  const [musicOn, setMusicOn] = useState(false);
-  const [musicSilent, setMusicSilent] = useState(false);
-  const [musicBlocked, setMusicBlocked] = useState(false);
+  // "Ordinary" belongs to the visit, not to this component. One audio element
+  // lives in `invite-music`, started on the welcome screen before this page
+  // mounts, and keeps playing through the cover, the film and the invitation.
+  // Only the guest's own Sound button stops it.
+  const music = useInviteMusic(c.music_url);
+  const musicUrl: string = c.music_url || "";
   const [showTop, setShowTop] = useState(false);
 
   const filmRef = useRef<HTMLVideoElement | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  // Set only when the guest themselves turns the sound off. Until then the
-  // song is meant to be playing, so a browser that blocks autoplay gets another
-  // attempt on the guest's first touch, scroll or key press.
-  const userMutedRef = useRef(false);
 
   const [name, setName] = useState(guest?.name || "");
   const [email, setEmail] = useState(guest?.email || "");
@@ -346,119 +343,10 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
 
   /* ------------------------------------------------------------- music */
 
-  const startMusic = useCallback(() => {
-    const a = audioRef.current;
-    if (!a) return;
-    a.volume = 0.62;
-    a.muted = false;
-    a.play()
-      .then(() => {
-        setMusicOn(true);
-        setMusicSilent(false);
-        setMusicBlocked(false);
-      })
-      .catch(() => {
-        // Phones refuse to start a page with sound. Keep the song running
-        // silently so it is already in time, then the guest's first touch
-        // only has to raise the volume: no second press, no restart.
-        a.muted = true;
-        a.play()
-          .then(() => {
-            setMusicOn(true);
-            setMusicSilent(true);
-            setMusicBlocked(true);
-          })
-          .catch(() => {
-            setMusicOn(false);
-            setMusicSilent(false);
-            setMusicBlocked(true);
-          });
-      });
-  }, []);
-
-  // "Ordinary" is ON by default: it starts the moment the invitation opens and
-  // stays on for the whole visit. The button is the only thing that turns it
-  // off, and once the guest has turned it off nothing else starts it again.
-  // A tap on a form field or a photograph never pauses or toggles it.
-  useEffect(() => {
-    startMusic();
-
-    const wake = () => {
-      const a = audioRef.current;
-      if (!a || userMutedRef.current) return;
-      if (!a.paused) {
-        // Already running silently: raise the volume. The play() call has to
-        // happen inside the gesture as well, because iOS in particular will
-        // not give sound to an element it allowed to autoplay muted unless it
-        // is played again from an interaction.
-        if (a.muted) {
-          a.muted = false;
-          a.volume = 0.62;
-          setMusicSilent(false);
-          setMusicBlocked(false);
-          setMusicOn(true);
-          a.play().catch(() => {
-            // Refused: keep the song running silently and in time, so the
-            // guest's next touch only has to raise the volume again.
-            a.muted = true;
-            setMusicSilent(true);
-            setMusicBlocked(true);
-            a.play().catch(() => {});
-          });
-        }
-        return;
-      }
-      startMusic();
-    };
-    // Gestures only: these are what a browser accepts as permission to play.
-    const events: (keyof WindowEventMap)[] = [
-      "pointerdown",
-      "pointerup",
-      "touchstart",
-      "touchend",
-      "click",
-      "wheel",
-      "keydown",
-    ];
-    events.forEach((event) => window.addEventListener(event, wake, { passive: true }));
-    return () =>
-      events.forEach((event) => window.removeEventListener(event, wake));
-  }, [startMusic]);
-
-  const toggleMusic = () => {
-    const a = audioRef.current;
-    if (!a) return;
-    if (!a.paused && a.muted) {
-      // it is playing silently, waiting for exactly this press
-      a.muted = false;
-      a.volume = 0.62;
-      userMutedRef.current = false;
-      setMusicSilent(false);
-      setMusicBlocked(false);
-      setMusicOn(true);
-      a.play().catch(() => {
-        // Refused: fall back to the silent, in-time playback and keep the hint.
-        a.muted = true;
-        setMusicSilent(true);
-        setMusicBlocked(true);
-        a.play().catch(() => {});
-      });
-      return;
-    }
-    if (!a.paused) {
-      userMutedRef.current = true;
-      a.pause();
-      setMusicOn(false);
-      setMusicSilent(false);
-      setMusicBlocked(false);
-      return;
-    }
-    userMutedRef.current = false;
-    startMusic();
-  };
-
-  const soundLabel = !musicOn ? "Sound off" : musicSilent ? "Tap for sound" : "Sound on";
-  const soundAction = !musicOn || musicSilent ? "Turn the music on" : "Turn the music off";
+  // The song is already running from the welcome screen. Nothing here starts,
+  // restarts or resumes it on a timer or gesture: the only control is the
+  // guest's own Sound button.
+  const soundAction = music.audible ? "Turn the music off" : "Turn the music on";
 
   /* -------------------------------------------------------------- cover */
 
@@ -781,25 +669,19 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
         )}
 
         {/* Sound is ON by default: the same control rides the cover and the film. */}
-        {music && (
+        {musicUrl && (
           <button
-            onClick={toggleMusic}
+            onClick={music.toggle}
             aria-label={soundAction}
-            className="absolute right-4 top-4 z-30 flex items-center gap-2 rounded-full px-3 py-2 text-[9px] uppercase"
+            className="absolute right-4 top-4 z-30 flex h-10 w-10 items-center justify-center rounded-full text-[9px] uppercase"
             style={{
-              letterSpacing: "0.22em",
               color: CREAM,
               background: "rgba(0,0,0,0.5)",
               backdropFilter: "blur(8px)",
               border: "1px solid rgba(230,230,250,0.22)",
-              animation:
-                musicSilent || (musicBlocked && !musicOn)
-                  ? "annivFloat 2.4s ease-in-out infinite"
-                  : "none",
             }}
           >
-            {musicOn && !musicSilent ? <Volume2 size={13} /> : <VolumeX size={13} />}
-            {soundLabel}
+            {music.audible ? <Volume2 size={14} /> : <VolumeX size={14} />}
           </button>
         )}
       </div>
@@ -811,29 +693,7 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
     <div style={{ fontFamily: BODY, background: CREAM, color: INK }}>
       <style dangerouslySetInnerHTML={{ __html: FONT_CSS }} />
 
-      {/* One audio element for the whole visit. */}
-      {music && <audio ref={audioRef} src={music} loop preload="auto" />}
-
       {gate}
-
-      {/* Only while the browser is still holding the sound back. Any tap, scroll
-          or key press releases it, so the guest is never sent hunting for a
-          control to switch the music on. */}
-      {music && (musicSilent || (musicBlocked && !musicOn)) && (
-        <div
-          className="pointer-events-none fixed left-1/2 z-[60] -translate-x-1/2 whitespace-nowrap rounded-full border px-4 py-2 text-[9px] uppercase"
-          style={{
-            bottom: "calc(1.1rem + env(safe-area-inset-bottom))",
-            letterSpacing: "0.22em",
-            borderColor: "rgba(230,230,250,0.5)",
-            background: "rgba(27,21,80,0.92)",
-            color: CREAM,
-            animation: "annivFloat 2.4s ease-in-out infinite",
-          }}
-        >
-          Tap anywhere for sound
-        </div>
-      )}
 
       {phase === "invitation" && (
         <div className="anniv-fade">
@@ -868,24 +728,22 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
                 </span>
               </button>
               <div className="flex items-center gap-2 sm:gap-3">
-                {music && (
+                {musicUrl && (
                   <button
-                    onClick={toggleMusic}
+                    onClick={music.toggle}
                     aria-label={soundAction}
-                    className="flex h-10 items-center gap-2 rounded-full border px-3 text-[9px] uppercase transition-colors"
+                    className="flex h-10 w-10 items-center justify-center rounded-full border transition-colors"
                     style={{
-                      letterSpacing: "0.2em",
-                      borderColor: musicOn ? "rgba(230,230,250,0.55)" : "rgba(230,230,250,0.28)",
-                      background: musicOn ? "rgba(75,75,216,0.65)" : "rgba(255,255,255,0.06)",
+                      borderColor: music.audible
+                        ? "rgba(230,230,250,0.55)"
+                        : "rgba(230,230,250,0.28)",
+                      background: music.audible
+                        ? "rgba(75,75,216,0.65)"
+                        : "rgba(255,255,255,0.06)",
                       color: CREAM,
-                      animation:
-                        musicSilent || (musicBlocked && !musicOn)
-                          ? "annivFloat 2.4s ease-in-out infinite"
-                          : "none",
                     }}
                   >
-                    {musicOn && !musicSilent ? <Volume2 size={14} /> : <VolumeX size={14} />}
-                    <span className="hidden sm:inline">{soundLabel}</span>
+                    {music.audible ? <Volume2 size={15} /> : <VolumeX size={15} />}
                   </button>
                 )}
                 <a

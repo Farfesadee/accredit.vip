@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import { Calendar, Clock, MapPin, Check, X } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
+import { inviteMusic } from "@/lib/invite-music";
 import BrandSplash from "@/components/shared/brand-splash";
 import GalaRSVP from "@/components/rsvp/GalaRSVP";
 import AnniversaryRSVP from "@/components/rsvp/AnniversaryRSVP";
@@ -81,8 +82,16 @@ export default function RSVPPage() {
         );
         const payload = data?.[`${experience}_content`];
         if (cancelled) return;
-        if (payload) setExperienceContent(payload);
-        else setExperienceError(true);
+        if (payload) {
+          setExperienceContent(payload);
+          // The song begins here, under the welcome screen, and runs on into
+          // the cover, the film and the invitation. The wedding keeps its own
+          // player (`wedding-music`), so only these two start it here.
+          if (experience === "gala" || experience === "anniversary") {
+            const musicUrl: string | undefined = payload.music_url;
+            if (musicUrl) inviteMusic.start(musicUrl);
+          }
+        } else setExperienceError(true);
       } catch {
         if (!cancelled) setExperienceError(true);
       }
@@ -98,6 +107,11 @@ export default function RSVPPage() {
       window.dispatchEvent(new Event("accredit:bespoke-invite"));
     } catch {}
   }, [experience]);
+
+  // Leaving the invitation: the song leaves with it.
+  useEffect(() => {
+    return () => inviteMusic.stop();
+  }, []);
 
   useEffect(() => {
     const loadRsvpData = async () => {

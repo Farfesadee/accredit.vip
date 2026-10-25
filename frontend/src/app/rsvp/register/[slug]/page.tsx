@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { Calendar, Clock, MapPin, Check, X, Loader, User, Building, Briefcase } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
+import { inviteMusic } from "@/lib/invite-music";
 import BrandSplash from "@/components/shared/brand-splash";
 import EnvelopeSplash from "@/components/rsvp/EnvelopeSplash";
 import WeddingRSVP from "@/components/rsvp/WeddingRSVP";
@@ -199,6 +200,12 @@ export default function EventRegistrationPage() {
       try {
         const data = await apiClient<RegistrationData>(`/rsvp/register/${slug}`);
         setRsvpData(data);
+        // The invitation's own song starts here, while the welcome screen is
+        // still up, and runs uninterrupted through the cover, the film and the
+        // invitation. One element for the visit, owned by `invite-music`.
+        const musicUrl: string | undefined =
+          data.gala_content?.music_url || data.anniversary_content?.music_url;
+        if (musicUrl) inviteMusic.start(musicUrl);
         if (data.event.id === 72) setShowEnvelope(true);
       } catch (err: any) {
         setError(err.detail || err.message || "Could not load event details");
@@ -207,6 +214,7 @@ export default function EventRegistrationPage() {
       }
     };
     load();
+    return () => inviteMusic.stop();
   }, [slug]);
 
   const submitRsvp = async () => {
