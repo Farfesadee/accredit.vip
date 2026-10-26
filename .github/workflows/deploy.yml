@@ -58,7 +58,25 @@ jobs:
         working-directory: frontend
         env:
           NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${{ secrets.NEXT_PUBLIC_GOOGLE_CLIENT_ID }}
-        run: npm run build
+          NEXT_TELEMETRY_DISABLED: "1"
+        # next/font/google downloads the font files during the build, and a
+        # single dropped request fails the whole build with a Turbopack
+        # "next/font/google queries have exactly one entry" error that has
+        # nothing to do with our code. Three attempts, each from a clean .next,
+        # so a flaky fetch cannot block a deploy.
+        run: |
+          for attempt in 1 2 3; do
+            echo "== build attempt ${attempt} =="
+            rm -rf .next
+            if npm run build; then
+              echo "build succeeded on attempt ${attempt}"
+              exit 0
+            fi
+            echo "build attempt ${attempt} failed, retrying"
+            sleep 10
+          done
+          echo "::error::next build failed three times"
+          exit 1
 
       - name: Check the backend compiles
         run: python3 -m compileall -q backend/app
