@@ -71,21 +71,38 @@ def wedding_content() -> dict:
             "venue": "Los Angeles Event Center, Kado, Abuja",
             "time": "3:00 PM",
         },
+        # Two days, two looks. The white wedding is black tie and pastels; the
+        # traditional, two days earlier, is green for the men and asoebi for
+        # the women (client direction, October 2026).
         "dress_code": {
-            "label": "White Wedding Dress Code",
-            "theme": "Black Tie",
-            "message": "We invite you to celebrate with us in an elegant palette of soft, sophisticated pastel tones.",
-            "style": "Black Tie | Pastel Elegance",
-            "note": "Guests are encouraged to embrace refined black-tie silhouettes while incorporating one or more of the above pastel shades.",
+            "label": "Dress Code",
+            "message": "Two days, two looks. Come dressed for each with us.",
+            "wedding": {
+                "label": "The White Wedding",
+                "when": "Saturday, 19 December 2026",
+                "men": "Suit or black tie",
+                "women": "Pastel colours",
+                "note": "Gentlemen, a suit or black tie. Ladies, soft pastel tones.",
+            },
+            "traditional": {
+                "label": "The Traditional Wedding",
+                "when": "Thursday, 17 December 2026",
+                "men": "Green, the colour of the day",
+                "women": "Asoebi",
+                "note": "Gentlemen wear green, the colour of the day. Asoebi is for the ladies only.",
+            },
+            # Names only: the client asked us to drop the colour swatches and
+            # keep the shade names as words.
             "colors": [
-                {"name": "Blush Pink", "hex": "#F5C6D0"},
-                {"name": "Powder Blue", "hex": "#B9D2E8"},
-                {"name": "Lavender", "hex": "#D3C6E8"},
-                {"name": "Sage Green", "hex": "#AEBD9D"},
-                {"name": "Soft Peach", "hex": "#F9CFB4"},
-                {"name": "Butter Yellow", "hex": "#F7E8A4"},
-                {"name": "Dusty Rose", "hex": "#D29B9B"},
+                "Blush Pink",
+                "Powder Blue",
+                "Lavender",
+                "Sage Green",
+                "Soft Peach",
+                "Butter Yellow",
+                "Dusty Rose",
             ],
+            "colors_note": "Pastel shades for the ladies at the white wedding.",
         },
         "video_url": "/uploads/wedding-0cd6a8bc64df.mp4",
         # Opening curtain the client supplied (their montage). Silent clip: the
@@ -97,7 +114,6 @@ def wedding_content() -> dict:
         "reveal_at": 2.4,
         "hero_image": "/uploads/wedding-7e961344fddf.jpg",
         "hero_line": "To join in the celebration of love at their White Wedding, Abuja, Saturday 19 December 2026.",
-        "music_url": "/uploads/wedding-music.mp3",
         "photos": [
             "/uploads/wedding-313c597dfe3a.jpg",
             "/uploads/wedding-7e961344fddf.jpg",
@@ -114,13 +130,64 @@ def wedding_content() -> dict:
             {"name": "Belanova Apartment", "address": "Plot 3349 Lualaba Close, Off Madeira Street, Maitama District, Abuja"},
             {"name": "The Palms Hotel", "address": "Plot 269, Muhammadu Buhari Way, Central Business District, Abuja"},
         ],
+        # The traditional holds two days before the white wedding. Only the date
+        # and the dress direction are stated: the couple has not published a
+        # traditional venue, so the page never invents one.
+        "traditional": {
+            "label": "The Traditional Wedding",
+            "date": "Thursday, 17 December 2026",
+            "note": "The asoebi is worn at the traditional. Gentlemen wear green, the colour of the day.",
+        },
+        # Friends of the couple asoebi: for the ladies, worn at the traditional
+        # on 17 December. The client was explicit that men do not wear it.
         "asoebi": {
+            "name": "Friends of the Couple Asoebi",
+            "short": "Asoebi",
+            "for_who": "For the ladies",
+            "occasion": "Worn at the traditional wedding, Thursday, 17 December 2026",
+            "note": "Asoebi is for the women only. Gentlemen, your colour of the day for the traditional is green.",
             "price": ASOEBI_PRICE,
             "items": ["3 yards of lace", "3 yards of lining", "Gele", "Souvenir from the couple"],
             "bank": ASOEBI_BANK,
             "whatsapp": ASOEBI_WHATSAPP,
-            "whatsapp_link": "https://wa.me/2349046751511?text=" + quote("Hello, I just paid for the Aso Ebi package. Please confirm my payment."),
+            "whatsapp_link": "https://wa.me/2349046751511?text=" + quote("Hello, I just paid for the Asoebi package. Please confirm my payment."),
         },
+        # Anything about the day, answered from the details above. No invented
+        # facts: times, venues, dress and the asoebi are all on the invitation.
+        "faq": [
+            {
+                "q": "What time should I arrive?",
+                "a": "The white wedding ceremony begins at 12:00 PM at Church of the Assumption, Asokoro. Please come a little early so you are seated before the procession.",
+            },
+            {
+                "q": "Where do I go after the church?",
+                "a": "The reception follows from 3:00 PM at Los Angeles Event Center, Kado, Abuja. The When and Where section carries directions from wherever you are.",
+            },
+            {
+                "q": "What should I wear to the white wedding?",
+                "a": "Gentlemen, a suit or black tie. Ladies, pastel colours in soft, sophisticated tones. The shade names are on the Dress Code section if you want a steer.",
+            },
+            {
+                "q": "What should I wear to the traditional?",
+                "a": "The traditional holds on Thursday, 17 December 2026. Gentlemen wear green, the colour of the day. Ladies wear the friends of the couple asoebi.",
+            },
+            {
+                "q": "Who is the asoebi for, and how do I get it?",
+                "a": "The asoebi is for the ladies, worn at the traditional wedding on 17 December 2026. Open the Aso Ebi page, pay into the account shown, then claim your reference and send your receipt on WhatsApp.",
+            },
+            {
+                "q": "Do I need to RSVP?",
+                "a": "Yes, please. The RSVP is how we count for the catering and the seating, and it is the list the organisers work from.",
+            },
+            {
+                "q": "How do I get into the venue on the day?",
+                "a": "Once you confirm, your entry QR code is sent to you by email or WhatsApp. Please have it ready at the door.",
+            },
+            {
+                "q": "Where can I stay?",
+                "a": "The Hotel Recommendations section lists hotels close to the venues, with directions from your current location. Please book directly with the hotel you choose.",
+            },
+        ],
     }
 
 

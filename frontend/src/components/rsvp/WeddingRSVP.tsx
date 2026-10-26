@@ -3,10 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { apiClient } from "@/lib/api-client";
-import WeddingMusicButton from "@/components/rsvp/WeddingMusic";
 import WeddingNav from "@/components/rsvp/WeddingNav";
 import WeddingPhoneInput from "@/components/rsvp/WeddingPhoneInput";
-import { playWeddingMusic } from "@/lib/wedding-music";
 
 interface WeddingRSVPProps {
   slug: string;
@@ -162,6 +160,47 @@ function WeddingChapter({
   );
 }
 
+// Questions about the day, folded away until they are asked, the way the
+// reference invitation does it: a hairline list, serif question, quiet answer.
+function WeddingFaq({ items }: { items: { q: string; a: string }[] }) {
+  const [open, setOpen] = useState<number | null>(0);
+  return (
+    <div className="border-t" style={{ borderColor: "#e2d5b8" }}>
+      {items.map((item, i) => {
+        const isOpen = open === i;
+        return (
+          <div key={item.q} className="border-b" style={{ borderColor: "#e2d5b8" }}>
+            <button
+              type="button"
+              onClick={() => setOpen(isOpen ? null : i)}
+              aria-expanded={isOpen}
+              className="flex w-full items-start justify-between gap-4 py-5 text-left"
+            >
+              <span className="font-serif text-[17px] leading-snug sm:text-lg">{item.q}</span>
+              <span
+                className="mt-0.5 shrink-0 text-xl leading-none transition-transform"
+                style={{ color: GOLD, transform: isOpen ? "rotate(45deg)" : "none" }}
+                aria-hidden
+              >
+                +
+              </span>
+            </button>
+            <div
+              className="overflow-hidden transition-all duration-300 ease-out"
+              style={{ maxHeight: isOpen ? 480 : 0, opacity: isOpen ? 1 : 0 }}
+              aria-hidden={!isOpen}
+            >
+              <p className="pb-5 pr-8 text-sm leading-relaxed" style={{ color: "rgba(43,33,24,0.72)" }}>
+                {item.a}
+              </p>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function WeddingRSVP({ slug, content, guestToken, guest }: WeddingRSVPProps) {
   const [entered, setEntered] = useState<boolean>(() => {
     // If the guest already opened the invitation this session (e.g. coming
@@ -187,8 +226,6 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
   const [declined, setDeclined] = useState(guest?.status === "declined");
   const [error, setError] = useState("");
 
-  const [dressPick, setDressPick] = useState<string | null>(null);
-
   const cd = useCountdown(content.countdown_to);
   const filmUrl = content.invite_video_url || content.video_url;
   const posterUrl = content.invite_poster_url || content.monogram_url;
@@ -201,7 +238,6 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
   const heroLine =
     content.hero_line ||
     "To join in the celebration of love at their White Wedding, Abuja, Saturday 19 December 2026.";
-  const musicUrl = content.music_url;
 
   const ceremony = content.ceremony || {};
   const ceremonyFull = [ceremony.venue, ceremony.location].filter(Boolean).join(", ");
@@ -231,9 +267,8 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
   };
 
   const startFilm = () => {
-    // Music begins the moment the guest taps to open, while the silent curtain
-    // clip plays. If the clip cannot play, open the invitation straight away.
-    if (musicUrl) playWeddingMusic(musicUrl);
+    // Silent invitation: the client asked us to remove the song, so the clip
+    // plays on its own. If it cannot play, open the invitation straight away.
     setPlayingFilm(true);
     const v = filmRef.current;
     if (!v) {
@@ -317,9 +352,11 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
 
   const navItems = [
     { label: "Invitation", href: "#invitation" },
-    { label: "When & Where", href: "#when-where" },
+    { label: "The Day", href: "#when-where" },
     { label: "Dress Code", href: "#dress-code" },
     { label: "Hotels", href: "#hotels" },
+    { label: "Asoebi", href: "#asoebi" },
+    { label: "FAQ", href: "#faq" },
     { label: "RSVP", href: "#rsvp" },
   ];
 
@@ -486,7 +523,7 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
               e.preventDefault();
               scrollTo("#rsvp");
             }}
-            className="mt-7 inline-flex h-12 w-fit items-center justify-center rounded-full px-9 text-sm font-bold text-white transition-transform hover:scale-[1.02]"
+            className="mt-7 inline-flex h-12 w-full items-center justify-center rounded-full px-9 text-sm font-bold text-white transition-transform hover:scale-[1.02] sm:w-fit"
             style={{ background: `linear-gradient(160deg, ${GOLD_LIGHT}, ${GOLD})` }}
           >
             RSVP
@@ -500,31 +537,66 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
         </div>
       </section>
 
-      {/* YOU ARE INVITED */}
-      <section className="px-6 pt-12 pb-4 max-w-2xl mx-auto text-center">
+      {/* YOU ARE INVITED: the reference invitation puts this on a bordered
+          card, with the date and place set as quiet rows, so a phone reads it
+          in one glance. */}
+      <section className="px-5 pt-12 pb-4 max-w-2xl mx-auto text-center">
         <Reveal>
           <img
             src={content.monogram_url}
             alt="Sarah and Patrick crest"
-            className="mx-auto w-24 select-none sm:w-28"
+            className="mx-auto w-20 select-none sm:w-24"
             draggable={false}
           />
-          <p className="mt-6 text-[10px] uppercase font-medium" style={{ color: GOLD, letterSpacing: "0.42em" }}>
-            You are invited
-          </p>
-          <p className="mt-4 font-serif text-3xl sm:text-4xl">Sarah &amp; Patrick</p>
-          <p className="mt-3 text-sm opacity-70">invite you to their</p>
-          <p className="mt-2 font-serif text-2xl sm:text-3xl">White Wedding</p>
+          <div
+            className="mt-7 rounded-2xl border bg-white px-5 py-9 sm:px-10 sm:py-10"
+            style={{ borderColor: "#e2d5b8", boxShadow: "0 18px 40px rgba(43,33,24,0.06)" }}
+          >
+            <p className="text-[10px] uppercase font-medium" style={{ color: GOLD, letterSpacing: "0.42em" }}>
+              You are invited
+            </p>
+            <p className="mt-4 font-serif text-[30px] leading-tight sm:text-4xl">Sarah &amp; Patrick</p>
+            <p className="mt-2.5 text-sm opacity-70">invite you to their</p>
+            <p className="mt-2 font-serif text-2xl sm:text-3xl">The White Wedding</p>
+
+            <div className="mx-auto my-7 h-px w-12" style={{ background: "#d8c9a6" }} />
+
+            <dl className="space-y-3 text-left">
+              <div className="flex gap-4">
+                <dt
+                  className="w-14 shrink-0 pt-0.5 text-[10px] font-bold uppercase"
+                  style={{ color: GOLD, letterSpacing: "0.22em" }}
+                >
+                  When
+                </dt>
+                <dd className="text-sm leading-snug">
+                  {ceremony.date}
+                  <span className="block opacity-60">{ceremony.time}</span>
+                </dd>
+              </div>
+              <div className="flex gap-4">
+                <dt
+                  className="w-14 shrink-0 pt-0.5 text-[10px] font-bold uppercase"
+                  style={{ color: GOLD, letterSpacing: "0.22em" }}
+                >
+                  Where
+                </dt>
+                <dd className="text-sm leading-snug">
+                  {ceremony.venue}
+                  <span className="block opacity-60">{ceremony.location}</span>
+                </dd>
+              </div>
+            </dl>
+          </div>
         </Reveal>
 
         <Reveal delay={120}>
           <div className="mt-10">
-            <div className="mx-auto mb-8 h-px w-16" style={{ background: "#d8c9a6" }} />
             <p className="text-[10px] uppercase font-bold" style={{ color: GOLD, letterSpacing: "0.3em" }}>
               The celebration begins in
             </p>
             {!cd.passed ? (
-              <div className="mt-5 flex items-start justify-center gap-6 sm:gap-10">
+              <div className="mt-5 flex items-start justify-center gap-5 sm:gap-10">
                 {(
                   [
                     [cd.days, "Days"],
@@ -534,8 +606,8 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
                   ] as [number, string][]
                 ).map(([v, l]) => (
                   <div key={l} className="text-center">
-                    <p className="font-serif text-4xl tabular-nums">{String(v).padStart(2, "0")}</p>
-                    <p className="mt-1 text-[10px] uppercase" style={{ color: "#8a7a5e", letterSpacing: "0.22em" }}>
+                    <p className="font-serif text-3xl tabular-nums sm:text-4xl">{String(v).padStart(2, "0")}</p>
+                    <p className="mt-1 text-[9px] uppercase sm:text-[10px]" style={{ color: "#8a7a5e", letterSpacing: "0.2em" }}>
                       {l}
                     </p>
                   </div>
@@ -595,6 +667,23 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
           </div>
         </div>
 
+        {content.traditional?.date && (
+          <div
+            className="mt-7 rounded-xl border p-4"
+            style={{ borderColor: "rgba(232,192,95,0.4)", background: "rgba(255,255,255,0.05)" }}
+          >
+            <p className="text-[10px] uppercase font-bold" style={{ color: GOLD_LIGHT, letterSpacing: "0.3em" }}>
+              {content.traditional.label}
+            </p>
+            <p className="mt-1.5 font-serif text-lg" style={{ color: "#f8f2e6" }}>
+              {content.traditional.date}
+            </p>
+            <p className="mt-1 text-sm leading-relaxed" style={{ color: "rgba(248,242,230,0.72)" }}>
+              {content.traditional.note}
+            </p>
+          </div>
+        )}
+
         <a
           href={calendarHref(content)}
           download="sarah-and-patrick-white-wedding.ics"
@@ -609,121 +698,172 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
         </a>
       </WeddingChapter>
 
-      {/* DRESS CODE */}
+      {/* DRESS CODE: two days, two looks. Names of the pastel shades only, no
+          swatches, per the client. */}
       {content.dress_code && (
-        <section id="dress-code" className="px-6 pt-14 pb-12 max-w-2xl mx-auto" style={{ scrollMarginTop: "4.5rem" }}>
+        <section id="dress-code" className="px-5 pt-14 pb-12 max-w-2xl mx-auto" style={{ scrollMarginTop: "4.5rem" }}>
           <Reveal>
-            <div className="text-center mb-6">
+            <div className="text-center mb-7">
               <Eyebrow>{content.dress_code.label}</Eyebrow>
-              <h2 className="font-serif text-3xl sm:text-4xl">{content.dress_code.style}</h2>
-              <p className="text-sm opacity-70 mt-4 max-w-md mx-auto leading-relaxed">{content.dress_code.message}</p>
-            </div>
-          </Reveal>
-          <Reveal>
-            <div className="rounded-2xl border bg-white/70 p-6" style={{ borderColor: "#e2d5b8" }}>
-              <p className="text-[11px] uppercase text-center mb-4 font-bold" style={{ color: GOLD, letterSpacing: "0.3em" }}>
-                Colour Palette
+              <h2 className="font-serif text-3xl leading-tight sm:text-4xl">Two days, two looks.</h2>
+              <p className="text-sm opacity-70 mt-3 max-w-md mx-auto leading-relaxed">
+                {content.dress_code.message}
               </p>
-              <div className="flex flex-wrap justify-center gap-x-5 gap-y-4">
-                {(content.dress_code.colors || []).map((c: any) => (
-                  <button
-                    key={c.name}
-                    type="button"
-                    onClick={() => setDressPick(dressPick === c.name ? null : c.name)}
-                    className="flex flex-col items-center gap-1.5 transition-all active:scale-95"
-                    title={c.name}
-                  >
-                    <span
-                      className="w-14 h-14 rounded-full border-2 transition-all"
-                      style={{
-                        background: c.hex,
-                        borderColor: dressPick === c.name ? GOLD : "#ffffff",
-                        boxShadow: dressPick === c.name
-                          ? "0 0 0 2px #b8892f, 0 8px 18px rgba(184,137,47,0.35)"
-                          : "0 4px 12px rgba(0,0,0,0.12)",
-                      }}
-                    />
-                    <span className="text-[11px] font-bold opacity-80">{c.name}</span>
-                  </button>
-                ))}
-              </div>
-              <p className="text-sm opacity-70 mt-5 text-center leading-relaxed">{content.dress_code.note}</p>
-              {dressPick && (
-                <p className="mt-3 text-center text-xs font-bold uppercase" style={{ color: GOLD, letterSpacing: "0.2em" }}>
-                  {dressPick} (
-                  {(content.dress_code.colors || []).find((c: any) => c.name === dressPick)?.hex})
-                </p>
-              )}
             </div>
           </Reveal>
+
+          <div className="space-y-4">
+            {[content.dress_code.wedding, content.dress_code.traditional].filter(Boolean).map((look: any, i: number) => (
+              <Reveal key={look.label} delay={i * 90}>
+                <div className="rounded-2xl border bg-white p-5 sm:p-6" style={{ borderColor: "#e2d5b8" }}>
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                    <p className="font-serif text-xl">{look.label}</p>
+                    <p className="text-[11px] uppercase" style={{ color: "#8a7a5e", letterSpacing: "0.18em" }}>
+                      {look.when}
+                    </p>
+                  </div>
+
+                  <dl className="mt-4 space-y-2.5">
+                    <div className="flex gap-4">
+                      <dt
+                        className="w-14 shrink-0 pt-0.5 text-[10px] font-bold uppercase"
+                        style={{ color: GOLD, letterSpacing: "0.22em" }}
+                      >
+                        Men
+                      </dt>
+                      <dd className="text-sm leading-snug">{look.men}</dd>
+                    </div>
+                    <div className="flex gap-4">
+                      <dt
+                        className="w-14 shrink-0 pt-0.5 text-[10px] font-bold uppercase"
+                        style={{ color: GOLD, letterSpacing: "0.22em" }}
+                      >
+                        Women
+                      </dt>
+                      <dd className="text-sm leading-snug">{look.women}</dd>
+                    </div>
+                  </dl>
+
+                  {look.note && <p className="mt-3 text-xs leading-relaxed opacity-60">{look.note}</p>}
+
+                  {i === 0 && (content.dress_code.colors || []).length > 0 && (
+                    <div className="mt-4 border-t pt-4" style={{ borderColor: "#efe6d2" }}>
+                      <p
+                        className="text-[10px] font-bold uppercase"
+                        style={{ color: "#8a7a5e", letterSpacing: "0.22em" }}
+                      >
+                        {content.dress_code.colors_note || "The pastels"}
+                      </p>
+                      <p className="mt-1.5 text-sm leading-relaxed">
+                        {(content.dress_code.colors || []).join("  ·  ")}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </Reveal>
+            ))}
+          </div>
         </section>
       )}
 
-      {/* HOTELS */}
-      <section id="hotels" className="px-6 pt-14 pb-12 max-w-4xl mx-auto" style={{ scrollMarginTop: "4.5rem" }}>
+      {/* HOTELS: an editorial list, numbered with hairlines, the whole row a
+          link to directions. Replaces the old two-column card grid. */}
+      <section id="hotels" className="px-5 pt-14 pb-12 max-w-2xl mx-auto" style={{ scrollMarginTop: "4.5rem" }}>
         <Reveal>
-          <div className="text-center mb-6">
+          <div className="text-center mb-7">
             <Eyebrow>Getting you there</Eyebrow>
-            <h2 className="font-serif text-3xl sm:text-4xl">Hotel Recommendations</h2>
-            <p className="text-sm opacity-60 mt-3 max-w-md mx-auto">{content.hotels_note}</p>
+            <h2 className="font-serif text-3xl leading-tight sm:text-4xl">Where to stay</h2>
+            <p className="text-sm opacity-60 mt-3 max-w-md mx-auto leading-relaxed">{content.hotels_note}</p>
           </div>
         </Reveal>
-        <div className="grid gap-3 sm:grid-cols-2">
+
+        <div className="border-t" style={{ borderColor: "#e2d5b8" }}>
           {(content.hotels || []).map((h: any, i: number) => (
-            <Reveal key={i} delay={Math.min(i * 60, 300)}>
-              <div className="rounded-xl border bg-white/70 p-4 flex items-start justify-between gap-3" style={{ borderColor: "#e2d5b8" }}>
-                <div>
-                  <p className="font-serif font-bold">{h.name}</p>
-                  <p className="text-xs opacity-60 mt-0.5">{h.address}</p>
-                </div>
-                <a
-                  href={dirUrl(`${h.name}, ${h.address}`)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-shrink-0 text-xs font-bold underline underline-offset-4 mt-1"
+            <Reveal key={h.name} delay={Math.min(i * 50, 250)}>
+              <a
+                href={dirUrl(`${h.name}, ${h.address}`)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group flex items-start gap-4 border-b py-4 transition-colors hover:bg-white/50"
+                style={{ borderColor: "#e2d5b8" }}
+                title="Open directions from your current location"
+              >
+                <span
+                  className="w-6 shrink-0 pt-1 text-[11px] font-bold tabular-nums"
                   style={{ color: GOLD }}
-                  title="Open directions from your current location"
                 >
-                  Directions
-                </a>
-              </div>
+                  {String(i + 1).padStart(2, "0")}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-serif text-lg leading-snug">{h.name}</span>
+                  <span className="mt-1 block text-xs leading-relaxed opacity-60">{h.address}</span>
+                </span>
+                <span
+                  className="mt-1 shrink-0 text-[11px] font-bold uppercase underline underline-offset-4"
+                  style={{ color: GOLD, letterSpacing: "0.14em" }}
+                >
+                  Map
+                </span>
+              </a>
             </Reveal>
           ))}
         </div>
+
+        <p className="mt-4 text-center text-xs opacity-50">Recommendations only, please book directly with the hotel you choose.</p>
       </section>
 
-      {/* CHAPTER: ASO EBI, carried by the third photograph */}
+      {/* CHAPTER: ASO EBI, carried by the third photograph. For the ladies
+          only, worn at the traditional on 17 December. */}
       <WeddingChapter
         id="asoebi"
         image={asoebiPhoto}
         imagePosition="center 42%"
-        eyebrow="Aso Ebi"
+        eyebrow={content.asoebi?.for_who || "For the ladies"}
         title={
           <>
-            The family cloth,
+            Friends of the couple
             <br />
-            in one payment.
+            asoebi.
           </>
         }
       >
         <p className="max-w-md text-sm leading-relaxed sm:text-base" style={{ color: "rgba(248,242,230,0.85)" }}>
-          Choose the Aso Ebi package for yourself or the whole family at once, pay once, and get a reference you can look
-          up any time.
+          {content.asoebi?.occasion || "Worn at the traditional wedding, Thursday, 17 December 2026."} Pay once for one
+          package or the whole family, and keep a reference you can look up any time.
+        </p>
+        <p className="mt-4 max-w-md text-sm leading-relaxed" style={{ color: "rgba(248,242,230,0.62)" }}>
+          {content.asoebi?.note || "Asoebi is for the women only. Gentlemen, your colour of the day is green."}
         </p>
         <p className="mt-5 font-serif text-2xl" style={{ color: "#f8f2e6" }}>
-          ₦{(content.asoebi.price || 0).toLocaleString()}{" "}
-          <span className="text-xs" style={{ color: "rgba(248,242,230,0.6)" }}>
-            from, per package
-          </span>
+          ₦{(content.asoebi?.price || 0).toLocaleString()}{" "}
+          <span className="text-xs" style={{ color: "rgba(248,242,230,0.6)" }}>per package</span>
         </p>
         <Link
           href={`/rsvp/asoebi/${slug}`}
-          className="mt-6 inline-flex h-12 items-center justify-center rounded-full px-8 text-sm font-bold text-white transition-transform hover:scale-[1.02]"
+          className="mt-6 flex h-12 w-full items-center justify-center rounded-full px-8 text-sm font-bold text-white transition-transform hover:scale-[1.02] sm:w-fit"
           style={{ background: `linear-gradient(160deg, ${GOLD_LIGHT}, ${GOLD})` }}
         >
-          Get Aso Ebi Package
+          Get the Asoebi
         </Link>
       </WeddingChapter>
+
+      {/* FAQ */}
+      {(content.faq || []).length > 0 && (
+        <section id="faq" className="px-5 pt-14 pb-12 max-w-2xl mx-auto" style={{ scrollMarginTop: "4.5rem" }}>
+          <Reveal>
+            <div className="text-center mb-7">
+              <Eyebrow>Before you come</Eyebrow>
+              <h2 className="font-serif text-3xl leading-tight sm:text-4xl">Questions, answered.</h2>
+              <p className="text-sm opacity-60 mt-3 max-w-sm mx-auto leading-relaxed">
+                The day, the dress and the asoebi, all in one place.
+              </p>
+            </div>
+          </Reveal>
+          <Reveal>
+            <WeddingFaq items={content.faq} />
+          </Reveal>
+        </section>
+      )}
 
       {/* RSVP */}
       <section id="rsvp" className="px-6 pt-14 pb-16 max-w-2xl mx-auto" style={{ scrollMarginTop: "4.5rem" }}>
@@ -848,10 +988,6 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
         <p className="text-[11px] uppercase" style={{ color: GOLD, letterSpacing: "0.3em" }}>{content.hashtag}</p>
         <p className="text-[11px] opacity-40 mt-2">Sarah &amp; Patrick, December 19, 2026</p>
       </footer>
-
-      {/* The music control appears only once the curtain has opened: the tap
-          that parts the curtain is also what starts the music. */}
-      {musicUrl && entered && <WeddingMusicButton src={musicUrl} />}
     </div>
   );
 }

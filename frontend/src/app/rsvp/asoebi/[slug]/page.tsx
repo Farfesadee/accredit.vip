@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { apiClient } from "@/lib/api-client";
-import WeddingMusicButton from "@/components/rsvp/WeddingMusic";
 import WeddingNav from "@/components/rsvp/WeddingNav";
 import WeddingPhoneInput from "@/components/rsvp/WeddingPhoneInput";
 
@@ -103,11 +102,11 @@ export default function WeddingAsoEbiPage() {
       <WeddingNav
         items={[
           { label: "Invitation", href: `/rsvp/register/${slug}` },
-          { label: "When & Where", href: `/rsvp/register/${slug}#when-where` },
+          { label: "The Day", href: `/rsvp/register/${slug}#when-where` },
           { label: "Dress Code", href: `/rsvp/register/${slug}#dress-code` },
-          { label: "Photos", href: `/rsvp/register/${slug}#photos` },
           { label: "Hotels", href: `/rsvp/register/${slug}#hotels` },
-          { label: "Aso Ebi", href: `/rsvp/asoebi/${slug}` },
+          { label: "Asoebi", href: `/rsvp/asoebi/${slug}` },
+          { label: "FAQ", href: `/rsvp/register/${slug}#faq` },
         ]}
         cta={{ label: "RSVP Now", href: `/rsvp/register/${slug}#rsvp` }}
       />
@@ -116,21 +115,25 @@ export default function WeddingAsoEbiPage() {
         {!receipt ? (
           <>
             <p className="text-[11px] uppercase font-medium" style={{ color: "#8a7a5c", letterSpacing: "0.35em" }}>
-              Getting you there
+              {asoebi.for_who || "For the ladies"}
             </p>
             <h1 className="font-serif text-4xl sm:text-5xl font-normal leading-tight mt-3">
-              The family cloth, in one payment.
+              Friends of the couple asoebi.
             </h1>
             <p className="text-[15px] leading-relaxed mt-4 opacity-75">
-              Choose the Aso Ebi package for yourself, or for the whole family at once. Pay once into the account below.
-              We send you a reference you can look up any time.
+              {asoebi.occasion || "Worn at the traditional wedding, Thursday, 17 December 2026."} Choose a package for
+              yourself, or for the whole family at once. Pay once into the account below and we send you a reference you
+              can look up any time.
+            </p>
+            <p className="mt-3 text-sm leading-relaxed opacity-60">
+              {asoebi.note || "Asoebi is for the women only. Gentlemen, your colour of the day is green."}
             </p>
 
             {/* PACKAGE CARD */}
             <div className="mt-8 rounded-2xl border bg-white p-6 sm:p-8" style={{ borderColor: "#e2d5b8" }}>
               <p className="text-[11px] uppercase" style={{ color: "#8a7a5c", letterSpacing: "0.35em" }}>Standard</p>
-              <h2 className="font-serif text-3xl mt-2">Aso Ebi Package</h2>
-              <p className="text-sm opacity-60 mt-1">The family lace.</p>
+              <h2 className="font-serif text-3xl mt-2">{asoebi.name || "Friends of the Couple Asoebi"}</h2>
+              <p className="text-sm opacity-60 mt-1">The cloth for the traditional.</p>
               <ul className="mt-4 space-y-2">
                 {(asoebi.items || []).map((item: string, i: number) => (
                   <li key={i} className="flex items-center gap-2 text-sm">
@@ -140,7 +143,7 @@ export default function WeddingAsoEbiPage() {
                 ))}
               </ul>
               <p className="mt-5 text-xl font-black">
-                ₦{price.toLocaleString()} <span className="text-xs font-normal opacity-50">from, per package</span>
+                ₦{price.toLocaleString()} <span className="text-xs font-normal opacity-50">per package</span>
               </p>
             </div>
 
@@ -228,8 +231,6 @@ export default function WeddingAsoEbiPage() {
           </div>
         )}
       </main>
-
-      {content.music_url && <WeddingMusicButton src={content.music_url} />}
     </div>
   );
 }
