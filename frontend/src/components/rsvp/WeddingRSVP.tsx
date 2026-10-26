@@ -375,18 +375,21 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
 
   // The full list fills the phone menu. Desktop shows a short bar instead:
   // three anchors and the gold Aso Ebi button, so the header never crowds.
+  // The schedule chapter carries no nav label of its own (the client did not
+  // want "The Day" in the bar); guests reach it by scrolling, and its heading
+  // says what it is.
+  const hasFaq = (content.faq || []).length > 0;
   const navItems = [
     { label: "Invitation", href: "#invitation" },
-    { label: "The Day", href: "#when-where" },
     { label: "Dress Code", href: "#dress-code" },
     { label: "Hotels", href: "#hotels" },
     { label: "Asoebi", href: "#asoebi" },
-    { label: "FAQ", href: "#faq" },
+    ...(hasFaq ? [{ label: "FAQ", href: "#faq" }] : []),
     { label: "RSVP", href: "#rsvp" },
   ];
   const desktopNavItems = [
     { label: "Invitation", href: "#invitation" },
-    { label: "The Day", href: "#when-where" },
+    ...(hasFaq ? [{ label: "FAQ", href: "#faq" }] : []),
     { label: "RSVP", href: "#rsvp" },
   ];
 

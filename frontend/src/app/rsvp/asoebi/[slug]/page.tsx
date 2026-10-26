@@ -102,7 +102,6 @@ export default function WeddingAsoEbiPage() {
       <WeddingNav
         items={[
           { label: "Invitation", href: `/rsvp/register/${slug}` },
-          { label: "The Day", href: `/rsvp/register/${slug}#when-where` },
           { label: "Dress Code", href: `/rsvp/register/${slug}#dress-code` },
           { label: "Hotels", href: `/rsvp/register/${slug}#hotels` },
           { label: "Asoebi", href: `/rsvp/asoebi/${slug}` },
@@ -110,7 +109,6 @@ export default function WeddingAsoEbiPage() {
         ]}
         desktopItems={[
           { label: "Invitation", href: `/rsvp/register/${slug}` },
-          { label: "The Day", href: `/rsvp/register/${slug}#when-where` },
           { label: "FAQ", href: `/rsvp/register/${slug}#faq` },
         ]}
         cta={{ label: "RSVP Now", href: `/rsvp/register/${slug}#rsvp` }}
