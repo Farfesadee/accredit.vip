@@ -1,0 +1,160 @@
+name: Deploy accredit.vip to VPS
+
+# Runs on every push to main of Farfesadee/accredit.vip, or by hand from the
+# Actions tab. One deploy at a time: a second push waits instead of racing.
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  VPS_PATH: /var/www/accredit.vip
+  # Both are inlined into the client bundle at build time and must be the
+  # production values, otherwise share links bake in localhost and the browser
+  # calls the wrong API host.
+  NEXT_PUBLIC_API_URL: https://accredit.vip/api/v1
+  NEXT_PUBLIC_SITE_URL: https://accredit.vip
+
+jobs:
+  deploy:
+    name: Build and deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fail early if the VPS secrets are missing
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USERNAME: ${{ secrets.VPS_USERNAME }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          [ -n "$VPS_HOST" ] || { echo "::error::Repository secret VPS_HOST is not set"; exit 1; }
+          [ -n "$VPS_USERNAME" ] || { echo "::error::Repository secret VPS_USERNAME is not set"; exit 1; }
+          [ -n "$VPS_SSH_KEY" ] || { echo "::error::Repository secret VPS_SSH_KEY is not set"; exit 1; }
+
+      - name: Use Node 24 (the major the VPS runtime uses)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+
+      - name: Type check
+        working-directory: frontend
+        run: npx tsc --noEmit
+
+      - name: Build Next.js
+        working-directory: frontend
+        env:
+          NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${{ secrets.NEXT_PUBLIC_GOOGLE_CLIENT_ID }}
+        run: npm run build
+
+      - name: Check the backend compiles
+        run: python3 -m compileall -q backend/app
+
+      - name: Set up SSH
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_PORT: ${{ secrets.VPS_PORT }}
+          VPS_USERNAME: ${{ secrets.VPS_USERNAME }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          PORT="${VPS_PORT:-22}"
+          ssh-keyscan -p "$PORT" -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          {
+            echo "Host vps"
+            echo "  HostName $VPS_HOST"
+            echo "  User ${VPS_USERNAME:-root}"
+            echo "  Port $PORT"
+            echo "  IdentityFile ~/.ssh/deploy_key"
+            echo "  IdentitiesOnly yes"
+          } > ~/.ssh/config
+          chmod 600 ~/.ssh/config
+          ssh vps 'echo "SSH ready as $(whoami) on $(hostname)"'
+
+      # Source only. No --delete here on purpose: the server keeps files that are
+      # not in the repo (frontend/.env, the Search Console verification page).
+      - name: Upload frontend source
+        run: |
+          rsync -az --human-readable \
+            --exclude '.next' \
+            --exclude 'node_modules' \
+            --exclude '.next_old' \
+            --exclude '.env' \
+            --exclude '.env.*' \
+            --exclude 'next_build.tar' \
+            frontend/ vps:$VPS_PATH/frontend/
+
+      # The build output is replaced wholesale so deleted routes really disappear.
+      - name: Upload the build output
+        run: rsync -az --delete --human-readable frontend/.next/ vps:$VPS_PATH/frontend/.next/
+
+      - name: Upload backend source
+        run: |
+          rsync -az --human-readable backend/app/ vps:$VPS_PATH/backend/app/
+          rsync -az --human-readable backend/requirements.txt vps:$VPS_PATH/backend/requirements.txt
+
+      - name: Install, restart and verify
+        run: |
+          ssh vps 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          ROOT=/var/www/accredit.vip
+          cd "$ROOT/frontend"
+
+          # Node modules only when the lockfile actually changed. npm ci starts by
+          # removing node_modules, so it is deliberately not run on every deploy.
+          if [ ! -f "$ROOT/.deploy-lock-stamp" ] || ! cmp -s package-lock.json "$ROOT/.deploy-lock-stamp"; then
+            echo "== npm ci (package-lock.json changed) =="
+            npm ci --no-audit --no-fund
+            cp package-lock.json "$ROOT/.deploy-lock-stamp"
+          else
+            echo "== npm ci skipped (package-lock.json unchanged) =="
+          fi
+
+          # next start runs as the deploy user, so the fresh build must be readable.
+          chown -R deploy:deploy .next src public
+          find .next -type d -exec chmod 755 {} +
+          find .next -type f -exec chmod 644 {} +
+
+          # Python dependencies, same rule.
+          cd "$ROOT/backend"
+          if [ ! -f "$ROOT/.deploy-req-stamp" ] || ! cmp -s requirements.txt "$ROOT/.deploy-req-stamp"; then
+            echo "== pip install (requirements.txt changed) =="
+            ./venv/bin/pip install -q -r requirements.txt
+            cp requirements.txt "$ROOT/.deploy-req-stamp"
+          else
+            echo "== pip install skipped (requirements.txt unchanged) =="
+          fi
+
+          systemctl restart accredit-api.service
+          systemctl restart accredit-web.service
+
+          for i in $(seq 1 30); do
+            api=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8001/api/v1/health || true)
+            web=$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:3000/ || true)
+            if [ "$api" = "200" ] && [ "$web" = "200" ]; then
+              echo "healthy after ${i} checks: api=$api web=$web"
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "::error::health check failed api=$api web=$web"
+          journalctl -u accredit-api.service -n 30 --no-pager || true
+          journalctl -u accredit-web.service -n 30 --no-pager || true
+          exit 1
+          REMOTE
