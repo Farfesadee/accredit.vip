@@ -350,6 +350,8 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
     setTimeout(() => document.getElementById(id)?.scrollIntoView({ behavior: "smooth" }), 100);
   };
 
+  // The full list fills the phone menu. Desktop shows a short bar instead:
+  // three anchors and the gold Aso Ebi button, so the header never crowds.
   const navItems = [
     { label: "Invitation", href: "#invitation" },
     { label: "The Day", href: "#when-where" },
@@ -357,6 +359,11 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
     { label: "Hotels", href: "#hotels" },
     { label: "Asoebi", href: "#asoebi" },
     { label: "FAQ", href: "#faq" },
+    { label: "RSVP", href: "#rsvp" },
+  ];
+  const desktopNavItems = [
+    { label: "Invitation", href: "#invitation" },
+    { label: "The Day", href: "#when-where" },
     { label: "RSVP", href: "#rsvp" },
   ];
 
@@ -475,7 +482,12 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
         </div>
       )}
 
-      <WeddingNav items={navItems} cta={{ label: "Get Aso Ebi", href: `/rsvp/asoebi/${slug}` }} onNavigate={scrollTo} />
+      <WeddingNav
+        items={navItems}
+        desktopItems={desktopNavItems}
+        cta={{ label: "Get Aso Ebi", href: `/rsvp/asoebi/${slug}` }}
+        onNavigate={scrollTo}
+      />
 
       {/* HERO: the photograph the curtain opens onto */}
       <section
@@ -713,55 +725,62 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
           </Reveal>
 
           <div className="space-y-4">
-            {[content.dress_code.wedding, content.dress_code.traditional].filter(Boolean).map((look: any, i: number) => (
-              <Reveal key={look.label} delay={i * 90}>
-                <div className="rounded-2xl border bg-white p-5 sm:p-6" style={{ borderColor: "#e2d5b8" }}>
-                  <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-                    <p className="font-serif text-xl">{look.label}</p>
-                    <p className="text-[11px] uppercase" style={{ color: "#8a7a5e", letterSpacing: "0.18em" }}>
-                      {look.when}
-                    </p>
+            {/* Chronological: the traditional falls two days before the white
+                wedding, so it reads first. */}
+            {[
+              { look: content.dress_code.traditional, shades: false },
+              { look: content.dress_code.wedding, shades: true },
+            ]
+              .filter((entry) => Boolean(entry.look))
+              .map(({ look, shades }, i) => (
+                <Reveal key={look.label} delay={i * 90}>
+                  <div className="rounded-2xl border bg-white p-5 sm:p-6" style={{ borderColor: "#e2d5b8" }}>
+                    <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                      <p className="font-serif text-xl">{look.label}</p>
+                      <p className="text-[11px] uppercase" style={{ color: "#8a7a5e", letterSpacing: "0.18em" }}>
+                        {look.when}
+                      </p>
+                    </div>
+
+                    <dl className="mt-4 space-y-2.5">
+                      <div className="flex gap-4">
+                        <dt
+                          className="w-14 shrink-0 pt-0.5 text-[10px] font-bold uppercase"
+                          style={{ color: GOLD, letterSpacing: "0.22em" }}
+                        >
+                          Men
+                        </dt>
+                        <dd className="text-sm leading-snug">{look.men}</dd>
+                      </div>
+                      <div className="flex gap-4">
+                        <dt
+                          className="w-14 shrink-0 pt-0.5 text-[10px] font-bold uppercase"
+                          style={{ color: GOLD, letterSpacing: "0.22em" }}
+                        >
+                          Women
+                        </dt>
+                        <dd className="text-sm leading-snug">{look.women}</dd>
+                      </div>
+                    </dl>
+
+                    {look.note && <p className="mt-3 text-xs leading-relaxed opacity-60">{look.note}</p>}
+
+                    {shades && (content.dress_code.colors || []).length > 0 && (
+                      <div className="mt-4 border-t pt-4" style={{ borderColor: "#efe6d2" }}>
+                        <p
+                          className="text-[10px] font-bold uppercase"
+                          style={{ color: "#8a7a5e", letterSpacing: "0.22em" }}
+                        >
+                          {content.dress_code.colors_note || "The pastels"}
+                        </p>
+                        <p className="mt-1.5 text-sm leading-relaxed">
+                          {(content.dress_code.colors || []).join("  ·  ")}
+                        </p>
+                      </div>
+                    )}
                   </div>
-
-                  <dl className="mt-4 space-y-2.5">
-                    <div className="flex gap-4">
-                      <dt
-                        className="w-14 shrink-0 pt-0.5 text-[10px] font-bold uppercase"
-                        style={{ color: GOLD, letterSpacing: "0.22em" }}
-                      >
-                        Men
-                      </dt>
-                      <dd className="text-sm leading-snug">{look.men}</dd>
-                    </div>
-                    <div className="flex gap-4">
-                      <dt
-                        className="w-14 shrink-0 pt-0.5 text-[10px] font-bold uppercase"
-                        style={{ color: GOLD, letterSpacing: "0.22em" }}
-                      >
-                        Women
-                      </dt>
-                      <dd className="text-sm leading-snug">{look.women}</dd>
-                    </div>
-                  </dl>
-
-                  {look.note && <p className="mt-3 text-xs leading-relaxed opacity-60">{look.note}</p>}
-
-                  {i === 0 && (content.dress_code.colors || []).length > 0 && (
-                    <div className="mt-4 border-t pt-4" style={{ borderColor: "#efe6d2" }}>
-                      <p
-                        className="text-[10px] font-bold uppercase"
-                        style={{ color: "#8a7a5e", letterSpacing: "0.22em" }}
-                      >
-                        {content.dress_code.colors_note || "The pastels"}
-                      </p>
-                      <p className="mt-1.5 text-sm leading-relaxed">
-                        {(content.dress_code.colors || []).join("  ·  ")}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </Reveal>
-            ))}
+                </Reveal>
+              ))}
           </div>
         </section>
       )}

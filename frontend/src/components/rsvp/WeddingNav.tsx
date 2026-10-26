@@ -10,6 +10,11 @@ export interface WeddingNavItem {
 
 interface WeddingNavProps {
   items: WeddingNavItem[];
+  /**
+   * The subset shown inline on desktop. The full list still fills the phone
+   * menu, so a short bar never hides a section from a guest.
+   */
+  desktopItems?: WeddingNavItem[];
   cta?: { label: string; href: string };
   onNavigate?: (href: string) => void;
 }
@@ -27,8 +32,9 @@ export function WeddingNames() {
   );
 }
 
-export default function WeddingNav({ items, cta, onNavigate }: WeddingNavProps) {
+export default function WeddingNav({ items, desktopItems, cta, onNavigate }: WeddingNavProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const inlineItems = desktopItems && desktopItems.length > 0 ? desktopItems : items;
 
   const handleClick = (e: React.MouseEvent, href: string) => {
     // Only in-page anchors are intercepted for smooth scrolling. Full paths
@@ -75,9 +81,9 @@ export default function WeddingNav({ items, cta, onNavigate }: WeddingNavProps) 
       <header className="sticky top-0 z-40 border-b" style={{ background: `${CREAM}f2`, borderColor: "#e2d5b8" }}>
         <div className="max-w-4xl mx-auto px-5 h-14 flex items-center justify-between gap-4">
           <WeddingNames />
-          {/* Desktop: inline links, no hamburger */}
-          <nav className="hidden md:flex items-center gap-5">
-            {items.map((l) => renderItem(l, false))}
+          {/* Desktop: a short inline bar. The rest lives in the phone menu. */}
+          <nav className="hidden md:flex items-center gap-6">
+            {inlineItems.map((l) => renderItem(l, false))}
             {cta && (
               <Link
                 href={cta.href}

@@ -108,6 +108,11 @@ export default function WeddingAsoEbiPage() {
           { label: "Asoebi", href: `/rsvp/asoebi/${slug}` },
           { label: "FAQ", href: `/rsvp/register/${slug}#faq` },
         ]}
+        desktopItems={[
+          { label: "Invitation", href: `/rsvp/register/${slug}` },
+          { label: "The Day", href: `/rsvp/register/${slug}#when-where` },
+          { label: "FAQ", href: `/rsvp/register/${slug}#faq` },
+        ]}
         cta={{ label: "RSVP Now", href: `/rsvp/register/${slug}#rsvp` }}
       />
 

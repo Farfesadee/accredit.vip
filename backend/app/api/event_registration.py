@@ -164,12 +164,12 @@ def wedding_content() -> dict:
                 "a": "The reception follows from 3:00 PM at Los Angeles Event Center, Kado, Abuja. The When and Where section carries directions from wherever you are.",
             },
             {
-                "q": "What should I wear to the white wedding?",
-                "a": "Gentlemen, a suit or black tie. Ladies, pastel colours in soft, sophisticated tones. The shade names are on the Dress Code section if you want a steer.",
-            },
-            {
                 "q": "What should I wear to the traditional?",
                 "a": "The traditional holds on Thursday, 17 December 2026. Gentlemen wear green, the colour of the day. Ladies wear the friends of the couple asoebi.",
+            },
+            {
+                "q": "What should I wear to the white wedding?",
+                "a": "Gentlemen, a suit or black tie. Ladies, pastel colours in soft, sophisticated tones. The shade names are on the Dress Code section if you want a steer.",
             },
             {
                 "q": "Who is the asoebi for, and how do I get it?",
