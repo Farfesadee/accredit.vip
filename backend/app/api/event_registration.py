@@ -76,7 +76,7 @@ def wedding_content() -> dict:
         # the women (client direction, October 2026).
         "dress_code": {
             "label": "Dress Code",
-            "message": "Two days, two looks. Come dressed for each with us.",
+            "message": "Come dressed for each with us.",
             "wedding": {
                 "label": "The White Wedding",
                 "when": "Saturday, 19 December 2026",
@@ -144,7 +144,7 @@ def wedding_content() -> dict:
             "name": "Friends of the Couple Asoebi",
             "short": "Asoebi",
             "for_who": "For the ladies",
-            "occasion": "Worn at the traditional wedding, Thursday, 17 December 2026",
+            "occasion": "Worn at the traditional wedding, Thursday, 17 December 2026.",
             "note": "Asoebi is for the women only. Gentlemen, your colour of the day for the traditional is green.",
             "price": ASOEBI_PRICE,
             "items": ["3 yards of lace", "3 yards of lining", "Gele", "Souvenir from the couple"],

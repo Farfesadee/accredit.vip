@@ -121,9 +121,9 @@ export default function WeddingAsoEbiPage() {
               Friends of the couple asoebi.
             </h1>
             <p className="text-[15px] leading-relaxed mt-4 opacity-75">
-              {asoebi.occasion || "Worn at the traditional wedding, Thursday, 17 December 2026."} Choose a package for
-              yourself, or for the whole family at once. Pay once into the account below and we send you a reference you
-              can look up any time.
+              {(asoebi.occasion || "Worn at the traditional wedding, Thursday, 17 December 2026").replace(/\.?$/, ".")}{" "}
+              Choose a package for yourself, or for the whole family at once. Pay once into the account below and we
+              send you a reference you can look up any time.
             </p>
             <p className="mt-3 text-sm leading-relaxed opacity-60">
               {asoebi.note || "Asoebi is for the women only. Gentlemen, your colour of the day is green."}

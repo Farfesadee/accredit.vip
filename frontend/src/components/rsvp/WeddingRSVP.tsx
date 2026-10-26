@@ -828,8 +828,11 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
         }
       >
         <p className="max-w-md text-sm leading-relaxed sm:text-base" style={{ color: "rgba(248,242,230,0.85)" }}>
-          {content.asoebi?.occasion || "Worn at the traditional wedding, Thursday, 17 December 2026."} Pay once for one
-          package or the whole family, and keep a reference you can look up any time.
+          {(content.asoebi?.occasion || "Worn at the traditional wedding, Thursday, 17 December 2026").replace(
+            /\.?$/,
+            "."
+          )}{" "}
+          Pay once for one package or the whole family, and keep a reference you can look up any time.
         </p>
         <p className="mt-4 max-w-md text-sm leading-relaxed" style={{ color: "rgba(248,242,230,0.62)" }}>
           {content.asoebi?.note || "Asoebi is for the women only. Gentlemen, your colour of the day is green."}
