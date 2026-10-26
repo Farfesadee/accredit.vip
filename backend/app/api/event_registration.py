@@ -203,10 +203,15 @@ def is_anniversary_event(event: Event) -> bool:
 
 def anniversary_content() -> dict:
     return {
-        "groom": "Nelkon",
-        "bride": "Blessing",
-        "surname": "Obi-Uzu",
-        "hashtag": "#NelkonBlessing30",
+        # The client's own invitation is the authority on the names, and on
+        # 2026-10-26 they confirmed the spelling in writing: "Engr. Obi & Dr.
+        # Blessing". No family surname is set, so the second line under the
+        # names is the occasion itself rather than an invented name.
+        "groom": "Engr. Obi",
+        "bride": "Dr. Blessing",
+        "surname": "",
+        "occasion": "30th Wedding Anniversary",
+        "hashtag": "#ObiBlessing30",
         "since": "December 1996",
         "countdown_to": "2026-12-15T15:00:00+01:00",
         "ceremony": {
@@ -227,10 +232,13 @@ def anniversary_content() -> dict:
             "allowed": True,
             "note": "Your invitation admits two: you and one companion.",
         },
-        # Short montage cut from the couple's own photographs, set to "Ordinary".
-        # Versioned so a replaced cut is never served from cache.
-        "video_url": "/uploads/anniversary-montage.mp4?v=4",
-        "invite_video_url": "/uploads/anniversary-montage.mp4?v=4",
+        # Short montage cut from the couple's own artwork and photographs, set
+        # to "Ordinary". v5 opens on the client's portrait cover, runs their six
+        # photographs, and closes on the "Together since 1996" collage, which is
+        # the order they asked for. Versioned so a replaced cut is never served
+        # from cache.
+        "video_url": "/uploads/anniversary-montage.mp4?v=5",
+        "invite_video_url": "/uploads/anniversary-montage.mp4?v=5",
         # The opening carries their traditional attire portrait (red cap, white
         # agbada, red lace), which the client chose by name, so the names and
         # "Together since December 1996" read at a glance on a phone. The page

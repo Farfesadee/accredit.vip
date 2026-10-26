@@ -8,6 +8,7 @@ import {
   ChevronDown,
   Clock,
   MapPin,
+  Play,
   Volume2,
   VolumeX,
 } from "lucide-react";
@@ -16,7 +17,7 @@ import { useInviteMusic } from "@/lib/invite-music";
 import { COUNTRIES, flagEmoji } from "@/components/shared/phone-input";
 
 /**
- * Nelkon & Blessing Obi-Uzu: 30th Wedding Anniversary (event 84).
+ * Engr. Obi & Dr. Blessing: 30th Wedding Anniversary (event 84).
  *
  * Standalone guest experience, scoped to this event only. The cover opens by
  * itself after a short beat (no tap), the film tells the story in their own
@@ -276,9 +277,11 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
   const c = content || {};
   const poster: string = c.invite_poster_url || c.hero_image || "";
   const film: string = c.invite_video_url || c.video_url || "";
-  const groom: string = c.groom || "Nelkon";
-  const bride: string = c.bride || "Blessing";
-  const surname: string = c.surname || "Obi-Uzu";
+  const groom: string = c.groom || "Engr. Obi";
+  const bride: string = c.bride || "Dr. Blessing";
+  // No family surname: the client's invitation names the couple only, so the
+  // line under the names states the occasion instead of inventing a name.
+  const occasion: string = c.occasion || "30th Wedding Anniversary";
   const ceremony = c.ceremony || {};
   const dress = c.dress_code || {};
   const photos: { url: string; caption: string; note: string; width?: number; height?: number }[] =
@@ -378,6 +381,17 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
     }
   }, [slug]);
 
+  // "Watch the Invitation" plays the montage again. The gate is a fixed overlay,
+  // so the guest keeps their place in the invitation, the song never breaks, and
+  // the film hands them back to the same spot when it ends.
+  const replayRef = useRef(false);
+  const watchFilm = useCallback(() => {
+    if (!film) return;
+    replayRef.current = true;
+    setFilmStalled(false);
+    setPhase("film");
+  }, [film]);
+
   useEffect(() => {
     if (phase === "invitation") return;
     document.body.style.overflow = "hidden";
@@ -390,6 +404,17 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
     if (phase !== "film") return;
     const v = filmRef.current;
     if (!v) return;
+    // A replay starts the montage from the top; the first pass already played
+    // under the parting cover, so it carries on where it is.
+    if (replayRef.current) {
+      replayRef.current = false;
+      try {
+        v.currentTime = 0;
+      } catch {
+        /* ignore */
+      }
+    }
+    setFilmStalled(false);
     v.muted = true;
     v.play().catch(() => setFilmStalled(true));
     const guard = setTimeout(() => {
@@ -498,14 +523,14 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
       "DTSTAMP:20261022T000000Z",
       "DTSTART:20261215T140000Z",
       "DTEND:20261215T190000Z",
-      `SUMMARY:${groom} & ${bride} ${surname} 30th Wedding Anniversary`,
+      `SUMMARY:${groom} & ${bride} 30th Wedding Anniversary`,
       `LOCATION:${ceremony.venue || "Landmark Centre"}, ${ceremony.location || "Victoria Island, Lagos"}`,
       "DESCRIPTION:Thirty years. Please join us to celebrate.",
       "END:VEVENT",
       "END:VCALENDAR",
     ].join("\r\n");
     return "data:text/calendar;charset=utf-8," + encodeURIComponent(ics);
-  }, [groom, bride, surname, ceremony.venue, ceremony.location]);
+  }, [groom, bride, ceremony.venue, ceremony.location]);
 
   /* -------------------------------------------------------- opening gate */
 
@@ -614,22 +639,27 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
                     Together since {c.since || "December 1996"}
                   </p>
                   <h1
-                    className="anniv-rise anniv-script-lh mt-3"
+                    className="anniv-rise anniv-script-lh mt-3 flex flex-wrap items-baseline justify-center gap-x-2 md:justify-start"
                     style={{
                       fontFamily: SCRIPT,
-                      fontSize: "clamp(44px, 13vw, 78px)",
+                      // Sized for the whole name, not a first name: the client's
+                      // "Engr. Obi & Dr. Blessing" has to sit on one line on a
+                      // phone, and wraps in two balanced lines when it cannot.
+                      fontSize: "clamp(34px, 9vw, 66px)",
                       color: CREAM,
                       textShadow: "0 6px 40px rgba(20,15,60,0.35)",
                       animationDelay: "420ms",
                     }}
                   >
-                    {groom} &amp; {bride}
+                    <span>{groom}</span>
+                    <span style={{ color: PEACH }}>&amp;</span>
+                    <span>{bride}</span>
                   </h1>
                   <p
-                    className="anniv-rise mt-1 text-[11px] uppercase"
-                    style={{ letterSpacing: "0.5em", color: CREAM, animationDelay: "700ms" }}
+                    className="anniv-rise mt-2 text-[10px] uppercase sm:text-[11px]"
+                    style={{ letterSpacing: "0.36em", color: CREAM, animationDelay: "700ms" }}
                   >
-                    {surname}
+                    {occasion}
                   </p>
                   <span
                     className="anniv-rise mt-4 block h-px w-16"
@@ -668,22 +698,10 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
           </>
         )}
 
-        {/* Sound is ON by default: the same control rides the cover and the film. */}
-        {musicUrl && (
-          <button
-            onClick={music.toggle}
-            aria-label={soundAction}
-            className="absolute right-4 top-4 z-30 flex h-10 w-10 items-center justify-center rounded-full text-[9px] uppercase"
-            style={{
-              color: CREAM,
-              background: "rgba(0,0,0,0.5)",
-              backdropFilter: "blur(8px)",
-              border: "1px solid rgba(230,230,250,0.22)",
-            }}
-          >
-            {music.audible ? <Volume2 size={14} /> : <VolumeX size={14} />}
-          </button>
-        )}
+        {/* No sound control over the film: the client asked for the floating
+            speaker to go. The music itself is untouched and still plays from
+            the first frame; the guest can mute it from the header once the
+            invitation is open. */}
       </div>
     ) : null;
 
@@ -718,7 +736,7 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
                   className="flex h-9 w-9 items-center justify-center rounded-full border text-[11px]"
                   style={{ borderColor: "rgba(230,230,250,0.5)", color: CREAM }}
                 >
-                  NB
+                  OB
                 </span>
                 <span
                   className="hidden text-[12px] sm:block"
@@ -774,7 +792,7 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
                 {poster && (
                   <img
                     src={poster}
-                    alt={`${groom} and ${bride} ${surname}`}
+                    alt={`${groom} and ${bride}`}
                     width={1200}
                     height={1500}
                     className="w-full max-w-[300px] sm:max-w-[340px] lg:max-w-[400px]"
@@ -798,20 +816,24 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
                   Together since {c.since || "December 1996"}
                 </p>
                 <h1
-                  className="anniv-script-lh mt-4"
+                  className="anniv-script-lh mt-4 flex flex-wrap items-baseline justify-center gap-x-3 gap-y-1 lg:justify-start"
                   style={{
                     fontFamily: SCRIPT,
-                    fontSize: "clamp(44px, 10vw, 96px)",
+                    // The full names on a phone, and two balanced lines rather
+                    // than one squeezed line on a wide screen.
+                    fontSize: "clamp(34px, 7.4vw, 58px)",
                     color: CREAM,
                   }}
                 >
-                  {groom} &amp; {bride}
+                  <span>{groom}</span>
+                  <span style={{ color: PEACH }}>&amp;</span>
+                  <span>{bride}</span>
                 </h1>
                 <p
-                  className="mt-1 text-[12px] uppercase sm:text-[14px]"
-                  style={{ letterSpacing: "0.52em", color: CREAM }}
+                  className="mt-2 text-[10px] uppercase sm:text-[11.5px]"
+                  style={{ letterSpacing: "0.4em", color: CREAM }}
                 >
-                  {surname}
+                  {occasion}
                 </p>
                 <div className="mt-6 flex items-center justify-center gap-3 lg:justify-start">
                   <span className="block h-px w-12" style={{ background: PEACH, opacity: 0.85 }} />
@@ -840,9 +862,40 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
                     Victoria Island, Lagos
                   </span>
                 </div>
+                <div className="mt-9 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-center lg:justify-start">
+                  <a
+                    href="#rsvp"
+                    className="inline-flex h-12 items-center justify-center px-8 text-[10.5px] uppercase transition-transform hover:scale-[1.02]"
+                    style={{
+                      letterSpacing: "0.24em",
+                      background: PEACH,
+                      color: INK,
+                      fontWeight: 600,
+                    }}
+                  >
+                    RSVP
+                  </a>
+                  {/* The house pattern for every montage event: the film can be
+                      watched again from the invitation, and the song never
+                      restarts when it does. */}
+                  {film && (
+                    <button
+                      type="button"
+                      onClick={watchFilm}
+                      className="inline-flex h-12 items-center justify-center gap-2.5 border px-6 text-[10.5px] uppercase transition-colors hover:bg-white/10"
+                      style={{
+                        letterSpacing: "0.22em",
+                        borderColor: "rgba(255,218,185,0.6)",
+                        color: CREAM,
+                      }}
+                    >
+                      <Play size={12} /> Watch the Invitation
+                    </button>
+                  )}
+                </div>
                 <a
                   href="#letter"
-                  className="mt-9 inline-flex items-center gap-3 text-[10px] uppercase"
+                  className="mt-6 inline-flex items-center gap-3 text-[10px] uppercase"
                   style={{ letterSpacing: "0.3em", color: PEACH }}
                 >
                   Read the invitation
@@ -867,16 +920,10 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
               </p>
               <h2
                 className="anniv-script-lh mt-5"
-                style={{ fontFamily: SCRIPT, fontSize: "clamp(34px, 7vw, 54px)", color: INK }}
+                style={{ fontFamily: SCRIPT, fontSize: "clamp(30px, 6.6vw, 50px)", color: INK }}
               >
                 {groom} and {bride}
               </h2>
-              <p
-                className="mt-3 text-[11px] uppercase sm:text-[12px]"
-                style={{ letterSpacing: "0.46em", color: MUTED }}
-              >
-                {surname}
-              </p>
               <p
                 className="mt-4 text-[12px] uppercase sm:text-[13px]"
                 style={{ letterSpacing: "0.4em", color: MUTED }}
@@ -1410,9 +1457,9 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
             </p>
             <p
               className="mt-2 text-[10px] uppercase"
-              style={{ letterSpacing: "0.5em", color: LAV }}
+              style={{ letterSpacing: "0.4em", color: LAV }}
             >
-              {surname}
+              {occasion}
             </p>
             <div className="mx-auto mt-7 flex items-center justify-center gap-3">
               <span className="block h-px w-14" style={{ background: "rgba(255,218,185,0.6)" }} />

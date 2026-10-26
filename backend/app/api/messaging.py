@@ -452,14 +452,20 @@ def _build_gala_qr_message(
     return subject, body, _gala_shell(inner)
 
 
-# ── Nelkon & Blessing 30th anniversary (event 84 only) ──
+# ── Engr. Obi & Dr. Blessing 30th anniversary (event 84 only) ──
 # Aubergine, lavender and cream taken from the client's own flier, with the
 # client's banner as the header image. Scoped to the anniversary slug.
+#
+# The couple's names come from their printed invitation, confirmed in writing by
+# the client on 2026-10-26: "Engr. Obi & Dr. Blessing". No family surname is
+# used anywhere, because the artwork names the couple only.
 
 ANNIV_INK = "#171021"
 ANNIV_AUBERGINE = "#241B33"
 ANNIV_LAV = "#C3B2DE"
 ANNIV_CREAM = "#FAF6EF"
+ANNIV_COUPLE = "Engr. Obi & Dr. Blessing"
+ANNIV_COUPLE_HTML = "Engr. Obi &amp; Dr. Blessing"
 
 
 def _anniv_shell(inner: str, tracking_pixel: str = "") -> str:
@@ -470,7 +476,7 @@ def _anniv_shell(inner: str, tracking_pixel: str = "") -> str:
         '<div style="padding:28px 26px 20px;text-align:center;border-bottom:1px solid rgba(195,178,222,0.28)">'
         '<p style="margin:0 0 10px;font-family:Arial,Helvetica,sans-serif;font-size:9px;'
         f'letter-spacing:5px;color:{ANNIV_LAV};text-transform:uppercase">Together since December 1996</p>'
-        f'<p style="margin:0;font-size:26px;letter-spacing:2px;color:{ANNIV_CREAM}">Nelkon &amp; Blessing</p>'
+        f'<p style="margin:0;font-size:26px;letter-spacing:2px;color:{ANNIV_CREAM}">{ANNIV_COUPLE_HTML}</p>'
         '<p style="margin:6px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
         f'letter-spacing:4px;color:{ANNIV_LAV};text-transform:uppercase">30th Wedding Anniversary</p>'
         "</div>"
@@ -478,7 +484,7 @@ def _anniv_shell(inner: str, tracking_pixel: str = "") -> str:
         '<div style="background:#1B1526;padding:22px 26px;text-align:center;border-top:1px solid rgba(195,178,222,0.22)">'
         '<p style="margin:0 0 6px;font-family:Arial,Helvetica,sans-serif;font-size:9px;'
         f'letter-spacing:4px;color:{ANNIV_LAV};text-transform:uppercase">With love</p>'
-        f'<p style="margin:0 0 14px;font-size:15px;letter-spacing:1px;color:{ANNIV_CREAM}">The Obi-Uzu Family</p>'
+        f'<p style="margin:0 0 14px;font-size:15px;letter-spacing:1px;color:{ANNIV_CREAM}">{ANNIV_COUPLE_HTML}</p>'
         '<p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
         f'letter-spacing:2px;color:#8b7fa3">ACCREDIT INTERACTIVE - Premium Event Infrastructure</p>'
         "</div>"
@@ -541,13 +547,13 @@ def _build_anniv_invite_message(
         else ""
     )
 
-    subject = "You are invited: Nelkon & Blessing 30th Wedding Anniversary"
+    subject = f"You are invited: {ANNIV_COUPLE} 30th Wedding Anniversary"
     party_note = (content.get("plus_one") or {}).get("note") or (
         "Your invitation admits two: you and one companion."
     )
     body = (
         f"Dear {guest.name},\n\n"
-        "With hearts full of gratitude, Nelkon and Blessing Obi-Uzu invite you to "
+        "With hearts full of gratitude, Engr. Obi and Dr. Blessing invite you to "
         "celebrate thirty years of love, laughter and lifelong companionship.\n\n"
         f"Date: {ceremony['date']}\n\n"
         f"Time: {ceremony['time']} (WAT)\n\n"
@@ -555,20 +561,20 @@ def _build_anniv_invite_message(
         f"Dress Code: {dress.get('theme') or 'Elegant'}\n\n"
         f"{party_note}\n\n"
         f"Kindly confirm your seat: {rsvp_link}\n\n"
-        "With love,\nThe Obi-Uzu Family"
+        f"With love,\n{ANNIV_COUPLE}"
     )
 
     rows = _anniv_details_rows(_anniv_rows(content))
 
     inner = (
-        f'<img src="{banner}" alt="Nelkon and Blessing, thirty years" width="600" '
+        f'<img src="{banner}" alt="{ANNIV_COUPLE}, thirty years" width="600" '
         'style="width:100%;max-width:600px;height:auto;display:block;border:0" />'
         '<div style="padding:30px 28px 8px">'
         f'<p style="margin:0 0 14px;font-size:16px;line-height:1.6;color:{ANNIV_CREAM}">Dear {guest.name},</p>'
         '<p style="margin:0 0 16px;font-size:15px;line-height:1.75;color:#cfc6d9">'
         "With hearts full of gratitude, we invite you to celebrate "
         f'<span style="color:{ANNIV_CREAM}">thirty years of love, laughter and lifelong companionship</span> '
-        "with Nelkon and Blessing Obi-Uzu."
+        "with Engr. Obi and Dr. Blessing."
         "</p>"
         '<p style="margin:0 0 22px;font-size:15px;line-height:1.75;color:#cfc6d9">'
         "An afternoon of thanksgiving, good food and the company of family and friends, "
@@ -615,10 +621,10 @@ def _build_anniv_qr_message(
         else "This pass admits one guest."
     )
 
-    subject = "Your Entry Pass: Nelkon & Blessing 30th Wedding Anniversary"
+    subject = f"Your Entry Pass: {ANNIV_COUPLE} 30th Wedding Anniversary"
     body = (
         f"Dear {guest.name},\n\n"
-        "Your entry pass for the Nelkon and Blessing Obi-Uzu 30th Wedding Anniversary "
+        "Your entry pass for the Engr. Obi and Dr. Blessing 30th Wedding Anniversary "
         "is enclosed. Please present the QR code at the door for accreditation.\n\n"
         f"Date: {ceremony['date']}\n\n"
         f"Time: {ceremony['time']} (WAT)\n\n"
@@ -626,7 +632,7 @@ def _build_anniv_qr_message(
         f"Dress Code: {dress.get('theme') or 'Elegant'}\n\n"
         f"{admits_text}\n\n"
         f"View your pass: {rsvp_link}\n\n"
-        "With love,\nThe Obi-Uzu Family"
+        f"With love,\n{ANNIV_COUPLE}"
     )
 
     absolute_qr = _absolute_url(qr_image_url) if qr_image_url else None
