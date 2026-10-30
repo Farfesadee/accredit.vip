@@ -11,6 +11,7 @@ import EnvelopeSplash from "@/components/rsvp/EnvelopeSplash";
 import WeddingRSVP from "@/components/rsvp/WeddingRSVP";
 import GalaRSVP from "@/components/rsvp/GalaRSVP";
 import AnniversaryRSVP from "@/components/rsvp/AnniversaryRSVP";
+import RsvpThanksModal from "@/components/rsvp/RsvpThanksModal";
 
 interface RegistrationEvent {
   id: number;
@@ -90,15 +91,12 @@ export default function EventRegistrationPage() {
   const [subDepartment, setSubDepartment] = useState("");
   const [category, setCategory] = useState("");
 
-  // single-page flow (non-ACAMB)
-  const [response, setResponse] = useState<"accepted" | "declined" | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-
-  // two-step flow (ACAMB / event 67)
+  // Every RSVP page asks the attendance question first. The details form only
+  // exists for a guest who has said yes, and a "no" is answered with a short
+  // thank-you note: no form, no blank page, and no guest record.
   const [step, setStep] = useState<"attendance" | "details" | "done">("attendance");
-  const [twoStepResponse, setTwoStepResponse] = useState<"accepted" | "declined" | null>(null);
-  const [twoStepSubmitting, setTwoStepSubmitting] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [thanksOpen, setThanksOpen] = useState(false);
 
   // Birthday music for event 72
   const audioCtxRef = useRef<any>(null);
@@ -178,8 +176,6 @@ export default function EventRegistrationPage() {
   }, []);
 
   const themeColor = rsvpData?.event.theme_color || "#1ABC9C";
-  const isTwoStep = !!rsvpData?.two_step;
-  const isNFW = rsvpData?.event.id === 74;
 
   // Load the invitation while the welcome screen is up, so the guest lands on
   // a ready page the moment it lifts.
@@ -206,37 +202,37 @@ export default function EventRegistrationPage() {
     return () => inviteMusic.stop();
   }, [slug]);
 
-  const submitRsvp = async () => {
-    if (!name.trim() || !phone.trim() || !email.trim() || !response || (isNFW && !category)) return;
-    setSubmitting(true);
+  // "No" is answered on the spot: the note is the response, so the guest is
+  // never handed a form. A public decline creates no guest record on the
+  // server; a decline that carries details still updates a guest we know.
+  const decline = async () => {
     setError("");
+    setThanksOpen(true);
     try {
       await apiClient(`/rsvp/register/${slug}`, {
         method: "POST",
-        body: { name: name.trim(), phone: phone.trim(), email: email.trim(), response, category: isNFW ? category : "" },
+        body: { name: "", email: "", phone: "", response: "declined" },
       });
-      setSubmitted(true);
     } catch (err: any) {
-      const msg = err.detail || err.message || "";
-      if (msg.toLowerCase().includes("already registered")) {
-        setError("You have already registered for this event. No need to register again.");
-      } else {
-        setError(msg || "Failed to submit. Please try again.");
-      }
-    } finally {
-      setSubmitting(false);
+      setError(
+        err.detail ||
+          err.message ||
+          "We could not reach the server. Please check your connection and try again."
+      );
     }
   };
 
   const submitDetails = async () => {
     if (!rsvpData) return;
-    const isACAMB = rsvpData.event.id === 67;
-    if (isACAMB) {
+    const eventId = rsvpData.event.id;
+    if (eventId === 67) {
       if (!name.trim() || !phone.trim() || !email.trim() || !organization.trim() || !subDepartment.trim()) return;
-    } else {
-      if (!name.trim() || !phone.trim() || !email.trim()) return;
+    } else if (eventId === 74) {
+      if (!name.trim() || !phone.trim() || !email.trim() || !category) return;
+    } else if (!name.trim() || !phone.trim() || !email.trim()) {
+      return;
     }
-    setTwoStepSubmitting(true);
+    setSubmitting(true);
     setError("");
     try {
       const body: any = {
@@ -245,12 +241,12 @@ export default function EventRegistrationPage() {
         email: email.trim(),
         response: "accepted",
       };
-      if (isACAMB) {
+      if (eventId === 67) {
         body.organization = organization.trim();
         body.sub_department = subDepartment.trim();
       }
+      if (eventId === 74) body.category = category;
       await apiClient(`/rsvp/register/${slug}`, { method: "POST", body });
-      setTwoStepResponse("accepted");
       setStep("done");
     } catch (err: any) {
       const msg = err.detail || err.message || "";
@@ -260,7 +256,7 @@ export default function EventRegistrationPage() {
         setError(msg || "Failed to submit. Please try again.");
       }
     } finally {
-      setTwoStepSubmitting(false);
+      setSubmitting(false);
     }
   };
 
@@ -384,99 +380,120 @@ export default function EventRegistrationPage() {
     return <AnniversaryRSVP slug={slug} content={rsvpData.anniversary_content} />;
   }
 
-  // ---------- Two-step flow (ACAMB event 67 / Annette event 72) ----------
-  if (isTwoStep) {
-    const event = rsvpData!.event;
-    const isACAMB = event.id === 67;
+  // ---------- The invitation: attendance first, details only on yes ----------
+  // A guest lands on the flyer and the event's own details. The form that asks
+  // for their details only exists after "Yes, I will attend", and "No" is
+  // answered with a thank-you note instead of a form or a blank page.
+  const event = rsvpData!.event;
+  const isACAMB = event.id === 67;
+  const isNFWEvent = event.id === 74;
+  const isAnchorEvent = event.id === 85; // Anchor Evening of Bliss
 
-    if (step === "done") {
-      const accepted = twoStepResponse === "accepted";
-      return (<>
+  const thanksNote = (
+    <RsvpThanksModal
+      open={thanksOpen}
+      onClose={() => setThanksOpen(false)}
+      accent={themeColor}
+      surface="#ffffff"
+      textColor="#0D1B2A"
+      mutedColor="#64748b"
+    />
+  );
+
+  const musicButton = musicStartedRef.current ? (
+    <button
+      type="button"
+      onClick={toggleMusic}
+      aria-label={musicPlaying ? "Pause music" : "Play music"}
+      className="fixed bottom-6 right-6 z-50 w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-all"
+      style={{ backgroundColor: themeColor }}
+    >
+      {musicPlaying ? (
+        <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" /></svg>
+      ) : (
+        <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+      )}
+    </button>
+  ) : null;
+
+  if (step === "done") {
+    return (
+      <>
         <div className="min-h-screen bg-[#0D1B2A] px-4 py-12 sm:py-16">
           <div className="max-w-lg mx-auto">
             <div className="rounded-2xl bg-white shadow-lg overflow-hidden">
-{(event.cover_image || event.flyer_url) && (
-  <img src={event.cover_image || event.flyer_url || undefined} alt={event.title} className="w-full h-auto object-contain" />
-)}
+              {!isAnchorEvent && (event.cover_image || event.flyer_url) && (
+                <img
+                  src={event.cover_image || event.flyer_url || undefined}
+                  alt={event.title}
+                  className="w-full h-auto object-contain"
+                />
+              )}
               <div className="p-6 sm:p-8 text-center">
-                {accepted ? (
-                  <>
-                    {event.id === 72 && event.cover_image && (
-                      <img
-                        src={event.cover_image}
-                        alt={event.host_name}
-                        className="w-20 h-20 rounded-full object-cover mx-auto mb-4 border-3"
-                        style={{ borderColor: themeColor }}
-                      />
-                    )}
-                    <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full" style={{ background: `${themeColor}1A` }}>
-                      <Check className="w-8 h-8" style={{ color: themeColor }} />
-                    </div>
-                    <h1 className="text-2xl font-bold text-[#0D1B2A]">Registration Received</h1>
-                    <div className="mt-6 rounded-xl p-5 text-left" style={{ background: `${themeColor}0D`, border: `1px solid ${themeColor}30` }}>
-                      <p className="text-sm font-semibold text-slate-800 mb-2">What happens next?</p>
-                      <ul className="text-sm text-slate-700 space-y-2 list-disc list-inside leading-relaxed">
-                        <li>Your registration details have been received and your event access is being processed.</li>
-                        <li>Once processed, your QR code will be sent via email or WhatsApp ahead of the event.</li>
-                        <li>This QR code is your access to the venue.</li>
-                        <li>Entry to the venue is strictly by valid QR access code.</li>
-                      </ul>
-                    </div>
-                    <div className="mt-6 rounded-xl bg-slate-50 border border-slate-200 p-4 text-left space-y-3">
-                      <div className="flex items-center gap-2.5 text-sm text-slate-600">
-                        <Calendar className="w-4 h-4 flex-shrink-0" style={{ color: themeColor }} />
-                        <span><strong>Date:</strong> {formatDate(event.date)}</span>
-                      </div>
-                      <div className="flex items-center gap-2.5 text-sm text-slate-600">
-                        <Clock className="w-4 h-4 flex-shrink-0" style={{ color: themeColor }} />
-                        <span><strong>Time:</strong> {formatTime(event.time)}</span>
-                      </div>
-                      <div className="flex items-center gap-2.5 text-sm text-slate-600">
-                        <MapPin className="w-4 h-4 flex-shrink-0" style={{ color: themeColor }} />
-                        <span><strong>Venue:</strong> {event.venue}</span>
-                      </div>
-                      <div className="flex items-center gap-2.5 text-sm text-slate-600">
-                        <User className="w-4 h-4 flex-shrink-0" style={{ color: themeColor }} />
-                        <span><strong>Host:</strong> {event.host_name}</span>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full" style={{ background: `${themeColor}1A` }}>
-                      <X className="w-8 h-8" style={{ color: themeColor }} />
-                    </div>
-                    <h1 className="text-2xl font-bold text-[#0D1B2A]">Thank You For Your Response</h1>
-                    <p className="mt-3 text-slate-600 leading-relaxed">
-                      We appreciate you letting us know. We hope to see you at a future event!
-                    </p>
-                  </>
+                {event.id === 72 && event.cover_image && (
+                  <img
+                    src={event.cover_image}
+                    alt={event.host_name}
+                    className="w-20 h-20 rounded-full object-cover mx-auto mb-4"
+                    style={{ border: `3px solid ${themeColor}` }}
+                  />
                 )}
+                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full" style={{ background: `${themeColor}1A` }}>
+                  <Check className="w-8 h-8" style={{ color: themeColor }} />
+                </div>
+                <h1 className="text-2xl font-bold text-[#0D1B2A]">Registration Received</h1>
+                <div className="mt-6 rounded-xl p-5 text-left" style={{ background: `${themeColor}0D`, border: `1px solid ${themeColor}30` }}>
+                  <p className="text-sm font-semibold text-slate-800 mb-2">What happens next?</p>
+                  <ul className="text-sm text-slate-700 space-y-2 list-disc list-inside leading-relaxed">
+                    <li>Your registration details have been received and your event access is being processed.</li>
+                    <li>Once processed, your QR code will be sent via email or WhatsApp ahead of the event.</li>
+                    <li>This QR code is your access to the venue.</li>
+                    <li>Entry to the venue is strictly by valid QR access code.</li>
+                  </ul>
+                </div>
+                <div className="mt-6 rounded-xl bg-slate-50 border border-slate-200 p-4 text-left space-y-3">
+                  <div className="flex items-center gap-2.5 text-sm text-slate-600">
+                    <Calendar className="w-4 h-4 flex-shrink-0" style={{ color: themeColor }} />
+                    <span><strong>Date:</strong> {formatDate(event.date)}</span>
+                  </div>
+                  <div className="flex items-center gap-2.5 text-sm text-slate-600">
+                    <Clock className="w-4 h-4 flex-shrink-0" style={{ color: themeColor }} />
+                    <span><strong>Time:</strong> {formatTime(event.time)}</span>
+                  </div>
+                  <div className="flex items-center gap-2.5 text-sm text-slate-600">
+                    <MapPin className="w-4 h-4 flex-shrink-0" style={{ color: themeColor }} />
+                    <span><strong>Venue:</strong> {event.venue}</span>
+                  </div>
+                  <div className="flex items-center gap-2.5 text-sm text-slate-600">
+                    <User className="w-4 h-4 flex-shrink-0" style={{ color: themeColor }} />
+                    <span><strong>Host:</strong> {event.host_name}</span>
+                  </div>
+                </div>
               </div>
+            </div>
+            <p className="mt-6 text-center text-xs text-white/40">
+              Powered by <span className="font-semibold" style={{ color: themeColor }}>Accredit Interactive</span>
+            </p>
           </div>
         </div>
-        <p className="mt-6 text-center text-xs text-white/40">
-          Powered by <span className="font-semibold" style={{ color: themeColor }}>Accredit Interactive</span>
-        </p>
-      </div>
-      {musicStartedRef.current && (
-        <button onClick={toggleMusic} className="fixed bottom-6 right-6 z-50 w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-all" style={{ backgroundColor: themeColor }}>
-          {musicPlaying
-            ? <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg>
-            : <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>}
-        </button>
-      )}
-      </>);
-    }
+        {musicButton}
+      </>
+    );
+  }
 
-    if (step === "attendance") {
-      return (<>
+  if (step === "attendance") {
+    return (
+      <>
         <div className="min-h-screen bg-[#f8f9fc]">
           <div className="max-w-2xl mx-auto px-4 py-6 sm:py-10">
             <div className="rounded-2xl bg-white border border-slate-200 shadow-lg overflow-hidden">
-{(event.id !== 72 && (event.cover_image || event.flyer_url)) && (
-  <img src={event.cover_image || event.flyer_url || undefined} alt={event.title} className="w-full h-auto object-contain" />
-)}
+              {event.id !== 72 && (event.cover_image || event.flyer_url) && (
+                <img
+                  src={event.cover_image || event.flyer_url || undefined}
+                  alt={event.title}
+                  className="w-full h-auto object-contain"
+                />
+              )}
               <div className="p-6 sm:p-8">
                 <div className="text-center mb-6">
                   {event.id === 72 && event.cover_image && (
@@ -535,7 +552,7 @@ export default function EventRegistrationPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <button
                       type="button"
-                      onClick={() => { setTwoStepResponse("accepted"); setStep("details"); }}
+                      onClick={() => setStep("details")}
                       className="flex items-center justify-center gap-2 px-6 py-4 rounded-xl font-bold text-base bg-emerald-600 text-white shadow-lg ring-2 ring-emerald-600 ring-offset-2"
                     >
                       <Check className="w-5 h-5" />
@@ -543,7 +560,7 @@ export default function EventRegistrationPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => { setTwoStepResponse("declined"); setStep("done"); }}
+                      onClick={decline}
                       className="flex items-center justify-center gap-2 px-6 py-4 rounded-xl font-bold text-base bg-red-600 text-white shadow-lg ring-2 ring-red-600 ring-offset-2"
                     >
                       <X className="w-5 h-5" />
@@ -561,26 +578,30 @@ export default function EventRegistrationPage() {
             </div>
           </div>
         </div>
-        {musicStartedRef.current && (
-          <button onClick={toggleMusic} className="fixed bottom-6 right-6 z-50 w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-all" style={{ backgroundColor: themeColor }}>
-            {musicPlaying
-              ? <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg>
-              : <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>}
-          </button>
-        )}
-      </>);
-    }
+        {thanksNote}
+        {musicButton}
+      </>
+    );
+  }
 
-    // step === "details"
-    const canSubmit = isACAMB
-      ? name.trim() && phone.trim() && email.trim() && organization.trim() && subDepartment.trim()
-      : name.trim() && phone.trim() && email.trim();
-    return (<>
+  // ---------- step === "details": only reachable from "Yes, I will attend" ----------
+  const canSubmit = isACAMB
+    ? name.trim() && phone.trim() && email.trim() && organization.trim() && subDepartment.trim()
+    : isNFWEvent
+    ? name.trim() && phone.trim() && email.trim() && category
+    : name.trim() && phone.trim() && email.trim();
+
+  return (
+    <>
       <div className="min-h-screen bg-[#f8f9fc]">
         <div className="max-w-2xl mx-auto px-4 py-6 sm:py-10">
           <div className="rounded-2xl bg-white border border-slate-200 shadow-lg overflow-hidden">
             {(event.cover_image || event.flyer_url) && (
-              <img src={event.cover_image || event.flyer_url || undefined} alt={event.title} className="w-full h-auto object-contain" />
+              <img
+                src={event.cover_image || event.flyer_url || undefined}
+                alt={event.title}
+                className="w-full h-auto object-contain"
+              />
             )}
             <div className="p-6 sm:p-8">
               <div className="text-center mb-6">
@@ -636,41 +657,60 @@ export default function EventRegistrationPage() {
 
                 {isACAMB && (
                   <>
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider mb-1.5">
-                    <span className="inline-flex items-center gap-1.5"><Building className="w-3.5 h-3.5" /> Organization <span className="text-red-500">*</span></span>
-                  </label>
-                  <input
-                    type="text"
-                    value={organization}
-                    onChange={e => setOrganization(e.target.value)}
-                    placeholder="e.g. First Bank Nigeria"
-                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-[#0D1B2A] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1ABC9C]"
-                  />
-                </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider mb-1.5">
+                        <span className="inline-flex items-center gap-1.5"><Building className="w-3.5 h-3.5" /> Organization <span className="text-red-500">*</span></span>
+                      </label>
+                      <input
+                        type="text"
+                        value={organization}
+                        onChange={e => setOrganization(e.target.value)}
+                        placeholder="e.g. First Bank Nigeria"
+                        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-[#0D1B2A] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1ABC9C]"
+                      />
+                    </div>
 
-                <div>
-                  <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider mb-1.5">
-                    <span className="inline-flex items-center gap-1.5"><Briefcase className="w-3.5 h-3.5" /> Sub Department <span className="text-red-500">*</span></span>
-                  </label>
-                  <input
-                    type="text"
-                    value={subDepartment}
-                    onChange={e => setSubDepartment(e.target.value)}
-                    placeholder="e.g. SPEC dept, Marketing & Comms"
-                    className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-[#0D1B2A] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1ABC9C]"
-                  />
-                </div>
+                    <div>
+                      <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider mb-1.5">
+                        <span className="inline-flex items-center gap-1.5"><Briefcase className="w-3.5 h-3.5" /> Sub Department <span className="text-red-500">*</span></span>
+                      </label>
+                      <input
+                        type="text"
+                        value={subDepartment}
+                        onChange={e => setSubDepartment(e.target.value)}
+                        placeholder="e.g. SPEC dept, Marketing & Comms"
+                        className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-[#0D1B2A] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1ABC9C]"
+                      />
+                    </div>
                   </>
                 )}
 
+                {isNFWEvent && (
+                  <div>
+                    <label htmlFor="rsvp-category" className="block text-xs font-medium text-slate-500 uppercase tracking-wider mb-1.5">
+                      Category <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      id="rsvp-category"
+                      value={category}
+                      onChange={e => setCategory(e.target.value)}
+                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-[#0D1B2A] focus:outline-none focus:ring-2 focus:ring-[#1ABC9C]"
+                    >
+                      <option value="">Select your category</option>
+                      <option value="Student">Student</option>
+                      <option value="Professional">Professional</option>
+                    </select>
+                  </div>
+                )}
+
                 <button
+                  type="button"
                   onClick={submitDetails}
-                  disabled={!canSubmit || twoStepSubmitting}
+                  disabled={!canSubmit || submitting}
                   className="w-full mt-4 flex items-center justify-center gap-2 px-6 py-4 rounded-xl font-bold text-base text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{ backgroundColor: canSubmit ? themeColor : "#94a3b8" }}
                 >
-                  {twoStepSubmitting ? (
+                  {submitting ? (
                     <><Loader className="w-5 h-5 animate-spin" /> Submitting...</>
                   ) : (
                     "Confirm Attendance"
@@ -679,7 +719,7 @@ export default function EventRegistrationPage() {
 
                 <button
                   type="button"
-                  onClick={() => { setStep("attendance"); setTwoStepResponse(null); }}
+                  onClick={() => setStep("attendance")}
                   className="w-full text-sm text-slate-400 hover:text-slate-600"
                 >
                   Back
@@ -695,248 +735,7 @@ export default function EventRegistrationPage() {
           </div>
         </div>
       </div>
-      {musicStartedRef.current && (
-        <button onClick={toggleMusic} className="fixed bottom-6 right-6 z-50 w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-all" style={{ backgroundColor: themeColor }}>
-          {musicPlaying
-            ? <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg>
-            : <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>}
-        </button>
-      )}
-      </>);
-  }
-
-  // ---------- default single-page flow (other events) ----------
-  const event = rsvpData!.event;
-  const canSubmit = isNFW
-      ? name.trim() && phone.trim() && email.trim() && response && category
-      : name.trim() && phone.trim() && email.trim() && response;
-  const fieldErrors: string[] = [];
-  if (!name.trim()) fieldErrors.push("Full Name");
-  if (!phone.trim()) fieldErrors.push("Phone Number");
-  if (!email.trim()) fieldErrors.push("Email Address");
-  if (!response) fieldErrors.push("Attendance Response");
-  if (isNFW && !category) fieldErrors.push("Category");
-
-  const accepted = response === "accepted";
-  const isAnchorEvent = event.id === 85; // Anchor Evening of Bliss
-
-  if (submitted) {
-    return (
-      <div className="min-h-screen bg-[#0D1B2A] px-4 py-12 sm:py-16">
-        <div className="min-h-screen bg-[#0D1B2A] px-4 py-12 sm:py-16">
-          <div className="max-w-lg mx-auto">
-            <div className="rounded-2xl bg-white shadow-lg overflow-hidden">
-              {!isAnchorEvent && (event.cover_image || event.flyer_url) && (
-                <img src={event.cover_image || event.flyer_url || undefined} alt={event.title} className="w-full h-auto object-contain" />
-              )}
-              <div className="p-6 sm:p-8 text-center">
-              {accepted ? (
-                <>
-                  <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full" style={{ background: `${themeColor}1A` }}>
-                    <Check className="w-8 h-8" style={{ color: themeColor }} />
-                  </div>
-                  <h1 className="text-2xl font-bold text-[#0D1B2A]">Registration Received</h1>
-                  <div className="mt-6 rounded-xl p-5 text-left" style={{ background: `${themeColor}0D`, border: `1px solid ${themeColor}30` }}>
-                    <p className="text-sm font-semibold text-slate-800 mb-2">What happens next?</p>
-                    <ul className="text-sm text-slate-700 space-y-2 list-disc list-inside leading-relaxed">
-                      <li>Your registration details have been received and your event access is being processed.</li>
-                      <li>Once processed, your QR code will be sent via email or WhatsApp ahead of the event.</li>
-                      <li>This QR code is your access to the venue.</li>
-                      <li>Entry to the venue is strictly by valid QR access code.</li>
-                    </ul>
-                  </div>
-                  <div className="mt-6 rounded-xl bg-slate-50 border border-slate-200 p-4 text-left space-y-3">
-                    <div className="flex items-center gap-2.5 text-sm text-slate-600">
-                      <Calendar className="w-4 h-4 flex-shrink-0" style={{ color: themeColor }} />
-                      <span><strong>Date:</strong> {formatDate(event.date)}</span>
-                    </div>
-                    <div className="flex items-center gap-2.5 text-sm text-slate-600">
-                      <Clock className="w-4 h-4 flex-shrink-0" style={{ color: themeColor }} />
-                      <span><strong>Time:</strong> {formatTime(event.time)}</span>
-                    </div>
-                    <div className="flex items-center gap-2.5 text-sm text-slate-600">
-                      <MapPin className="w-4 h-4 flex-shrink-0" style={{ color: themeColor }} />
-                      <span><strong>Venue:</strong> {event.venue}</span>
-                    </div>
-                    <div className="flex items-center gap-2.5 text-sm text-slate-600">
-                      <User className="w-4 h-4 flex-shrink-0" style={{ color: themeColor }} />
-                      <span><strong>Host:</strong> {event.host_name}</span>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full" style={{ background: `${themeColor}1A` }}>
-                    <X className="w-8 h-8" style={{ color: themeColor }} />
-                  </div>
-                  <h1 className="text-2xl font-bold text-[#0D1B2A]">Thank You For Your Response</h1>
-                  <p className="mt-3 text-slate-600 leading-relaxed">
-                    We appreciate you letting us know. We hope to see you at a future event!
-                  </p>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-      <p className="mt-6 text-center text-xs text-white/40">
-        Powered by <span className="font-semibold" style={{ color: themeColor }}>Accredit Interactive</span>
-      </p>
-      {musicStartedRef.current && (
-        <button onClick={toggleMusic} className="fixed bottom-6 right-6 z-50 w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-all" style={{ backgroundColor: themeColor }}>
-          {musicPlaying
-            ? <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg>
-            : <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>}
-        </button>
-      )}
-    </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-[#f8f9fc]">
-      <div className="max-w-2xl mx-auto px-4 py-6 sm:py-10">
-        <div className="rounded-2xl bg-white border border-slate-200 shadow-lg overflow-hidden">
-          {(event.cover_image || event.flyer_url) && (
-            <img src={event.cover_image || event.flyer_url || undefined} alt={event.title} className="w-full h-auto object-contain" />
-          )}
-
-          <div className="p-6 sm:p-8">
-            <div className="text-center mb-6">
-              <h1 className={`${event.id === 72 ? "text-lg" : "text-2xl"} font-bold text-[#0D1B2A]`}>{event.title}</h1>
-              <p className="text-sm text-slate-500 mt-1">Please confirm your attendance below</p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6 pb-6 border-b border-slate-100">
-              <div className="flex items-start gap-3 bg-slate-50 rounded-xl p-3">
-                <Calendar className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: themeColor }} />
-                <div>
-                  <p className="text-xs text-slate-400 uppercase tracking-wider">Date</p>
-                  <p className="font-semibold text-[#0D1B2A] text-sm">{formatDate(event.date)}</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 bg-slate-50 rounded-xl p-3">
-                <Clock className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: themeColor }} />
-                <div>
-                  <p className="text-xs text-slate-400 uppercase tracking-wider">Time</p>
-                  <p className="font-semibold text-[#0D1B2A] text-sm">{formatTime(event.time)}</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3 bg-slate-50 rounded-xl p-3 sm:col-span-2">
-                <MapPin className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: themeColor }} />
-                <div>
-                  <p className="text-xs text-slate-400 uppercase tracking-wider">Venue</p>
-                  <p className="font-semibold text-[#0D1B2A] text-sm">{event.venue}</p>
-                </div>
-              </div>
-            </div>
-
-            <form className="space-y-4">
-              {error && (
-                <div className="rounded-xl bg-red-50 border border-red-200 p-3">
-                  <p className="text-sm font-medium text-red-800">{error}</p>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider mb-1.5">
-                  Full Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  placeholder="Enter your full name"
-                  required
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-[#0D1B2A] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1ABC9C]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider mb-1.5">
-                  Email Address <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  placeholder="your@email.com"
-                  required
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-[#0D1B2A] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1ABC9C]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider mb-1.5">
-                  Phone Number <span className="text-red-500">*</span>
-                </label>
-                <PhoneInput
-                  value={phone}
-                  onChange={setPhone}
-                  placeholder="8012345678"
-                  size="md"
-                  inputClassName="text-[#0D1B2A] placeholder:text-slate-400 focus:ring-2 focus:ring-[#1ABC9C] rounded-r-xl"
-                />
-              </div>
-
-              <div className="pt-2 space-y-3">
-                <p className="text-center text-sm font-semibold text-[#0D1B2A]">
-                  Will you attend? <span className="text-red-500">*</span>
-                </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setResponse("accepted")}
-                    className={`flex items-center justify-center gap-2 px-6 py-4 rounded-xl font-bold text-base transition-all ${
-                      response === "accepted"
-                        ? "bg-emerald-600 text-white shadow-lg ring-2 ring-emerald-600 ring-offset-2"
-                        : "bg-white text-slate-500 border-2 border-slate-200 hover:border-emerald-500 hover:text-emerald-600"
-                    }`}
-                  >
-                    <Check className="w-5 h-5" />
-                    Yes, I Will Attend
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setResponse("declined")}
-                    className={`flex items-center justify-center gap-2 px-6 py-4 rounded-xl font-bold text-base transition-all ${
-                      response === "declined"
-                        ? "bg-red-600 text-white shadow-lg ring-2 ring-red-600 ring-offset-2"
-                        : "bg-white text-slate-500 border-2 border-slate-200 hover:border-red-500 hover:text-red-600"
-                    }`}
-                  >
-                    <X className="w-5 h-5" />
-                    Sorry, Cannot Attend
-                  </button>
-                </div>
-              </div>
-
-              <button
-                onClick={submitRsvp}
-                disabled={!canSubmit || submitting}
-                className="w-full mt-4 flex items-center justify-center gap-2 px-6 py-4 rounded-xl font-bold text-base text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ backgroundColor: canSubmit ? themeColor : "#94a3b8" }}
-              >
-                {submitting ? (
-                  <><Loader className="w-5 h-5 animate-spin" /> Submitting...</>
-                ) : response === "accepted" ? (
-                  "Confirm Attendance"
-                ) : response === "declined" ? (
-                  "Submit Response"
-                ) : (
-                  "Select an option above"
-                )}
-              </button>
-            </form>
-          </div>
-
-          <div className="bg-slate-50 px-6 py-4 text-center border-t border-slate-200">
-            <p className="text-xs text-slate-400">
-              Powered by <span className="font-semibold" style={{ color: themeColor }}>Accredit Interactive</span>
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
+      {musicButton}
+    </>
   );
 }

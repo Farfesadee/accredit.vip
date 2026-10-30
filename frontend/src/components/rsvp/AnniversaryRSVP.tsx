@@ -15,6 +15,7 @@ import {
 import { apiClient } from "@/lib/api-client";
 import { useInviteMusic } from "@/lib/invite-music";
 import { COUNTRIES, flagEmoji } from "@/components/shared/phone-input";
+import RsvpThanksModal from "@/components/rsvp/RsvpThanksModal";
 
 /**
  * Engr. Obi & Dr. Blessing: 30th Wedding Anniversary (event 84).
@@ -342,6 +343,7 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
     guest?.status === "accepted" || guest?.status === "declined"
   );
   const [declined, setDeclined] = useState(guest?.status === "declined");
+  const [thanksOpen, setThanksOpen] = useState(false);
   const [error, setError] = useState("");
   const [showForm, setShowForm] = useState(false);
 
@@ -470,6 +472,27 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
       }
       return;
     }
+    if (response === "no") {
+      // A public "no" asks for nothing: no form, no guest record, just a short
+      // note. Personal links keep the existing reply record + change response.
+      setSubmitting(true);
+      try {
+        await apiClient(`/rsvp/register/${slug}`, {
+          method: "POST",
+          body: { name: "", email: "", phone: "", response: "declined" },
+        });
+        setAttendance(null);
+        setThanksOpen(true);
+      } catch (err: any) {
+        setError(
+          err?.detail || err?.message || "We could not send your reply. Please try again."
+        );
+        setAttendance(null);
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
     if (response === "yes") {
       if (!name.trim()) {
         setError("Please tell us your full name.");
@@ -490,13 +513,12 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
           name: name.trim(),
           email: email.trim(),
           phone: phone ? `${dialCode}${phone.replace(/\D/g, "")}` : "",
-          response: response === "yes" ? "accepted" : "declined",
-          plus_one: response === "yes" ? wantsCompanion : false,
-          plus_one_name:
-            response === "yes" && wantsCompanion ? plusOneName.trim() : "",
+          response: "accepted",
+          plus_one: wantsCompanion,
+          plus_one_name: wantsCompanion ? plusOneName.trim() : "",
         },
       });
-      setDeclined(response === "no");
+      setDeclined(false);
       setDone(true);
     } catch (err: any) {
       setError(
@@ -1498,6 +1520,15 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
           </footer>
         </div>
       )}
+
+      <RsvpThanksModal
+        open={thanksOpen}
+        onClose={() => setThanksOpen(false)}
+        accent="#4B4BD8"
+        surface={CREAM}
+        textColor={INK}
+        mutedColor={MUTED}
+      />
     </div>
   );
 }

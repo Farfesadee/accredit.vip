@@ -503,12 +503,10 @@ async def get_registration_event_info(
     """Get event details for the public registration form."""
     event = await _get_event_by_slug(event_slug, db)
 
-    # Event 67 (ACAMB) and event 72 (Annette's BIG 40) use a two-step procedure:
-    # the attendance question is shown first, then a details form only for "Yes".
-    # The Art of Attention (gala) uses the same two-step logic.
-    is_two_step = (
-        event.id in (67, 72) or is_gala_event(event) or is_anniversary_event(event)
-    )
+    # Every RSVP page asks the attendance question before anything else, so the
+    # details form only appears for a guest who says yes. This flag stays in the
+    # payload for older clients and now describes that universal flow.
+    is_two_step = True
 
     wedding = is_wedding_event(event)
     gala = is_gala_event(event)
@@ -557,16 +555,17 @@ async def submit_registration(
     event = await _get_event_by_slug(event_slug, db)
     _raise_if_registration_closed(event)
 
-    is_two_step = (
-        event.id in (67, 72) or is_gala_event(event) or is_anniversary_event(event)
-    )
     response_lower = req.response.lower()
     if response_lower not in ("accepted", "yes", "declined", "no"):
         raise HTTPException(status_code=400, detail="Please choose whether you will attend")
 
-    # Two-step procedure: guests who answer "No" fill no form and are not added to
-    # the dashboard: the flow simply ends.
-    if is_two_step and response_lower in ("declined", "no"):
+    # A guest who says "No" straight from the invitation has filled nothing in,
+    # and no record is created for them: the flow simply ends. A decline that
+    # arrives with a name or a contact detail still comes from a guest we know
+    # (a personal link, a change of mind), so that one is recorded as before.
+    said_no = response_lower in ("declined", "no")
+    has_details = bool((req.name or "").strip() or (req.email or "").strip() or (req.phone or "").strip())
+    if said_no and not has_details:
         return {
             "status": "success",
             "response": "declined",

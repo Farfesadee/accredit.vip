@@ -19,6 +19,7 @@ import {
 import { apiClient } from "@/lib/api-client";
 import { useInviteMusic } from "@/lib/invite-music";
 import { COUNTRIES, flagEmoji } from "@/components/shared/phone-input";
+import RsvpThanksModal from "@/components/rsvp/RsvpThanksModal";
 
 const GOLD = "#C9A227";
 const IVORY = "#F3EDE2";
@@ -316,6 +317,9 @@ export default function GalaRSVP({ slug, content, guestToken, guest }: GalaRSVPP
   );
   const [declined, setDeclined] = useState(guest?.status === "declined");
   const [error, setError] = useState("");
+  // A public "no" is answered with a short note, never a form: the invitation
+  // stays exactly where it is behind it.
+  const [thanksOpen, setThanksOpen] = useState(false);
 
   const countdown = useCountdown(content.countdown_to);
 
@@ -430,8 +434,7 @@ export default function GalaRSVP({ slug, content, guestToken, guest }: GalaRSVPP
           method: "POST",
           body: { name: "", email: "", phone: "", response: "declined" },
         });
-        setDeclined(true);
-        setDone(true);
+        setThanksOpen(true);
         return;
       }
       await apiClient(`/rsvp/register/${slug}`, {
@@ -1484,6 +1487,15 @@ export default function GalaRSVP({ slug, content, guestToken, guest }: GalaRSVPP
       {filmOverlay}
 
       {entered ? invitation : gate}
+
+      <RsvpThanksModal
+        open={thanksOpen}
+        onClose={() => setThanksOpen(false)}
+        accent={GOLD}
+        surface="#0a0908"
+        textColor={IVORY}
+        mutedColor="#a49b8d"
+      />
     </>
   );
 }

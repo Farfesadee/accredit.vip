@@ -5,6 +5,7 @@ import Link from "next/link";
 import { apiClient } from "@/lib/api-client";
 import WeddingNav from "@/components/rsvp/WeddingNav";
 import WeddingPhoneInput from "@/components/rsvp/WeddingPhoneInput";
+import RsvpThanksModal from "@/components/rsvp/RsvpThanksModal";
 
 interface WeddingRSVPProps {
   slug: string;
@@ -228,6 +229,9 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
   );
   const [declined, setDeclined] = useState(guest?.status === "declined");
   const [error, setError] = useState("");
+  // A public "no" is answered with a short note, never a form: the invitation
+  // stays exactly where it is behind it.
+  const [thanksOpen, setThanksOpen] = useState(false);
 
   const cd = useCountdown(content.countdown_to);
   const filmUrl = content.invite_video_url || content.video_url;
@@ -988,7 +992,7 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
                 <span className="font-bold text-sm">{submitting && attendance === "yes" ? "Sending..." : "Yes, I Will Attend"}</span>
               </button>
               <button
-                onClick={() => (guestToken ? submitPersonal("no") : setAttendance("no"))}
+                onClick={() => (guestToken ? submitPersonal("no") : setThanksOpen(true))}
                 disabled={submitting}
                 className="rounded-2xl border-2 bg-white p-5 flex flex-col items-center gap-2 transition-all active:scale-95 disabled:opacity-60"
                 style={{ borderColor: "#e2d5b8" }}
@@ -1002,13 +1006,6 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
               </button>
             </div>
             {error && <p className="mt-4 text-xs text-red-700">{error}</p>}
-          </div>
-        ) : attendance === "no" ? (
-          <div className="rounded-2xl border bg-white p-6 text-center" style={{ borderColor: "#e2d5b8" }}>
-            <p className="opacity-80 text-sm">Thank you for letting us know. You will be missed!</p>
-            <button onClick={() => setAttendance(null)} className="mt-3 text-xs underline underline-offset-4" style={{ color: GOLD }}>
-              Back
-            </button>
           </div>
         ) : (
           <div className="rounded-2xl border bg-white p-5 space-y-4 max-w-md mx-auto" style={{ borderColor: "#e2d5b8" }}>
@@ -1053,6 +1050,15 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
         <p className="text-[11px] uppercase" style={{ color: GOLD, letterSpacing: "0.3em" }}>{content.hashtag}</p>
         <p className="text-[11px] opacity-40 mt-2">Sarah &amp; Patrick, December 19, 2026</p>
       </footer>
+
+      <RsvpThanksModal
+        open={thanksOpen}
+        onClose={() => setThanksOpen(false)}
+        accent={GOLD}
+        surface="#ffffff"
+        textColor={INK}
+        mutedColor="#7a6a55"
+      />
     </div>
   );
 }
