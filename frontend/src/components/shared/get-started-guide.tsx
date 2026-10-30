@@ -4,12 +4,39 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 
 const IconMap: Record<string, React.ReactNode> = {
-  welcome: <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 15H7a4 4 0 0 0-4 4v2h14v-2a4 4 0 0 0-4-4h-4z"/><circle cx="12" cy="7" r="4"/></svg>,
-  invite: <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7-10-7"/></svg>,
-  discover: <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="m16 12-4-4-4 4"/><path d="m12 10v8"/></svg>,
-  post: <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>,
-  next: <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2z"/><path d="M12 6v6l4 2"/></svg>,
+  welcome: <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 15H7a4 4 0 0 0-4 4v2h14v-2a4 4 0 0 0-4-4h-4z"/><circle cx="12" cy="7" r="4"/></svg>,
+  ways: <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7-10-7"/></svg>,
+  next: <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2z"/><path d="M12 6v6l4 2"/></svg>,
 };
+
+type Step = {
+  title: string;
+  icon: string;
+  lead: string;
+  points?: { label: string; text: string }[];
+};
+
+const steps: Step[] = [
+  {
+    title: "Welcome",
+    icon: "welcome",
+    lead: "Accredit Interactive runs your event from invitation to entry.",
+  },
+  {
+    title: "Two ways to run an event",
+    icon: "ways",
+    lead: "Pick the one that fits you.",
+    points: [
+      { label: "Create Invite", text: "Private events: send personalised invitations by WhatsApp, SMS or email, then check guests in by QR." },
+      { label: "Post Event", text: "Public events: list it, sell tickets, and issue a QR ticket to every buyer." },
+    ],
+  },
+  {
+    title: "Try it for free",
+    icon: "next",
+    lead: "Preview an invite or an event before you commit. You only need an account to send.",
+  },
+];
 
 export function GetStartedGuide() {
   const [isOpen, setIsOpen] = useState(false);
@@ -30,168 +57,38 @@ export function GetStartedGuide() {
 
   if (!isOpen) return null;
 
-  const steps = [
-    {
-      title: "Welcome to Accredit Interactive",
-      icon: "welcome",
-      content: (
-        <div className="space-y-4">
-          <p className="text-lg text-gray-700">
-            Welcome! We're the premium event infrastructure platform for Africa. Whether you're planning a wedding, concert, conference, or gathering: we've got you covered.
-          </p>
-          <p className="text-gray-600">
-            Let's walk you through what you can do in just a few minutes. Ready? Click Next to begin!
-          </p>
-        </div>
-      ),
-    },
-    {
-      title: "CREATE INVITE - Test First",
-      icon: "invite",
-      content: (
-        <div className="space-y-4">
-          <p className="text-gray-700">
-            <strong>Want to send invitations?</strong> Start here. You can:
-          </p>
-          <ul className="space-y-2 text-gray-600">
-            <li className="flex items-start gap-3">
-              <span className="text-[#1ABC9C] font-bold">→</span>
-              <span><strong>Design beautiful invitation flyers</strong> that guests see at a glance on their phones</span>
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="text-[#1ABC9C] font-bold">→</span>
-              <span><strong>TEST for free</strong>: send yourself a preview invitation to see exactly how it looks</span>
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="text-[#1ABC9C] font-bold">→</span>
-              <span><strong>Send via Email, WhatsApp, or SMS</strong>: pick your channels and send real invites</span>
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="text-[#1ABC9C] font-bold">→</span>
-              <span><strong>Attach QR codes</strong> for seamless check-in at your event</span>
-            </li>
-          </ul>
-          <p className="text-sm text-[#1ABC9C] font-semibold mt-4">Go to CREATE EVENT to get started with testing!</p>
-        </div>
-      ),
-    },
-    {
-      title: "DISCOVER EVENTS - Find & Buy Tickets",
-      icon: "discover",
-      content: (
-        <div className="space-y-4">
-          <p className="text-gray-700">
-            <strong>Looking for events?</strong> Browse and buy tickets here. You'll find:
-          </p>
-          <ul className="space-y-2 text-gray-600">
-            <li className="flex items-start gap-3">
-              <span className="text-purple-600 font-bold">→</span>
-              <span><strong>Concerts, conferences, festivals, weddings</strong>: and more events across Africa</span>
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="text-purple-600 font-bold">→</span>
-              <span><strong>Beautiful event flyers</strong> showing all the details you need</span>
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="text-purple-600 font-bold">→</span>
-              <span><strong>Instant ticket purchase</strong> with secure payment (we charge a small 5% platform fee)</span>
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="text-purple-600 font-bold">→</span>
-              <span><strong>Filters & search</strong> to find events by category, price, date, and location</span>
-            </li>
-          </ul>
-          <p className="text-sm text-purple-600 font-semibold mt-4">Go to DISCOVER EVENTS (or ATTEND) to browse!</p>
-        </div>
-      ),
-    },
-    {
-      title: "POST EVENT - Go Public",
-      icon: "post",
-      content: (
-        <div className="space-y-4">
-          <p className="text-gray-700">
-            <strong>Ready to reach thousands?</strong> Create a public event listing. You can:
-          </p>
-          <ul className="space-y-2 text-gray-600">
-            <li className="flex items-start gap-3">
-              <span className="text-cyan-600 font-bold">→</span>
-              <span><strong>Upload a professional event flyer</strong> (or AI generate one for you)</span>
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="text-cyan-600 font-bold">→</span>
-              <span><strong>Set ticket prices & limits</strong>: control how many tickets are available</span>
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="text-cyan-600 font-bold">→</span>
-              <span><strong>TEST before posting</strong>: see exactly how your event looks on Discover Events</span>
-            </li>
-            <li className="flex items-start gap-3">
-              <span className="text-cyan-600 font-bold">→</span>
-              <span><strong>Get ticket sales instantly</strong>: watch as guests buy tickets in real-time</span>
-            </li>
-          </ul>
-          <p className="text-sm text-cyan-600 font-semibold mt-4">Create an account to start posting events!</p>
-        </div>
-      ),
-    },
-    {
-      title: "Your Next Steps",
-      icon: "next",
-      content: (
-        <div className="space-y-4">
-          <p className="text-lg text-gray-700 font-semibold">
-            Here's how to get started:
-          </p>
-          <div className="space-y-3">
-            <div className="p-4 rounded-lg bg-teal-50 border-l-4 border-[#1ABC9C]">
-              <p className="font-semibold text-[#1ABC9C]">Step 1: Try Testing (Free!)</p>
-              <p className="text-sm text-gray-600 mt-1">
-                Click "CREATE EVENT" and try testing an invite or event without creating an account. See how beautiful everything looks!
-              </p>
-            </div>
-            <div className="p-4 rounded-lg bg-purple-50 border-l-4 border-purple-600">
-              <p className="font-semibold text-purple-600">Step 2: Browse & Buy Tickets</p>
-              <p className="text-sm text-gray-600 mt-1">
-                Go to "Discover Events" and explore public events. If you find something you like, buy a ticket!
-              </p>
-            </div>
-            <div className="p-4 rounded-lg bg-cyan-50 border-l-4 border-cyan-600">
-              <p className="font-semibold text-cyan-600">Step 3: Create an Account</p>
-              <p className="text-sm text-gray-600 mt-1">
-                Ready to send real invites or post events? Sign up and unlock the full power of Accredit Interactive. Your account is completely free.
-              </p>
-            </div>
-          </div>
-        </div>
-      ),
-    },
-  ];
-
   const currentStep = steps[step - 1];
+  const isLast = step === steps.length;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
-      <div className="rounded-2xl bg-white max-w-2xl w-full shadow-2xl overflow-hidden">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-[#1ABC9C] to-[#16A085] px-6 py-8 text-white">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 flex items-center justify-center" style={{ color: "white" }}>
-              {IconMap[currentStep.icon] || <span className="text-3xl">{currentStep.icon}</span>}
+      <div className="w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl">
+        <div className="bg-gradient-to-r from-[#1ABC9C] to-[#16A085] px-6 py-6 text-white">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center" style={{ color: "white" }}>
+              {IconMap[currentStep.icon]}
             </div>
             <div>
-              <h2 className="text-3xl font-bold">{currentStep.title}</h2>
-              <p className="text-white/80 text-sm mt-1">Step {step} of {steps.length}</p>
+              <h2 className="text-xl font-bold leading-tight">{currentStep.title}</h2>
+              <p className="mt-0.5 text-xs text-white/80">Step {step} of {steps.length}</p>
             </div>
           </div>
         </div>
 
-        {/* Content */}
-        <div className="px-6 py-8 max-h-[60vh] overflow-y-auto">
-          {currentStep.content}
+        <div className="px-6 py-6">
+          <p className="text-base leading-relaxed text-gray-700">{currentStep.lead}</p>
+          {currentStep.points && (
+            <ul className="mt-4 space-y-3">
+              {currentStep.points.map((p) => (
+                <li key={p.label} className="rounded-lg border-l-4 border-[#1ABC9C] bg-teal-50/60 p-3">
+                  <p className="text-sm font-semibold text-[#0D1B2A]">{p.label}</p>
+                  <p className="mt-0.5 text-sm leading-relaxed text-gray-600">{p.text}</p>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
 
-        {/* Progress Bar */}
         <div className="h-1 bg-gray-200">
           <div
             className="h-full bg-gradient-to-r from-[#1ABC9C] to-[#16A085] transition-all duration-300"
@@ -199,28 +96,27 @@ export function GetStartedGuide() {
           />
         </div>
 
-        {/* Footer */}
-        <div className="px-6 py-6 bg-[#f8f9fc] flex items-center justify-between gap-4">
+        <div className="flex items-center justify-between gap-4 bg-[#f8f9fc] px-6 py-4">
           <button
             onClick={handleClose}
-            className="text-sm font-semibold text-gray-600 hover:text-[#0D1B2A] transition-colors"
+            className="text-sm font-semibold text-gray-600 transition-colors hover:text-[#0D1B2A]"
           >
-            Skip Guide
+            Skip
           </button>
 
-          <div className="flex gap-3">
+          <div className="flex gap-2">
             {step > 1 && (
               <button
                 onClick={() => setStep(step - 1)}
-                className="px-6 py-2 rounded-lg border border-[#d9e2ec] text-[#0D1B2A] font-semibold hover:bg-[#f0f0f0] transition-colors"
+                className="rounded-lg border border-[#d9e2ec] px-5 py-2 font-semibold text-[#0D1B2A] transition-colors hover:bg-[#f0f0f0]"
               >
                 Back
               </button>
             )}
-            {step < steps.length ? (
+            {!isLast ? (
               <button
                 onClick={() => setStep(step + 1)}
-                className="px-6 py-2 rounded-lg bg-[#1ABC9C] text-white font-semibold hover:bg-[#d0147a] transition-colors"
+                className="rounded-lg bg-[#1ABC9C] px-5 py-2 font-semibold text-white transition-colors hover:bg-[#16A085]"
               >
                 Next
               </button>
@@ -228,9 +124,9 @@ export function GetStartedGuide() {
               <Link
                 href="/create-event"
                 onClick={handleClose}
-                className="px-6 py-2 rounded-lg bg-[#1ABC9C] text-white font-semibold hover:bg-[#d0147a] transition-colors inline-block"
+                className="inline-block rounded-lg bg-[#1ABC9C] px-5 py-2 font-semibold text-white transition-colors hover:bg-[#16A085]"
               >
-                Start Testing →
+                Get started
               </Link>
             )}
           </div>

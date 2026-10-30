@@ -201,6 +201,14 @@ def is_anniversary_event(event: Event) -> bool:
     return (event.slug or "") in ANNIVERSARY_SLUGS
 
 
+# Anchor Evening of Bliss (event 85)
+ANCHOR_SLUGS = ("anchor-evening-of-bliss",)
+
+
+def is_anchor_event(event: Event) -> bool:
+    return (event.slug or "") in ANCHOR_SLUGS
+
+
 def anniversary_content() -> dict:
     return {
         # The client's own invitation is the authority on the names, and on
@@ -212,7 +220,7 @@ def anniversary_content() -> dict:
         "surname": "",
         "occasion": "30th Wedding Anniversary",
         "hashtag": "#ObiBlessing30",
-        "since": "December 1996",
+        "since": "1996",
         "countdown_to": "2026-12-15T15:00:00+01:00",
         "ceremony": {
             "label": "30th Wedding Anniversary",
@@ -233,20 +241,27 @@ def anniversary_content() -> dict:
             "note": "Your invitation admits two: you and one companion.",
         },
         # Short montage cut from the couple's own artwork and photographs, set
-        # to "Ordinary". v5 opens on the client's portrait cover, runs their six
-        # photographs, and closes on the "Together since 1996" collage, which is
-        # the order they asked for. Versioned so a replaced cut is never served
-        # from cache.
-        "video_url": "/uploads/anniversary-montage.mp4?v=5",
-        "invite_video_url": "/uploads/anniversary-montage.mp4?v=5",
-        # The opening carries their traditional attire portrait (red cap, white
-        # agbada, red lace), which the client chose by name, so the names and
-        # "Together since December 1996" read at a glance on a phone. The page
-        # shows the whole frame, never a crop, so both of them stay in view.
+        # to "Ordinary". v6 opens on the "thirty years" poster, runs their five
+        # remaining photographs, and closes on the "Together since 1996"
+        # collage. The black tie staircase photograph came out of the montage at
+        # the client's request (2026-10-26). Versioned so a replaced cut is never
+        # served from cache.
+        "video_url": "/uploads/anniversary-montage.mp4?v=6",
+        "invite_video_url": "/uploads/anniversary-montage.mp4?v=6",
+        # Client directive (2026-10-26): the experience opens on the "thirty
+        # years" poster, not on the traditional attire portrait. The cover uses
+        # the poster artwork with the printed details band cropped off, because
+        # the page sets the names, the date and "Together since 1996"
+        # in type directly beneath it.
+        "cover_poster_url": "/uploads/anniv-cover-30.jpg?v=1",
+        # The invitation itself keeps their traditional attire portrait (red
+        # cap, white agbada, red lace) in the hero, which the client chose by
+        # name. The page shows the whole frame, never a crop, so both of them
+        # stay in view.
         "invite_poster_url": "/uploads/anniv-hero.jpg?v=3",
         "hero_image": "/uploads/anniv-hero.jpg?v=3",
         "hero_line": "Celebrating 30 beautiful years of love, laughter and lifelong companionship.",
-        # Gallery: six whole frames from the photographs the client sent in
+        # Gallery: five whole frames from the photographs the client sent in
         # October 2026. Nothing is cropped, so no one is ever cut at the edge of
         # a frame. width/height travel with each one so the boxes hold their
         # shape before the bytes arrive (no layout shift while a guest scrolls).
@@ -255,13 +270,6 @@ def anniversary_content() -> dict:
                 "url": "/uploads/anniv-g1.jpg?v=3",
                 "caption": "Still them",
                 "note": "Thirty years on",
-                "width": 900,
-                "height": 1200,
-            },
-            {
-                "url": "/uploads/anniv-g2.jpg?v=3",
-                "caption": "Black tie",
-                "note": "An evening out",
                 "width": 900,
                 "height": 1200,
             },
@@ -311,10 +319,15 @@ def is_gala_event(event: Event) -> bool:
 def experience_for(event: Event) -> str:
     """Which cinematic page an event opens with.
 
-    "wedding", "anniversary" and "gala" are the events that open with a film
-    and a montage, so every RSVP link they send (invite, pass, resend, host
-    link) has to land on that page. "standard" means the event has no film at
-    all, and the generic RSVP page is the right surface for it.
+    "wedding", "anniversary" and "gala" are the events that open with a film and
+    a montage, so every RSVP link they send (invite, pass, resend, host link)
+    has to land on that page. "standard" means the event has no film of its own,
+    and the generic RSVP page is the right surface for it.
+
+    Anchor Evening of Bliss (event 85) has no film, so it is "standard" here: its
+    invites send guests to the personal RSVP card, which is the link the client
+    approved. `is_anchor_event()` still gates that event's own invite and pass
+    wording, which is a separate concern from which page it opens.
     """
     if is_wedding_event(event):
         return "wedding"

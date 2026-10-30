@@ -2,7 +2,7 @@
 
 import os
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func, or_
 from pydantic import BaseModel
@@ -537,6 +537,63 @@ async def admin_add_guest(
                      resource_type="event", resource_id=event_id,
                      description=f"Added guest {guest.name} (id {guest.id})")
     return {"guest": guest.to_dict()}
+
+
+@router.post("/admin/events/{event_id}/guests/upload")
+async def admin_upload_guests(
+    event_id: int,
+    file: UploadFile = File(...),
+    admin: User = Depends(check_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin CSV import onto any organizer dashboard.
+
+    Same rule as the organizer importer in guests.py: every row needs a name
+    plus an email address or a phone number.
+    """
+    from app.api.guests import ensure_guest_capacity, parse_guest_csv
+
+    event = await _admin_get_event(db, event_id)
+
+    content = await file.read()
+    try:
+        text = content.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail="The file must be a UTF-8 CSV")
+
+    guests, skipped = parse_guest_csv(text, event_id)
+    if not guests:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "No valid guests found in CSV. Every row needs a name plus an "
+                "email address or a phone number."
+            ),
+        )
+
+    await ensure_guest_capacity(db, event, len(guests))
+    for guest in guests:
+        guest.invited_by = "Admin"
+    db.add_all(guests)
+    await db.commit()
+
+    await log_action(
+        db=db,
+        user_id=admin.id,
+        action="guests_uploaded_by_admin",
+        resource_type="event",
+        resource_id=event_id,
+        description=(
+            f"Uploaded CSV guest list for event {event_id}: "
+            f"{len(guests)} imported, {len(skipped)} skipped"
+        ),
+    )
+
+    return {
+        "imported": len(guests),
+        "skipped": len(skipped),
+        "skipped_rows": skipped[:50],
+    }
 
 
 @router.put("/admin/events/{event_id}/guests/{guest_id}")

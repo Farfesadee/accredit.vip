@@ -12,7 +12,7 @@ from app.core.database import init_db
 from app.core.rate_limit import RateLimitMiddleware
 
 logger = logging.getLogger(__name__)
-from app.api import auth, events, guests, qr_codes, verification, payments, admin, rsvp, burial_rsvp, event_registration, messaging, tickets, uploads, contact, trials, subscriptions, posts, ai, notifications, tracking, webhooks, guest_management, invite_sending, admin_dashboard, checkin_scanner, waitlist_api, coupons_api, rsvp_questions_api, event_templates_api, wallet_api, trial_migration, withdrawals, admin_events, admin_audience, pickup_api, std_messages, failed_messages, email_campaign, announcements, platform_settings
+from app.api import auth, events, guests, qr_codes, verification, payments, admin, rsvp, burial_rsvp, event_registration, messaging, tickets, uploads, contact, trials, subscriptions, posts, ai, notifications, tracking, webhooks, guest_management, invite_sending, admin_dashboard, checkin_scanner, waitlist_api, coupons_api, rsvp_questions_api, event_templates_api, wallet_api, trial_migration, withdrawals, admin_events, admin_event_days, admin_audience, pickup_api, std_messages, failed_messages, email_campaign, announcements, platform_settings
 
 
 @asynccontextmanager
@@ -122,6 +122,7 @@ app.include_router(qr_codes.router, prefix="/api/v1/events", tags=["QR Codes"])
 app.include_router(verification.router, prefix="/api/v1/qr", tags=["Verification"])
 app.include_router(payments.router, prefix="/api/v1/payments", tags=["Payments"])
 app.include_router(admin_events.router, prefix="/api/v1", tags=["Admin Events"])
+app.include_router(admin_event_days.router, prefix="/api/v1", tags=["Admin Event Days"])
 app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
 app.include_router(rsvp.router, prefix="/api/v1", tags=["RSVP"])
 app.include_router(burial_rsvp.router, prefix="/api/v1", tags=["Burial RSVP"])

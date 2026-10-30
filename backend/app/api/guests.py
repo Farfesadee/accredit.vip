@@ -24,6 +24,71 @@ def guest_limit_from_range(value: str) -> int | None:
     return max(numbers) if numbers else None
 
 
+EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$")
+
+
+def clean_guest_email(value: str | None) -> str | None:
+    """Return the email only when it looks deliverable, otherwise None."""
+    email = (value or "").strip()
+    if not email:
+        return None
+    return email if EMAIL_PATTERN.match(email) else None
+
+
+def clean_guest_phone(value: str | None) -> str | None:
+    """Return the phone only when it carries enough digits to be reachable."""
+    phone = (value or "").strip()
+    if not phone:
+        return None
+    digits = re.sub(r"[^\d]", "", phone)
+    return phone if len(digits) >= 7 else None
+
+
+def parse_guest_csv(text: str, event_id: int):
+    """Parse an uploaded CSV into Guest rows.
+
+    A row is accepted when it has a name AND at least one reachable contact:
+    an email address or a phone number. Everything else is skipped and
+    reported back so the organizer can fix the sheet.
+    """
+    reader = csv.DictReader(io.StringIO(text))
+    if reader.fieldnames:
+        reader.fieldnames = [(f or "").strip().lower() for f in reader.fieldnames]
+
+    guests = []
+    skipped: list[dict[str, str]] = []
+    for index, row in enumerate(reader, start=2):
+        name = (row.get("name") or row.get("full name") or row.get("guest name") or "").strip()
+        raw_email = (row.get("email") or row.get("email address") or "").strip()
+        raw_phone = (row.get("phone") or row.get("phone number") or row.get("mobile") or "").strip()
+
+        if not name:
+            skipped.append({"row": str(index), "name": "", "reason": "No name"})
+            continue
+
+        email = clean_guest_email(raw_email)
+        phone = clean_guest_phone(raw_phone)
+
+        if not email and not phone:
+            reason = "Email and phone missing" if not raw_email and not raw_phone else "No valid email or phone"
+            skipped.append({"row": str(index), "name": name, "reason": reason})
+            continue
+
+        org = (row.get("organization") or row.get("organisation") or row.get("company") or "").strip() or None
+        guests.append(
+            Guest(
+                event_id=event_id,
+                name=name,
+                phone=phone,
+                email=email,
+                category=(row.get("category") or "").strip() or None,
+                custom_data={"organization": org} if org else None,
+            )
+        )
+
+    return guests, skipped
+
+
 async def ensure_guest_capacity(db: AsyncSession, event: Event, additional_count: int):
     limit = guest_limit_from_range(event.guest_count_range)
     if limit is None:
@@ -275,34 +340,32 @@ async def upload_guests_csv(
         raise HTTPException(status_code=404, detail="Event not found")
 
     content = await file.read()
-    text = content.decode("utf-8-sig")
-    reader = csv.DictReader(io.StringIO(text))
+    try:
+        text = content.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail="The file must be a UTF-8 CSV")
 
-    guests = []
-    for row in reader:
-        name = row.get("name", "").strip()
-        if not name:
-            continue
-        org = row.get("organization", "").strip() or None
-        guest = Guest(
-            event_id=event_id,
-            name=name,
-            phone=row.get("phone", "").strip() or None,
-            email=row.get("email", "").strip() or None,
-            category=row.get("category", "").strip() or None,
-            custom_data={"organization": org} if org else None,
-        )
-        guests.append(guest)
+    guests, skipped = parse_guest_csv(text, event_id)
 
     if not guests:
-        raise HTTPException(status_code=400, detail="No valid guests found in CSV")
+        detail = "No valid guests found in CSV"
+        if skipped:
+            detail = (
+                "No valid guests found in CSV. Every row needs a name plus an email "
+                "address or a phone number."
+            )
+        raise HTTPException(status_code=400, detail=detail)
 
     await ensure_guest_capacity(db, event, len(guests))
 
     db.add_all(guests)
     await db.commit()
 
-    return {"imported": len(guests)}
+    return {
+        "imported": len(guests),
+        "skipped": len(skipped),
+        "skipped_rows": skipped[:50],
+    }
 
 
 class GuestUpdate(BaseModel):

@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { apiClient, API_BASE } from "@/lib/api-client";
 import { useAuth } from "@/contexts/auth-context";
-import { Check, X, Search, Camera, User, Clock, Loader, ChevronDown, QrCode, LogOut, Scan, FileText, Plane, Building2, MapPin, Bus } from "lucide-react";
+import { Check, X, Search, Camera, User, Clock, Loader, ChevronDown, QrCode, LogOut, Scan, FileText, Plane, Building2, MapPin, Bus, Calendar, Lock } from "lucide-react";
 
 const QRScanner = dynamic(() => import("@/components/accreditation/QRScanner"), { ssr: false });
 
@@ -93,6 +93,22 @@ interface ActivityItem {
   location?: string | null;
 }
 
+interface Day {
+  id: number;
+  day_number: number;
+  date: string;
+  label: string | null;
+  name: string;
+  heading: string;
+  start_time: string | null;
+  end_time: string | null;
+  accreditation_open: boolean;
+  is_active: boolean;
+  is_today: boolean;
+  note: string | null;
+  checked_in?: number;
+}
+
 export function AccreditationScanClient() {
   const router = useRouter();
   const { user, loading: authLoading, logout, refetchUser } = useAuth();
@@ -144,6 +160,9 @@ export function AccreditationScanClient() {
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
   const [selectedSubLocation, setSelectedSubLocation] = useState<string | null>(null);
+  // Multi-day state
+  const [eventDays, setEventDays] = useState<Day[]>([]);
+  const [selectedDayId, setSelectedDayId] = useState<number | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const LOCATION_OPTIONS = ["Airport", "Abuja Continental", "Abuja Continental 1", "Abuja Continental 2", "Abuja Continental 3", "Abuja Continental 4", "Abuja Continental 5", "Abuja Continental 6", "Transcorp", "Transcorp 1", "Transcorp 2", "Transcorp 3", "Transcorp 4", "Transcorp 5", "ICC", "ICC Guests"];
   const AC_SUBS = ["Airport", "ICC"];
@@ -209,20 +228,42 @@ export function AccreditationScanClient() {
     }
   }, [user]);
 
-  const loadStats = useCallback(async (eventId: number) => {
+  const loadStats = useCallback(async (eventId: number, dayId?: number) => {
     try {
-      const d = await apiClient<any>(`/scanner/events/${eventId}/stats`);
+      const url = `/scanner/events/${eventId}/stats${dayId ? `?event_day_id=${dayId}` : ""}`;
+      const d = await apiClient<any>(url);
       setStats({ checked_in: d.checked_in || 0, total_guests: d.total_guests || 0 });
     } catch {
       // keep previous stats on error
     }
   }, []);
 
-  const loadActivity = useCallback(async (eventId: number, page: number = 1, q: string = "") => {
+  const loadDays = useCallback(async (eventId: number) => {
+    try {
+      const res = await apiClient<any>(`/scanner/events/${eventId}/days`);
+      if (res.days && res.days.length > 0) {
+        setEventDays(res.days);
+        // Auto-select today's day if none selected
+        if (!selectedDayId) {
+          const today = res.days.find((d: Day) => d.is_today);
+          setSelectedDayId(today?.id ?? res.days[0].id);
+        }
+      } else {
+        setEventDays([]);
+        setSelectedDayId(null);
+      }
+    } catch {
+      setEventDays([]);
+      setSelectedDayId(null);
+    }
+  }, [selectedDayId]);
+
+  const loadActivity = useCallback(async (eventId: number, page: number = 1, q: string = "", dayId?: number) => {
     setActivityLoading(true);
     try {
       const params = new URLSearchParams({ page: String(page), per_page: "20" });
       if (q) params.set("q", q);
+      if (dayId) params.set("event_day_id", String(dayId));
       const d = await apiClient<{ activity: ActivityItem[]; total: number }>(`/scanner/events/${eventId}/activity?${params}`);
       setActivity(d.activity || []);
       setActivityTotal(d.total || 0);
@@ -245,21 +286,22 @@ export function AccreditationScanClient() {
   useEffect(() => {
     if (selectedEvent) {
       localStorage.setItem("accreditation_event_id", String(selectedEvent.id));
-      loadStats(selectedEvent.id);
+      loadStats(selectedEvent.id, selectedDayId ?? undefined);
+      loadDays(selectedEvent.id);
       setActivityPage(1);
       setActivitySearch("");
-      loadActivity(selectedEvent.id, 1, "");
+      loadActivity(selectedEvent.id, 1, "", selectedDayId ?? undefined);
     }
-  }, [selectedEvent, loadStats, loadActivity]);
+  }, [selectedEvent, loadStats, loadActivity, loadDays, selectedDayId]);
 
   useEffect(() => {
     if (!selectedEvent) return;
     const interval = setInterval(() => {
-      if (activityPage === 1 && !activitySearch) loadActivity(selectedEvent.id, 1, "");
-      loadStats(selectedEvent.id);
+      if (activityPage === 1 && !activitySearch) loadActivity(selectedEvent.id, 1, "", selectedDayId ?? undefined);
+      loadStats(selectedEvent.id, selectedDayId ?? undefined);
     }, 10000);
     return () => clearInterval(interval);
-  }, [selectedEvent, loadActivity, loadStats, activityPage, activitySearch]);
+  }, [selectedEvent, loadActivity, loadStats, activityPage, activitySearch, selectedDayId]);
 
   const handleEventChange = (eventId: number) => {
     setScanResult(null);
@@ -267,6 +309,8 @@ export function AccreditationScanClient() {
     setManualQuery("");
     setError("");
     setMode("scanner");
+    setEventDays([]);
+    setSelectedDayId(null);
     const ev = events.find((e) => e.id === eventId) || null;
     setSelectedEvent(ev);
     if (ev) localStorage.setItem("accreditation_event_id", String(ev.id));
@@ -285,7 +329,9 @@ export function AccreditationScanClient() {
     setScanResult(null);
     setError("");
     try {
-      const res = await apiClient<any>("/scanner/verify", { method: "POST", body: { token } });
+      const body: any = { token };
+      if (selectedDayId) body.event_day_id = selectedDayId;
+      const res = await apiClient<any>("/scanner/verify", { method: "POST", body });
       if (res.valid) setScanResult({ status: "found", message: `${res.guest.name}`, guest: res.guest, scannedToken: token });
       else setScanResult({ status: res.reason || "error", message: res.message, guest: res.guest, scannedToken: token });
     } catch (err: any) {
@@ -308,11 +354,12 @@ export function AccreditationScanClient() {
   const handleCheckin = async (token: string) => {
     try {
       const body: any = { token };
+      if (selectedDayId) body.event_day_id = selectedDayId;
       const loc = getEffectiveLocation();
       if (loc) body.location = loc;
       const res = await apiClient<any>("/scanner/checkin", { method: "POST", body });
       setScanResult({ status: res.status, message: res.message });
-      if (selectedEvent) { loadStats(selectedEvent.id); loadActivity(selectedEvent.id); }
+      if (selectedEvent) { loadStats(selectedEvent.id, selectedDayId ?? undefined); loadActivity(selectedEvent.id, 1, "", selectedDayId ?? undefined); }
     } catch (err: any) {
       setScanResult({ status: "error", message: err.message || "Check-in failed" });
     }
@@ -323,7 +370,7 @@ export function AccreditationScanClient() {
     const token = scanResult.guest.rsvp_token || scanResult.scannedToken;
     if (!token) return;
     await handleCheckin(token);
-    if (selectedEvent) { loadStats(selectedEvent.id); loadActivity(selectedEvent.id); }
+    if (selectedEvent) { loadStats(selectedEvent.id, selectedDayId ?? undefined); loadActivity(selectedEvent.id, 1, "", selectedDayId ?? undefined); }
   };
 
   // --- Manual handlers ---
@@ -332,7 +379,8 @@ export function AccreditationScanClient() {
     setSearching(true);
     setError("");
     try {
-      const res = await apiClient<{ guests: GuestResult[] }>(`/scanner/events/${selectedEvent.id}/guests?q=${encodeURIComponent(manualQuery)}`);
+      const url = `/scanner/events/${selectedEvent.id}/guests?q=${encodeURIComponent(manualQuery)}` + (selectedDayId ? `&event_day_id=${selectedDayId}` : "");
+      const res = await apiClient<{ guests: GuestResult[] }>(url);
       setManualResults(res.guests || []);
     } catch (err: any) { setError(err.message || "Search failed"); }
     setSearching(false);
@@ -343,6 +391,7 @@ export function AccreditationScanClient() {
     setError("");
     try {
       const body: any = { guest_id: guest.id };
+      if (selectedDayId) body.event_day_id = selectedDayId;
       const loc = getEffectiveLocation();
       if (loc) body.location = loc;
       const res = await apiClient<any>("/scanner/checkin", { method: "POST", body });
@@ -350,7 +399,7 @@ export function AccreditationScanClient() {
         showToast(`${guest.name} checked in`, "success");
         setManualResults((prev) => prev.map((g) => g.id === guest.id ? { ...g, checked_in: true } : g));
       } else showToast(`${res.message || "Check-in failed"}`, "error");
-      if (selectedEvent) { loadStats(selectedEvent.id); loadActivity(selectedEvent.id); }
+      if (selectedEvent) { loadStats(selectedEvent.id, selectedDayId ?? undefined); loadActivity(selectedEvent.id, 1, "", selectedDayId ?? undefined); }
     } catch (err: any) { showToast(err.message || "Check-in failed", "error"); }
     setCheckingIn(null);
   };
@@ -363,6 +412,7 @@ export function AccreditationScanClient() {
       if (guest && !guest.checked_in) {
           try {
             const body: any = { guest_id: guest.id };
+            if (selectedDayId) body.event_day_id = selectedDayId;
             const bLoc = getEffectiveLocation();
             if (bLoc) body.location = bLoc;
             await apiClient<any>("/scanner/checkin", { method: "POST", body }); successCount++;
@@ -371,7 +421,7 @@ export function AccreditationScanClient() {
     }
     showToast(`Checked in ${successCount} guest${successCount !== 1 ? "s" : ""}`, "success");
     setSelectedManualGuests(new Set());
-    if (selectedEvent) { loadStats(selectedEvent.id); loadActivity(selectedEvent.id); }
+    if (selectedEvent) { loadStats(selectedEvent.id, selectedDayId ?? undefined); loadActivity(selectedEvent.id, 1, "", selectedDayId ?? undefined); }
     setCheckingIn(null);
   };
 
@@ -390,7 +440,7 @@ export function AccreditationScanClient() {
       setManualResults((prev) => [g, ...prev]);
       setQaMsg({ ok: true, text: `${g.name} added: ready to check in` });
       setQaName(""); setQaPhone(""); setQaEmail(""); setQaCategory("");
-      if (selectedEvent) loadStats(selectedEvent.id);
+      if (selectedEvent) loadStats(selectedEvent.id, selectedDayId ?? undefined);
       if (qaCheckin) await handleManualCheckin(g);
     } catch (err: any) { setQaMsg({ ok: false, text: err.message || "Could not add guest" }); }
     setQaBusy(false);
@@ -585,6 +635,49 @@ export function AccreditationScanClient() {
             <div className="h-full bg-gradient-to-r from-teal-500 to-teal-600 transition-all duration-500 rounded-full" style={{ width: `${checkInPercentage}%` }} />
           </div>
         </div>
+
+        {/* Multi-day event selector */}
+        {eventDays.length > 0 && (
+          <div className="pt-3 border-t border-white/10">
+            <p className="text-xs font-semibold text-white/60 uppercase tracking-wide mb-2 flex items-center gap-2">
+              <Calendar className="w-3.5 h-3.5 text-teal-400" />
+              Accreditation Day
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {eventDays
+                .filter((d: Day) => d.is_active)
+                .map((d: Day) => (
+                  <button
+                    key={d.id}
+                    onClick={() => {
+                      setSelectedDayId(d.id);
+                      if (selectedEvent) {
+                        loadStats(selectedEvent.id, d.id);
+                        loadActivity(selectedEvent.id, 1, "", d.id);
+                      }
+                    }}
+                    className={`py-2 px-2.5 rounded-xl text-[10px] font-bold transition min-h-[36px] flex items-center gap-1.5 ${
+                      selectedDayId === d.id
+                        ? "bg-teal-600 text-white shadow-lg shadow-teal-500/30"
+                        : d.accreditation_open
+                        ? "bg-white/10 text-white/80 hover:bg-white/20 hover:text-white"
+                        : "bg-red-900/30 text-red-400 hover:bg-red-900/50 cursor-not-allowed opacity-60"
+                    }`}
+                    disabled={!d.accreditation_open}
+                  >
+                    <span>{d.name}</span>
+                    <span className="text-[9px] opacity-75">{d.checked_in ? `${d.checked_in}` : "0"} in</span>
+                    {!d.accreditation_open && <Lock className="w-2.5 h-2.5" />}
+                    {d.is_today && <span className="text-[8px] bg-teal-600 text-white px-1 rounded">TODAY</span>}
+                  </button>
+                ))}
+            </div>
+            <p className="text-[10px] text-white/40 mt-2">
+              Switching the day scopes scans, stats and activity to that day only. Guests accredited on other days are not counted here.
+            </p>
+          </div>
+        )}
+
         {selectedEvent?.id === NBC_EVENT_ID && (
           <div className="pt-3 border-t border-white/10">
             <p className="text-xs font-semibold text-white/60 uppercase tracking-wide mb-2">Accreditation Location</p>
@@ -817,6 +910,15 @@ export function AccreditationScanClient() {
                           <p className="text-sm font-bold text-teal-300">{scanResult.guest.category}</p>
                         </div>
                       )}
+                      {selectedDayId && eventDays.length > 0 && (() => {
+                        const d = eventDays.find((x: Day) => x.id === selectedDayId);
+                        return d ? (
+                          <div>
+                            <p className="text-xs text-white/50 uppercase tracking-wide">Accreditation Day</p>
+                            <p className="text-sm font-bold text-teal-300">{d.name} {d.is_today && <span className="ml-1 text-[10px] bg-teal-600 text-white px-1 rounded">TODAY</span>}</p>
+                          </div>
+                        ) : null;
+                      })()}
                       {scanResult.guest.party_size === 2 && (
                         <div>
                           <p className="text-xs text-white/50 uppercase tracking-wide">Party</p>

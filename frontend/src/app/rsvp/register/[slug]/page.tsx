@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { Calendar, Clock, MapPin, Check, X, Loader, User, Building, Briefcase } from "lucide-react";
 import { apiClient } from "@/lib/api-client";
+import { PhoneInput } from "@/components/shared/phone-input";
 import { inviteMusic } from "@/lib/invite-music";
 import BrandSplash from "@/components/shared/brand-splash";
 import EnvelopeSplash from "@/components/rsvp/EnvelopeSplash";
@@ -62,20 +63,9 @@ function formatTime(timeStr: string) {
   return `${h12}:${m} ${ampm}`;
 }
 
-const COUNTRY_CODES = [
-  { code: "+234", label: "Nigeria (+234)" },
-  { code: "+1", label: "USA / Canada (+1)" },
-  { code: "+44", label: "UK (+44)" },
-  { code: "+233", label: "Ghana (+233)" },
-  { code: "+254", label: "Kenya (+254)" },
-  { code: "+27", label: "South Africa (+27)" },
-  { code: "+971", label: "UAE (+971)" },
-  { code: "+91", label: "India (+91)" },
-];
-
-function fullPhoneNumber(countryCode: string, local: string) {
-  return (countryCode + " " + local).replace(/[^\d+]/g, "");
-}
+// The phone field is the shared searchable PhoneInput, whose value already
+// carries the dial code (for example +2348101143265), so nothing here needs to
+// prepend a country code any more.
 
 export default function EventRegistrationPage() {
   const params = useParams();
@@ -95,7 +85,6 @@ export default function EventRegistrationPage() {
   // shared detail fields
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
-  const [countryCode, setCountryCode] = useState("+234");
   const [email, setEmail] = useState("");
   const [organization, setOrganization] = useState("");
   const [subDepartment, setSubDepartment] = useState("");
@@ -224,7 +213,7 @@ export default function EventRegistrationPage() {
     try {
       await apiClient(`/rsvp/register/${slug}`, {
         method: "POST",
-        body: { name: name.trim(), phone: fullPhoneNumber(countryCode, phone), email: email.trim(), response, category: isNFW ? category : "" },
+        body: { name: name.trim(), phone: phone.trim(), email: email.trim(), response, category: isNFW ? category : "" },
       });
       setSubmitted(true);
     } catch (err: any) {
@@ -252,7 +241,7 @@ export default function EventRegistrationPage() {
     try {
       const body: any = {
         name: name.trim(),
-        phone: fullPhoneNumber(countryCode, phone),
+        phone: phone.trim(),
         email: email.trim(),
         response: "accepted",
       };
@@ -636,24 +625,13 @@ export default function EventRegistrationPage() {
                   <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider mb-1.5">
                     Phone Number <span className="text-red-500">*</span>
                   </label>
-                  <div className="flex gap-2">
-                    <select
-                      value={countryCode}
-                      onChange={e => setCountryCode(e.target.value)}
-                      className="rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm text-[#0D1B2A] focus:outline-none focus:ring-2 focus:ring-[#1ABC9C]"
-                    >
-                      {COUNTRY_CODES.map(c => (
-                        <option key={c.code} value={c.code}>{c.label}</option>
-                      ))}
-                    </select>
-                    <input
-                      type="tel"
-                      value={phone}
-                      onChange={e => setPhone(e.target.value)}
-                      placeholder="8012345678"
-                      className="flex-1 min-w-0 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-[#0D1B2A] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1ABC9C]"
-                    />
-                  </div>
+                  <PhoneInput
+                    value={phone}
+                    onChange={setPhone}
+                    placeholder="8012345678"
+                    size="md"
+                    inputClassName="text-[#0D1B2A] placeholder:text-slate-400 focus:ring-2 focus:ring-[#1ABC9C] rounded-r-xl"
+                  />
                 </div>
 
                 {isACAMB && (
@@ -739,6 +717,82 @@ export default function EventRegistrationPage() {
   if (!response) fieldErrors.push("Attendance Response");
   if (isNFW && !category) fieldErrors.push("Category");
 
+  const accepted = response === "accepted";
+  const isAnchorEvent = event.id === 85; // Anchor Evening of Bliss
+
+  if (submitted) {
+    return (
+      <div className="min-h-screen bg-[#0D1B2A] px-4 py-12 sm:py-16">
+        <div className="min-h-screen bg-[#0D1B2A] px-4 py-12 sm:py-16">
+          <div className="max-w-lg mx-auto">
+            <div className="rounded-2xl bg-white shadow-lg overflow-hidden">
+              {!isAnchorEvent && (event.cover_image || event.flyer_url) && (
+                <img src={event.cover_image || event.flyer_url || undefined} alt={event.title} className="w-full h-auto object-contain" />
+              )}
+              <div className="p-6 sm:p-8 text-center">
+              {accepted ? (
+                <>
+                  <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full" style={{ background: `${themeColor}1A` }}>
+                    <Check className="w-8 h-8" style={{ color: themeColor }} />
+                  </div>
+                  <h1 className="text-2xl font-bold text-[#0D1B2A]">Registration Received</h1>
+                  <div className="mt-6 rounded-xl p-5 text-left" style={{ background: `${themeColor}0D`, border: `1px solid ${themeColor}30` }}>
+                    <p className="text-sm font-semibold text-slate-800 mb-2">What happens next?</p>
+                    <ul className="text-sm text-slate-700 space-y-2 list-disc list-inside leading-relaxed">
+                      <li>Your registration details have been received and your event access is being processed.</li>
+                      <li>Once processed, your QR code will be sent via email or WhatsApp ahead of the event.</li>
+                      <li>This QR code is your access to the venue.</li>
+                      <li>Entry to the venue is strictly by valid QR access code.</li>
+                    </ul>
+                  </div>
+                  <div className="mt-6 rounded-xl bg-slate-50 border border-slate-200 p-4 text-left space-y-3">
+                    <div className="flex items-center gap-2.5 text-sm text-slate-600">
+                      <Calendar className="w-4 h-4 flex-shrink-0" style={{ color: themeColor }} />
+                      <span><strong>Date:</strong> {formatDate(event.date)}</span>
+                    </div>
+                    <div className="flex items-center gap-2.5 text-sm text-slate-600">
+                      <Clock className="w-4 h-4 flex-shrink-0" style={{ color: themeColor }} />
+                      <span><strong>Time:</strong> {formatTime(event.time)}</span>
+                    </div>
+                    <div className="flex items-center gap-2.5 text-sm text-slate-600">
+                      <MapPin className="w-4 h-4 flex-shrink-0" style={{ color: themeColor }} />
+                      <span><strong>Venue:</strong> {event.venue}</span>
+                    </div>
+                    <div className="flex items-center gap-2.5 text-sm text-slate-600">
+                      <User className="w-4 h-4 flex-shrink-0" style={{ color: themeColor }} />
+                      <span><strong>Host:</strong> {event.host_name}</span>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full" style={{ background: `${themeColor}1A` }}>
+                    <X className="w-8 h-8" style={{ color: themeColor }} />
+                  </div>
+                  <h1 className="text-2xl font-bold text-[#0D1B2A]">Thank You For Your Response</h1>
+                  <p className="mt-3 text-slate-600 leading-relaxed">
+                    We appreciate you letting us know. We hope to see you at a future event!
+                  </p>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+      <p className="mt-6 text-center text-xs text-white/40">
+        Powered by <span className="font-semibold" style={{ color: themeColor }}>Accredit Interactive</span>
+      </p>
+      {musicStartedRef.current && (
+        <button onClick={toggleMusic} className="fixed bottom-6 right-6 z-50 w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-all" style={{ backgroundColor: themeColor }}>
+          {musicPlaying
+            ? <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg>
+            : <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>}
+        </button>
+      )}
+    </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#f8f9fc]">
       <div className="max-w-2xl mx-auto px-4 py-6 sm:py-10">
@@ -777,7 +831,7 @@ export default function EventRegistrationPage() {
               </div>
             </div>
 
-            <div className="space-y-4">
+            <form className="space-y-4">
               {error && (
                 <div className="rounded-xl bg-red-50 border border-red-200 p-3">
                   <p className="text-sm font-medium text-red-800">{error}</p>
@@ -816,13 +870,12 @@ export default function EventRegistrationPage() {
                 <label className="block text-xs font-medium text-slate-500 uppercase tracking-wider mb-1.5">
                   Phone Number <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="tel"
+                <PhoneInput
                   value={phone}
-                  onChange={e => setPhone(e.target.value)}
-                  placeholder="08012345678"
-                  required
-                  className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-[#0D1B2A] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#1ABC9C]"
+                  onChange={setPhone}
+                  placeholder="8012345678"
+                  size="md"
+                  inputClassName="text-[#0D1B2A] placeholder:text-slate-400 focus:ring-2 focus:ring-[#1ABC9C] rounded-r-xl"
                 />
               </div>
 
@@ -874,7 +927,7 @@ export default function EventRegistrationPage() {
                   "Select an option above"
                 )}
               </button>
-            </div>
+            </form>
           </div>
 
           <div className="bg-slate-50 px-6 py-4 text-center border-t border-slate-200">

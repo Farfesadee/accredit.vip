@@ -26,6 +26,8 @@ type SendResult = {
   channels?: Record<string, any>;
   total_sent?: number;
   total_guests?: number;
+  skipped_invalid_phone?: number;
+  invalid_phone_guests?: { id: number; name: string; phone: string | null }[];
 };
 
 type BatchResult = {
@@ -545,11 +547,25 @@ export default function InvitesTabContent({
               {sendResult.channels ? (
                 <ul className="mt-1 space-y-1">
                   {Object.entries(sendResult.channels).map(([ch, info]: [string, any]) => (
-                    <li key={ch}>{ch}: {info.sent}/{info.total} sent{info.skipped_max_attempts > 0 ? ` (${info.skipped_max_attempts} skipped)` : ""}</li>
+                    <li key={ch}>{ch}: {info.sent}/{info.total} sent{info.skipped_max_attempts > 0 ? ` (${info.skipped_max_attempts} skipped)` : ""}{info.skipped_invalid_phone > 0 ? ` (${info.skipped_invalid_phone} wrong number)` : ""}</li>
                   ))}
                 </ul>
               ) : (
                 <p>Sent {sendResult.total_sent ?? 0} of {sendResult.total_guests ?? 0}</p>
+              )}
+              {!!sendResult.invalid_phone_guests?.length && (
+                <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3">
+                  <p className="font-semibold text-amber-900">
+                    {sendResult.invalid_phone_guests.length} guest(s) skipped for a wrong number
+                  </p>
+                  <p className="mt-1 text-amber-900">
+                    {sendResult.invalid_phone_guests.slice(0, 8).map((g) => `${g.name} (${(g.phone || "").trim() || "no number"})`).join(", ")}
+                    {sendResult.invalid_phone_guests.length > 8 ? ` and ${sendResult.invalid_phone_guests.length - 8} more` : ""}
+                  </p>
+                  <p className="mt-1 text-amber-800">
+                    Correct these in the guest list, then send again: guests who already received theirs will not be messaged twice.
+                  </p>
+                </div>
               )}
             </div>
           </div>

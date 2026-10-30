@@ -503,8 +503,12 @@ export default function GuestsTabContent({
         </h2>
         <div className="text-sm text-slate-600 mb-4 space-y-2">
           <p className="font-medium">Upload a CSV file with these columns:</p>
+          <p className="text-xs font-semibold text-slate-700">
+            Every row needs a Name plus an Email address or a Phone number. Rows missing both are skipped.
+          </p>
           <ul className="space-y-1.5 text-xs text-slate-500 ml-1">
             <li><strong className="text-slate-700">Name</strong> <span className="text-red-500">*</span>: Guest full name</li>
+            <li><strong className="text-slate-700">Email</strong> or <strong className="text-slate-700">Phone</strong> <span className="text-red-500">*</span>: at least one, e.g. <span className="font-mono">guest@example.com</span> or <span className="font-mono">+2348012345678</span></li>
             <li><strong className="text-slate-700">Phone</strong>: <span className="font-mono">+2348012345678</span> or local format (recommended for WhatsApp/SMS)</li>
             <li><strong className="text-slate-700">Email</strong>: <span className="font-mono">guest@example.com</span></li>
             {eventId === 77 && (
@@ -514,7 +518,7 @@ export default function GuestsTabContent({
             <li><strong className="text-slate-700">Organization</strong> (optional): brand / media house name, shown on the guest row</li>
             )}
           </ul>
-          <p className="text-xs text-slate-400">The first row must be column headers. Invalid rows are skipped with a warning.</p>
+          <p className="text-xs text-slate-400">The first row must be column headers. Invalid rows are skipped and counted in the upload result.</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2">
           <input

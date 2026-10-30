@@ -6,10 +6,11 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { useAuth } from "@/contexts/auth-context";
 import { ChevronLeft, Search, CheckCircle2, XCircle, Eye, Trash2, Menu, X, BarChart3, Calendar, Users, Settings, Loader, Clock, AlertTriangle, CreditCard, DollarSign, Database } from "lucide-react";
-import { apiClient } from "@/lib/api-client";
+import { apiClient, API_BASE } from "@/lib/api-client";
 import { NotificationBell } from "@/components/notification-bell";
 import { AdminLogoutButton } from "@/components/admin/logout-button";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { EventDaysCard } from "@/components/admin/event-days-card";
 
 function maskEmail(email: string) {
   const [local, domain] = email.split("@");
@@ -95,6 +96,9 @@ export default function AdminEventsPage() {
   const [gNotes, setGNotes] = useState("");
   const [gRsvp, setGRsvp] = useState("pending");
   const [guestMsg, setGuestMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvBusy, setCsvBusy] = useState(false);
+  const [csvMsg, setCsvMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   // Announcements state
   const [annList, setAnnList] = useState<any[]>([]);
@@ -147,6 +151,8 @@ export default function AdminEventsPage() {
     setStatusSel(e.status || "draft");
     setCtrlMsg(null);
     resetGuestForm();
+    setCsvFile(null);
+    setCsvMsg(null);
     searchGuests(e.id, "");
   };
 
@@ -320,6 +326,44 @@ export default function AdminEventsPage() {
     } catch (err: any) {
       setGuestMsg({ ok: false, text: err.message || "Delete failed" });
     }
+  };
+
+  const uploadGuestCsv = async () => {
+    if (!ctrlEvent || !csvFile) return;
+    setCsvBusy(true);
+    setCsvMsg(null);
+    try {
+      const token =
+        sessionStorage.getItem("accreditation_token") || localStorage.getItem("access_token");
+      const form = new FormData();
+      form.append("file", csvFile);
+      const res = await fetch(`${API_BASE}/admin/events/${ctrlEvent.id}/guests/upload`, {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: form,
+        credentials: "include",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const detail = typeof data.detail === "string" ? data.detail : "Upload failed";
+        throw new Error(detail);
+      }
+      const imported = Number(data.imported || 0);
+      const skipped = Number(data.skipped || 0);
+      setCsvMsg({
+        ok: true,
+        text:
+          `Imported ${imported} guest${imported === 1 ? "" : "s"}` +
+          (skipped
+            ? `, skipped ${skipped} row${skipped === 1 ? "" : "s"} without a valid email or phone`
+            : ""),
+      });
+      setCsvFile(null);
+      searchGuests(ctrlEvent.id, guestQuery);
+    } catch (err: any) {
+      setCsvMsg({ ok: false, text: err.message || "Upload failed" });
+    }
+    setCsvBusy(false);
   };
 
   // ---- Announcements ----
@@ -652,6 +696,9 @@ export default function AdminEventsPage() {
                 <button onClick={openReport} disabled={ctrlBusy} className="mt-2 w-full py-2.5 rounded-xl border-2 border-[#0D1B2A] text-[#0D1B2A] font-bold text-sm hover:bg-[#0D1B2A] hover:text-white transition-all disabled:opacity-50">
                   Open full report (HTML infographic)
                 </button>
+
+                {/* Multi-day schedule: per-day accreditation switches and per-day reports */}
+                <EventDaysCard eventId={ctrlEvent.id} eventDate={ctrlEvent.event_date} />
               </div>
             )}
           </div>
@@ -688,6 +735,38 @@ export default function AdminEventsPage() {
                 ))}
               </div>
             )}
+            <div className="rounded-xl bg-[#f8f9fc] border border-[#e8edf2] p-4 mb-3">
+              <p className="text-xs font-black uppercase tracking-wider text-[#64748b] mb-1">Bulk import CSV</p>
+              <p className="text-xs text-[#94a3b8] mb-3">
+                Every row needs a <strong className="text-slate-700">name</strong> plus an{" "}
+                <strong className="text-slate-700">email</strong> or a{" "}
+                <strong className="text-slate-700">phone number</strong>. Optional columns:
+                category, organization.
+              </p>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={(e) => {
+                    setCsvFile(e.target.files?.[0] || null);
+                    setCsvMsg(null);
+                  }}
+                  className="flex-1 min-w-0 text-xs text-[#64748b] file:mr-3 file:px-3 file:py-2 file:rounded-lg file:border-0 file:bg-[#0D1B2A] file:text-white file:text-xs file:font-bold"
+                />
+                <button
+                  onClick={uploadGuestCsv}
+                  disabled={!csvFile || csvBusy}
+                  className="px-4 py-2.5 rounded-xl bg-[#1ABC9C] text-white text-sm font-bold hover:bg-[#16A085] disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {csvBusy ? "Uploading..." : "Upload CSV"}
+                </button>
+              </div>
+              {csvMsg && (
+                <p className={`text-xs font-semibold mt-2 ${csvMsg.ok ? "text-emerald-600" : "text-red-600"}`}>
+                  {csvMsg.text}
+                </p>
+              )}
+            </div>
             <div className="rounded-xl bg-[#f8f9fc] border border-[#e8edf2] p-4">
               <p className="text-xs font-black uppercase tracking-wider text-[#64748b] mb-3">{editingGuest ? `Editing ${editingGuest.name}` : "Quick add guest"}</p>
               <div className="grid gap-2 sm:grid-cols-2">

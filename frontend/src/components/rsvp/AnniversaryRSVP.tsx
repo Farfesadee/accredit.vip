@@ -276,6 +276,10 @@ function AnnivPhoneInput({
 export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Props) {
   const c = content || {};
   const poster: string = c.invite_poster_url || c.hero_image || "";
+  // Client directive (2026-10-26): the experience opens on the "thirty years"
+  // poster, so the cover has its own artwork. The invitation below keeps the
+  // traditional attire portrait in the hero.
+  const coverPoster: string = c.cover_poster_url || poster;
   const film: string = c.invite_video_url || c.video_url || "";
   const groom: string = c.groom || "Engr. Obi";
   const bride: string = c.bride || "Dr. Blessing";
@@ -289,7 +293,6 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
       ? c.photos
       : [
           { url: "/uploads/anniv-g1.jpg?v=3", caption: "Still them", note: "Thirty years on" },
-          { url: "/uploads/anniv-g2.jpg?v=3", caption: "Black tie", note: "An evening out" },
           { url: "/uploads/anniv-g3.jpg?v=3", caption: "Out and about", note: "Somewhere warm" },
           { url: "/uploads/anniv-g4.jpg?v=3", caption: "Laughing", note: "Still" },
           { url: "/uploads/anniv-g5.jpg?v=3", caption: "Dressed up", note: "Ready to celebrate" },
@@ -540,7 +543,7 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
         <video
           ref={filmRef}
           src={film}
-          poster={phase === "film" ? poster : undefined}
+          poster={phase === "film" ? coverPoster : undefined}
           playsInline
           muted
           preload="auto"
@@ -581,8 +584,8 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
 
         {phase === "cover" && (
           <>
-            {/* The cover: their own photograph above, the words on a purple
-                panel beneath, so the picture, "Together since December 1996",
+            {/* The cover: the "thirty years" poster artwork above, the words on
+                a purple panel beneath, so the picture, "Together since 1996",
                 the names and the date all read inside one phone screen. Two
                 copies of the same composition are clipped down the middle and
                 part like a curtain when the invitation opens by itself. */}
@@ -603,17 +606,17 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
               >
                 <div className="absolute inset-0 flex flex-col md:block">
                   <div className="relative flex h-[50svh] w-full flex-none items-center justify-center overflow-hidden px-4 md:absolute md:inset-y-0 md:left-auto md:right-0 md:h-full md:w-[54%] md:px-8">
-                    {poster && (
+                    {coverPoster && (
                       <img
-                        src={poster}
+                        src={coverPoster}
                         alt={`${groom} and ${bride}`}
-                        width={1200}
-                        height={1500}
+                        width={1166}
+                        height={1165}
                         className="h-auto w-auto max-h-full max-w-full"
                         style={{
-                          // The whole photograph, never a crop. A cover crop put
-                          // the edge of the frame through the man, so the picture
-                          // now sits complete on the purple field at every width.
+                          // The whole poster, never a crop. A cover crop put the
+                          // edge of the frame through the man, so the picture now
+                          // sits complete on the purple field at every width.
                           objectFit: "contain",
                           boxShadow: "0 30px 80px rgba(20,15,60,0.45)",
                           border: "1px solid rgba(230,230,250,0.22)",
@@ -636,7 +639,7 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
                     className="anniv-rise text-[9.5px] uppercase sm:text-[10.5px]"
                     style={{ letterSpacing: "0.42em", color: LAV, animationDelay: "200ms" }}
                   >
-                    Together since {c.since || "December 1996"}
+                    Together since {c.since || "1996"}
                   </p>
                   <h1
                     className="anniv-rise anniv-script-lh mt-3 flex flex-wrap items-baseline justify-center gap-x-2 md:justify-start"
@@ -813,7 +816,7 @@ export default function AnniversaryRSVP({ slug, content, guestToken, guest }: Pr
                   className="text-[9.5px] uppercase sm:text-[11px]"
                   style={{ letterSpacing: "0.44em", color: LAV }}
                 >
-                  Together since {c.since || "December 1996"}
+                  Together since {c.since || "1996"}
                 </p>
                 <h1
                   className="anniv-script-lh mt-4 flex flex-wrap items-baseline justify-center gap-x-3 gap-y-1 lg:justify-start"

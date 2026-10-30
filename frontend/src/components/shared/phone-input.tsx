@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 export type Country = { code: string; iso: string; name: string };
 
@@ -241,6 +241,69 @@ export const COUNTRIES: Country[] = [
   { code: "+263", iso: "ZW", name: "Zimbabwe" },
 ];
 
+const NIGERIA = COUNTRIES[0];
+
+function digitsOf(value: string): string {
+  return (value || "").replace(/\D/g, "");
+}
+
+/** Longest dial code wins, so +1242 (Bahamas) never collapses into +1. */
+function detectCountry(value: string): Country | null {
+  if (!value || !value.startsWith("+")) return null;
+  let best: Country | null = null;
+  for (const c of COUNTRIES) {
+    if (c.code && value.startsWith(c.code) && (!best || c.code.length > best.code.length)) {
+      best = c;
+    }
+  }
+  return best;
+}
+
+function countryByIso(iso: string): Country {
+  return COUNTRIES.find((c) => c.iso === iso) || NIGERIA;
+}
+
+/**
+ * Ranked search for the country picker. A query can be a country name (full or
+ * partial), a two letter ISO code, or a dial code with or without the plus
+ * ("44", "+44"). Exact dial-code matches come first so typing "44" offers the
+ * United Kingdom before every country that merely contains 44.
+ */
+function searchCountries(raw: string): Country[] {
+  const q = raw.trim().toLowerCase();
+  if (!q) return COUNTRIES;
+  const qDigits = q.replace(/\D/g, "");
+  const scored: { country: Country; score: number }[] = [];
+
+  for (const country of COUNTRIES) {
+    const name = country.name.toLowerCase();
+    const iso = country.iso.toLowerCase();
+    const code = country.code.replace(/\D/g, "");
+    let score = -1;
+
+    if (iso === q) score = 110;
+    else if (qDigits && code === qDigits) score = 100;
+    else if (name === q) score = 95;
+    else if (name.startsWith(q)) score = 80;
+    else if (qDigits && code.startsWith(qDigits)) score = 75;
+    else if (iso.startsWith(q)) score = 70;
+    else if (name.includes(q)) score = 60;
+    else if (qDigits && qDigits.length > 1 && code.includes(qDigits)) score = 40;
+
+    if (score >= 0) scored.push({ country, score });
+  }
+
+  scored.sort((a, b) => {
+    if (b.score !== a.score) return b.score - a.score;
+    // Nigeria is the platform default, so it wins any exact tie ("nig" should
+    // offer Nigeria before Niger). Everything else stays alphabetical.
+    if (a.country.iso === NIGERIA.iso) return -1;
+    if (b.country.iso === NIGERIA.iso) return 1;
+    return a.country.name.localeCompare(b.country.name);
+  });
+  return scored.map((s) => s.country);
+}
+
 type Props = {
   value: string;
   onChange: (value: string) => void;
@@ -248,6 +311,8 @@ type Props = {
   required?: boolean;
   className?: string;
   inputClassName?: string;
+  /** "md" matches the taller rounded-xl fields used on the public RSVP forms. */
+  size?: "sm" | "md";
 };
 
 export function PhoneInput({
@@ -257,48 +322,316 @@ export function PhoneInput({
   required,
   className = "",
   inputClassName = "",
+  size = "sm",
 }: Props) {
-  const match = COUNTRIES.find((c) => c.code !== "" && value.startsWith(c.code));
-  const selected = match || COUNTRIES[0];
+  const [iso, setIso] = useState(() => detectCountry(value)?.iso ?? NIGERIA.iso);
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [highlight, setHighlight] = useState(0);
+  const [rect, setRect] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    maxHeight: number;
+  } | null>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const numberRef = useRef<HTMLInputElement>(null);
 
-  const displayValue = selected && value.startsWith(selected.code)
-    ? value.slice(selected.code.length)
-    : value;
+  // The panel is fixed-positioned from the trigger's own rectangle, so it is
+  // never clipped by a card, a modal's overflow or a scrolling table.
+  const place = () => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const gap = 6;
+    const margin = 10;
+    const spaceBelow = window.innerHeight - r.bottom - gap - margin;
+    const spaceAbove = r.top - gap - margin;
+    const openUp = spaceBelow < 240 && spaceAbove > spaceBelow;
+    const width = Math.min(Math.max(r.width + 150, 288), window.innerWidth - margin * 2);
+    let left = r.left;
+    if (left + width > window.innerWidth - margin) left = window.innerWidth - margin - width;
+    if (left < margin) left = margin;
+    const available = openUp ? spaceAbove : spaceBelow;
+    const maxHeight = Math.max(180, Math.min(available, 360));
+    setRect({
+      top: openUp ? Math.max(margin, r.top - gap - maxHeight) : r.bottom + gap,
+      left,
+      width,
+      maxHeight,
+    });
+  };
+
+  const detected = detectCountry(value);
+  const picked = countryByIso(iso);
+  // A number that arrives from outside (prefill, paste, edit form) brings its own
+  // dial code, so it wins. Codes are compared, not countries: +1 is shared by the
+  // US, Canada and the Caribbean, and the guest's own pick must not be flipped.
+  const active = detected && detected.code !== picked.code ? detected : picked;
+
+  // Keep the dropdown in step with a value that was set from outside.
+  useEffect(() => {
+    const found = detectCountry(value);
+    if (found && found.code !== countryByIso(iso).code) setIso(found.iso);
+  }, [value, iso]);
+
+  const codeDigits = active.code.replace(/\D/g, "");
+  const displayValue = value.startsWith(active.code)
+    ? value.slice(active.code.length).replace(/\D/g, "")
+    : digitsOf(value);
 
   const handleNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value.replace(/\D/g, "");
-    const codeDigits = selected.code.replace(/\D/g, "");
-    const num = raw.startsWith(codeDigits) ? raw.slice(codeDigits.length) : raw;
-    onChange(`${selected.code}${num}`);
+    const raw = e.target.value;
+    // A pasted international number ("+44 7700 900123" or "00447700900123")
+    // carries its own country, so adopt it instead of stacking a second code.
+    if (/^\s*(\+|00)/.test(raw)) {
+      let pasted = digitsOf(raw);
+      if (pasted.startsWith("00")) pasted = pasted.slice(2);
+      const found = detectCountry(`+${pasted}`);
+      if (found) {
+        const rest = pasted.slice(found.code.replace(/\D/g, "").length);
+        setIso(found.iso);
+        onChange(rest ? `${found.code}${rest}` : "");
+        return;
+      }
+    }
+    const typed = digitsOf(raw);
+    const num = typed.startsWith(codeDigits) ? typed.slice(codeDigits.length) : typed;
+    onChange(num ? `${active.code}${num}` : "");
   };
 
-  const handleCodeChange = (code: string) => {
-    const country = COUNTRIES.find((c) => c.code === code) || COUNTRIES[0];
-    const num = value.replace(/^\+\d+/, "");
-    onChange(num ? `${country.code}${num}` : "");
+  const handleCodeChange = (nextIso: string) => {
+    const next = countryByIso(nextIso);
+    // Keep whatever the guest has already typed and simply re-code it. The old
+    // version stripped the whole value here, which wiped the number and snapped
+    // the dropdown back to Nigeria on every change.
+    const typed = digitsOf(value);
+    const previous = active.code.replace(/\D/g, "");
+    const local = previous && typed.startsWith(previous) ? typed.slice(previous.length) : typed;
+    setIso(next.iso);
+    onChange(local ? `${next.code}${local}` : "");
   };
+
+  // ---- searchable picker -------------------------------------------------
+  // A native <select> with 229 options is a scroll marathon on a phone, so the
+  // code is a proper combobox: type a country name, a two letter code or the
+  // dial code itself.
+
+  const results = useMemo(() => searchCountries(query), [query]);
+
+  const openPanel = () => {
+    setQuery("");
+    setHighlight(0);
+    setOpen(true);
+  };
+
+  const pickCountry = (nextIso: string) => {
+    handleCodeChange(nextIso);
+    setOpen(false);
+    // Hand the cursor straight to the number box so picking a country is one
+    // action, not two.
+    if (typeof window !== "undefined") {
+      window.requestAnimationFrame(() => numberRef.current?.focus({ preventScroll: true }));
+    }
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    place();
+    const follow = () => place();
+    // Capture phase so the panel follows the trigger inside a scrolling modal too.
+    window.addEventListener("scroll", follow, true);
+    window.addEventListener("resize", follow);
+    return () => {
+      window.removeEventListener("scroll", follow, true);
+      window.removeEventListener("resize", follow);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  useEffect(() => {
+    // The search box only exists once the panel has been measured, so this waits
+    // for `rect`. The guard keeps a scroll (which re-measures) from stealing focus
+    // back while the guest is typing in the number field.
+    if (!open || !rect) return;
+    const active = document.activeElement;
+    if (active && panelRef.current?.contains(active)) return;
+    searchRef.current?.focus({ preventScroll: true });
+  }, [open, rect]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      const target = e.target as Node | null;
+      if (target && (wrapRef.current?.contains(target) || panelRef.current?.contains(target))) return;
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("touchstart", onDown);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("touchstart", onDown);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    // Keep the highlighted row in view while arrowing through the list.
+    if (!open) return;
+    const row = listRef.current?.querySelector<HTMLElement>(`[data-row="${highlight}"]`);
+    row?.scrollIntoView({ block: "nearest" });
+  }, [highlight, open, results]);
+
+  const onSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setHighlight((h) => Math.min(h + 1, results.length - 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setHighlight((h) => Math.max(h - 1, 0));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const chosen = results[highlight];
+      if (chosen) pickCountry(chosen.iso);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      setOpen(false);
+    } else if (e.key === "Tab") {
+      setOpen(false);
+    }
+  };
+
+  const skin =
+    size === "md"
+      ? { wrap: "h-12 rounded-xl", trigger: "h-12 rounded-l-xl pl-3 pr-2", input: "rounded-r-xl px-4 py-3" }
+      : { wrap: "h-10 rounded-lg", trigger: "h-10 rounded-l-lg pl-2 pr-1.5", input: "rounded-r-lg px-3 py-2" };
 
   return (
-    <div className={`flex rounded-lg border border-slate-200 bg-white overflow-hidden h-10 ${className}`}>
-      <select
-        value={selected.code}
-        onChange={(e) => handleCodeChange(e.target.value)}
-        className="flex-shrink-0 border-r border-slate-200 bg-slate-50 pl-2 pr-1 text-sm outline-none max-w-[132px]"
-        aria-label="Country code"
-      >
-        {COUNTRIES.map((c) => (
-          <option key={`${c.iso}-${c.code}`} value={c.code}>
-            {flagEmoji(c.iso)} {c.iso} {c.code}
-          </option>
-        ))}
-      </select>
+    <div className={`flex border border-slate-200 bg-white ${skin.wrap} ${className}`}>
+      <div ref={wrapRef} className="relative flex-shrink-0">
+        <button
+          type="button"
+          onClick={() => (open ? setOpen(false) : openPanel())}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowDown" && !open) {
+              e.preventDefault();
+              openPanel();
+            }
+          }}
+          aria-label="Country code"
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          className={`flex items-center gap-1 border-r border-slate-200 bg-slate-50 text-sm text-slate-700 outline-none hover:bg-slate-100 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-500 ${skin.trigger}`}
+        >
+          <span className="text-base leading-none">{flagEmoji(active.iso)}</span>
+          <span className="font-medium whitespace-nowrap">{active.code}</span>
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            className={`text-slate-400 transition-transform ${open ? "rotate-180" : ""}`}
+            aria-hidden="true"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" />
+          </svg>
+        </button>
+
+        {open && rect && (
+          <div
+            ref={panelRef}
+            style={{
+              position: "fixed",
+              top: rect.top,
+              left: rect.left,
+              width: rect.width,
+              maxHeight: rect.maxHeight,
+            }}
+            className="z-[80] flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10"
+          >
+            <div className="flex items-center gap-1.5 border-b border-slate-100 px-2.5 py-2">
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                className="flex-shrink-0 text-slate-400"
+                aria-hidden="true"
+              >
+                <circle cx="11" cy="11" r="7" />
+                <path strokeLinecap="round" d="m20 20-3.5-3.5" />
+              </svg>
+              <input
+                ref={searchRef}
+                value={query}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setHighlight(0);
+                }}
+                onKeyDown={onSearchKeyDown}
+                placeholder="Search country or code"
+                aria-label="Search country"
+                className="w-full bg-transparent text-[16px] text-slate-800 outline-none placeholder:text-slate-400 sm:text-sm"
+              />
+              {query && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuery("");
+                    setHighlight(0);
+                    searchRef.current?.focus();
+                  }}
+                  aria-label="Clear search"
+                  className="flex-shrink-0 rounded p-0.5 text-slate-400 hover:text-slate-600"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+                    <path strokeLinecap="round" d="M6 6l12 12M18 6 6 18" />
+                  </svg>
+                </button>
+              )}
+            </div>
+
+            <div ref={listRef} role="listbox" aria-label="Countries" className="flex-1 overflow-y-auto overscroll-contain py-1">
+              {results.length === 0 && (
+                <p className="px-3 py-4 text-center text-xs text-slate-500">No country matches that.</p>
+              )}
+              {results.map((c, i) => (
+                <button
+                  key={c.iso}
+                  type="button"
+                  data-row={i}
+                  role="option"
+                  aria-selected={c.iso === active.iso}
+                  onMouseEnter={() => setHighlight(i)}
+                  onClick={() => pickCountry(c.iso)}
+                  className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm ${
+                    i === highlight ? "bg-teal-50" : "bg-white"
+                  } ${c.iso === active.iso ? "font-semibold text-teal-700" : "text-slate-700"}`}
+                >
+                  <span className="text-base leading-none">{flagEmoji(c.iso)}</span>
+                  <span className="flex-1 truncate">{c.name}</span>
+                  <span className="flex-shrink-0 tabular-nums text-slate-500">{c.code}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
       <input
+        ref={numberRef}
         type="tel"
         value={displayValue}
         onChange={handleNumberChange}
         placeholder={placeholder}
         required={required}
-        className={`flex-1 bg-transparent px-3 py-2 text-sm outline-none min-w-0 ${inputClassName}`}
+        className={`flex-1 bg-transparent text-sm outline-none min-w-0 ${skin.input} ${inputClassName}`}
       />
     </div>
   );

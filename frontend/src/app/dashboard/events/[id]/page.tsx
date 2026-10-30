@@ -42,13 +42,15 @@ type Guest = {
 };
 
 type SendResult = {
-  channels?: Record<string, { batch_id: number; sent: number; total: number; skipped_max_attempts?: number }>;
+  channels?: Record<string, { batch_id: number; sent: number; total: number; skipped_max_attempts?: number; skipped_invalid_phone?: number; invalid_phone_guests?: { id: number; name: string; phone: string | null }[] }>;
   total_sent?: number;
   total_guests?: number;
   batch_id?: number;
   channel?: string;
   sent?: number;
   total?: number;
+  skipped_invalid_phone?: number;
+  invalid_phone_guests?: { id: number; name: string; phone: string | null }[];
 };
 
 type RSVPStats = {
@@ -458,12 +460,23 @@ function EventDetailContent() {
         const detail = typeof data.detail === "string" ? data.detail : "Upload failed";
         throw new Error(detail);
       }
-      showToast(`Imported ${data.imported} guests`);
+      const skipped = Number(data.skipped || 0);
+      showToast(
+        `Imported ${data.imported} guest${Number(data.imported) === 1 ? "" : "s"}` +
+          (skipped
+            ? `, skipped ${skipped} row${skipped === 1 ? "" : "s"} without a valid email or phone`
+            : "")
+      );
       setCsvFile(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
       loadGuests(); loadRsvpStats();
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Upload failed. Check CSV format (name, phone, email columns).", "error");
+      showToast(
+        err instanceof Error
+          ? err.message
+          : "Upload failed. Every row needs a name plus an email or a phone number.",
+        "error"
+      );
     }
     setCsvUploading(false);
   };
@@ -491,7 +504,17 @@ function EventDetailContent() {
         method: "POST", body,
       });
       setSendResult(res);
-      showToast("Invites sent successfully");
+      const skipped: { id: number; name: string; phone: string | null }[] = res.invalid_phone_guests || [];
+      if (skipped.length) {
+        const names = skipped.slice(0, 3).map((g) => g.name).join(", ");
+        const more = skipped.length > 3 ? ` and ${skipped.length - 3} more` : "";
+        showToast(
+          `Invites sent. ${skipped.length} guest(s) skipped for a wrong number: ${names}${more}. Fix their numbers in the guest list and send again.`,
+          "error"
+        );
+      } else {
+        showToast("Invites sent successfully");
+      }
       loadLogs();
       loadGuests();
     } catch (err: any) {
@@ -505,9 +528,13 @@ function EventDetailContent() {
         });
         setSendError("Payment required to re-send invites.");
       } else {
-        const errMsg = typeof detail === "string" ? detail : "Could not send invites.";
+        const bad: { name: string; phone: string | null }[] = detail?.invalid_phone_guests || [];
+        const badList = bad.length
+          ? `\n\nWrong numbers:\n${bad.slice(0, 10).map((g) => `${g.name}: ${g.phone || "no number"}`).join("\n")}${bad.length > 10 ? `\nand ${bad.length - 10} more` : ""}`
+          : "";
+        const errMsg = (typeof detail === "string" ? detail : detail?.message || "Could not send invites.") + badList;
         setSendError(errMsg);
-        showToast(errMsg, "error");
+        showToast("Could not send invites", "error");
       }
     }
     setSending(false);
@@ -578,9 +605,25 @@ function EventDetailContent() {
     try {
       const res = await apiClient<any>(`/events/${id}/send-qrs`, { method: "POST", body: { channels } });
       setSendResult(res);
+      const skipped: { id: number; name: string; phone: string | null }[] = res.invalid_phone_guests || [];
+      if (skipped.length) {
+        const names = skipped.slice(0, 3).map((g) => g.name).join(", ");
+        const more = skipped.length > 3 ? ` and ${skipped.length - 3} more` : "";
+        showToast(
+          `QR codes sent. ${skipped.length} guest(s) skipped for a wrong number: ${names}${more}.`,
+          "error"
+        );
+      }
       loadLogs();
-    } catch (err) {
-      setSendError(err instanceof Error ? err.message : "Could not send QR codes.");
+      loadGuests();
+    } catch (err: any) {
+      const detail = err?.detail;
+      const bad: { name: string; phone: string | null }[] = detail?.invalid_phone_guests || [];
+      const badList = bad.length
+        ? `\n\nWrong numbers:\n${bad.slice(0, 10).map((g) => `${g.name}: ${g.phone || "no number"}`).join("\n")}${bad.length > 10 ? `\nand ${bad.length - 10} more` : ""}`
+        : "";
+      const msg = (typeof detail === "string" ? detail : detail?.message || err?.message || "Could not send QR codes.") + badList;
+      setSendError(msg);
     }
     setSending(false);
   };

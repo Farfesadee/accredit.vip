@@ -23,6 +23,10 @@ from app.services.sms_service import send_sms
 from app.services.whatsapp_service import send_whatsapp
 from app.services.whatsapp_cloud_service import send_whatsapp_cloud
 from app.services.qr_service import qr_to_url, styled_qr_to_url
+from app.api.anchor_copy import (
+    _build_anchor_invite_message,
+    _build_anchor_qr_message,
+)
 
 RESEND_PRICE_PER_GUEST = 500  # NGN per guest for re-sending
 
@@ -49,11 +53,28 @@ class SendGuestInviteRequest(BaseModel):
         return self.channels if self.channels else [self.channel]
 
 
-def is_valid_phone(value: str | None) -> bool:
+def phone_digits(value: str | None) -> str:
+    """Digits only, so +234 803 123 4567 and (0803) 123-4567 both survive."""
     if not value:
-        return False
-    compact = re.sub(r"[\s().-]", "", value)
-    return bool(re.fullmatch(r"\+?\d{7,15}", compact))
+        return ""
+    digits = re.sub(r"\D", "", str(value))
+    # A pasted country code often doubles up (+234 234 810 ...). Collapse it so the
+    # number is usable instead of being flagged as invalid.
+    if digits.startswith("234234") and len(digits) > 12:
+        digits = "234" + digits[6:]
+    return digits
+
+
+def is_valid_phone(value: str | None) -> bool:
+    """A number is sendable when it carries 7 to 15 digits.
+
+    Anything the senders can normalise themselves (spaces, dashes, brackets,
+    a leading 0, a missing +, a doubled country code) must not block a batch,
+    so only genuinely unusable entries (blank, letters, too short, too long)
+    fail here.
+    """
+    digits = phone_digits(value)
+    return 7 <= len(digits) <= 15
 
 
 async def _send_whatsapp(to: str, message: str, media_url: str | None = None, content_vars: dict | None = None, media_urls: list[str] | None = None) -> tuple[bool, str | None]:
@@ -129,7 +150,12 @@ def invite_link_for(event: Event, guest: Guest) -> str:
     Every other event keeps the personal guest link, and QR passes always stay
     personal.
     """
-    from app.api.event_registration import experience_for
+    from app.api.event_registration import experience_for, is_anchor_event
+
+    # Anchor Evening of Bliss (event 85) is invited first from the dashboard, so
+    # its invite must carry the guest's own link rather than the public page.
+    if is_anchor_event(event):
+        return f"{settings.FRONTEND_URL}/rsvp/{guest.rsvp_token}"
 
     if event.slug and experience_for(event) != "standard":
         return f"{settings.FRONTEND_URL}/rsvp/register/{event.slug}"
@@ -475,7 +501,7 @@ def _anniv_shell(inner: str, tracking_pixel: str = "") -> str:
         "font-family:Georgia,'Times New Roman',serif;color:" + ANNIV_CREAM + '">'
         '<div style="padding:28px 26px 20px;text-align:center;border-bottom:1px solid rgba(195,178,222,0.28)">'
         '<p style="margin:0 0 10px;font-family:Arial,Helvetica,sans-serif;font-size:9px;'
-        f'letter-spacing:5px;color:{ANNIV_LAV};text-transform:uppercase">Together since December 1996</p>'
+        f'letter-spacing:5px;color:{ANNIV_LAV};text-transform:uppercase">Together since 1996</p>'
         f'<p style="margin:0;font-size:26px;letter-spacing:2px;color:{ANNIV_CREAM}">{ANNIV_COUPLE_HTML}</p>'
         '<p style="margin:6px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
         f'letter-spacing:4px;color:{ANNIV_LAV};text-transform:uppercase">30th Wedding Anniversary</p>'
@@ -716,8 +742,14 @@ def _build_invite_message(
             custom_subject=custom_subject, custom_body=custom_body,
         )
 
-    from app.api.event_registration import is_gala_event as _is_gala, is_anniversary_event as _is_anniv
+    from app.api.event_registration import is_gala_event as _is_gala, is_anniversary_event as _is_anniv, is_anchor_event as _is_anchor
 
+    # Anchor Evening of Bliss (event 85 only): the client supplied the wording,
+    # so their invitation goes out as written with the guest's own RSVP link.
+    if _is_anchor(event) and not custom_subject and not custom_body:
+        return _build_anchor_invite_message(
+            guest, event, invite_link_for(event, guest), flyer_url=flyer_url
+        )
     if _is_anniv(event) and not custom_subject and not custom_body:
         return _build_anniv_invite_message(
             guest, event, flyer_url, qr_image_url=qr_image_url, qr_url=qr_url, message_id=message_id
@@ -731,6 +763,20 @@ def _build_invite_message(
     # words; only the presentation is event specific.
     if getattr(event, "id", None) == 78:
         return _build_mobola_invite_message(
+            guest,
+            event,
+            flyer_url,
+            qr_image_url=qr_image_url,
+            qr_url=qr_url,
+            message_id=message_id,
+            custom_subject=custom_subject,
+            custom_body=custom_body,
+        )
+    if _is_annette_event(event):
+        # Annette's BIG 40 (event 72): deep plum and copper black tie design
+        # built from the client's own portrait. The dashboard copy still drives
+        # the words, the shell only dresses them.
+        return _build_annette_invite_message(
             guest,
             event,
             flyer_url,
@@ -1038,6 +1084,281 @@ def _build_mobola_invite_message(
     return subject, body, html
 
 
+# ── Annette's BIG 40 (event 72 only) ──
+# Colours lifted from the client's own portrait: deep plum, violet grey,
+# copper and champagne. Black tie is a dark, dressed mail, not the platform
+# default white template. The words still come from the dashboard save box.
+
+ANNETTE_INK = "#241A1E"
+ANNETTE_PLUM = "#403F54"
+ANNETTE_COPPER = "#B87254"
+ANNETTE_CHAMPAGNE = "#DDC7B3"
+ANNETTE_CREAM = "#F7EFE7"
+ANNETTE_TEXT = "#3A2A2E"
+ANNETTE_SIGNOFF = ("Warm regards", "The BIG 40 Team")
+
+
+def _is_annette_event(event: Event) -> bool:
+    if getattr(event, "id", None) == 72:
+        return True
+    return (getattr(event, "slug", None) or "").strip().lower() == "annettes-big-40"
+
+
+def _annette_details(event: Event) -> list[tuple[str, str]]:
+    """Date, time, venue and dress code, formatted for a black tie mail."""
+    formatted_date = str(_format_date(event.event_date))
+    date_parts = formatted_date.split(" ", 1)
+    if len(date_parts) == 2 and date_parts[0].endswith("day"):
+        formatted_date = f"{date_parts[0]}, {date_parts[1]}"
+    formatted_time = str(_format_time(event.event_time, event.timezone or "WAT"))
+    time_parts = formatted_time.split(" ", 1)
+    if len(time_parts) == 2 and time_parts[0].isdigit():
+        formatted_time = f"{time_parts[0]}:00 {time_parts[1]}"
+    return [
+        ("Date", formatted_date),
+        ("Time", formatted_time),
+        ("Venue", event.venue or ""),
+        ("Dress Code", event.dress_code or "Elegant"),
+    ]
+
+
+def _annette_copy_blocks(event: Event, custom_body: str | None = None) -> list[str]:
+    """Turn the organizer's saved reminder into paragraphs for the shell.
+
+    The greeting, the date/time/venue/dress lines and the sign off are lifted
+    out because the design prints its own. Everything the host wrote in
+    between survives word for word.
+    """
+    raw = (custom_body or event.invite_body or "").strip()
+    paragraphs: list[str] = []
+    for block in [b.strip() for b in raw.replace("\r\n", "\n").split("\n\n") if b.strip()]:
+        kept: list[str] = []
+        for line in [ln.strip() for ln in block.split("\n") if ln.strip()]:
+            upper = line.upper()
+            if upper.startswith("DEAR "):
+                continue
+            if upper.startswith(("DATE:", "TIME:", "VENUE:", "DRESS CODE:")):
+                continue
+            if line.lower().rstrip(",") in ("warm regards", "kind regards", "the big 40 team", "team annette"):
+                continue
+            kept.append(line)
+        if kept:
+            paragraphs.append(" ".join(kept))
+    if not paragraphs:
+        paragraphs = [
+            "A gentle reminder that Annette's BIG 40, hosted by Ushbebe, takes place this Friday.",
+        ]
+    return paragraphs
+
+
+def _annette_shell(inner: str, tracking_pixel: str = "") -> str:
+    return (
+        f'<div style="margin:0;padding:0;background:{ANNETTE_INK}">'
+        f'<div style="max-width:600px;margin:0 auto;background:{ANNETTE_CREAM};'
+        "font-family:Georgia,'Times New Roman',serif;color:" + ANNETTE_TEXT + '">'
+        f"{inner}"
+        f'<div style="background:{ANNETTE_INK};padding:22px 26px;text-align:center">'
+        '<p style="margin:0 0 6px;font-family:Arial,Helvetica,sans-serif;font-size:9px;'
+        f'letter-spacing:4px;color:{ANNETTE_COPPER};text-transform:uppercase">Accredit Interactive</p>'
+        '<p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
+        'letter-spacing:2px;color:#9A8388">Premium Event Infrastructure</p>'
+        "</div>"
+        f"{tracking_pixel}"
+        "</div></div>"
+    )
+
+
+def _annette_title_band(event: Event) -> str:
+    host = (event.host_name or "").strip()
+    eyebrow = f"Hosted by {host}" if host else "You are invited"
+    return (
+        f'<div style="background:{ANNETTE_INK};padding:26px 26px 24px;text-align:center;'
+        f'border-top:3px solid {ANNETTE_COPPER}">'
+        '<p style="margin:0 0 12px;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
+        f'letter-spacing:4px;color:{ANNETTE_COPPER};text-transform:uppercase">{eyebrow}</p>'
+        f'<p style="margin:0;font-size:33px;line-height:1.1;letter-spacing:4px;color:{ANNETTE_CHAMPAGNE}">'
+        "ANNETTE'S</p>"
+        f'<p style="margin:6px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:15px;'
+        f'letter-spacing:10px;color:{ANNETTE_COPPER};text-transform:uppercase">BIG 40</p>'
+        "</div>"
+    )
+
+
+def _annette_details_card(rows: list[tuple[str, str]]) -> str:
+    cells = "".join(
+        "<tr>"
+        f'<td style="padding:8px 0;width:92px;vertical-align:top;font-family:Arial,Helvetica,sans-serif;'
+        f'font-size:10px;letter-spacing:2px;color:{ANNETTE_COPPER};text-transform:uppercase">{label}</td>'
+        f'<td style="padding:8px 0;font-size:15px;color:{ANNETTE_INK};line-height:1.5;font-weight:bold">{value}</td>'
+        "</tr>"
+        for label, value in rows
+        if value
+    )
+    return (
+        '<div style="margin:0 0 26px;padding:18px 22px;background:#FFFFFF;'
+        f'border-left:3px solid {ANNETTE_COPPER};border-radius:8px">'
+        f'<table style="width:100%;border-collapse:collapse">{cells}</table>'
+        "</div>"
+    )
+
+
+def _annette_qr_card(qr_image_url: str | None, note: str = "Show this code at the entrance") -> str:
+    absolute_qr = _absolute_url(qr_image_url) if qr_image_url else None
+    if not absolute_qr:
+        return (
+            f'<div style="text-align:center;padding:18px;margin:0 0 26px;background:#FFFFFF;'
+            f'border:1px dashed {ANNETTE_CHAMPAGNE};border-radius:12px">'
+            '<p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:11px;'
+            f'letter-spacing:1px;color:{ANNETTE_TEXT}">Your QR entry code is attached to this email</p>'
+            "</div>"
+        )
+    return (
+        '<div style="text-align:center;padding:20px;margin:0 0 26px;background:#FFFFFF;'
+        f'border:1px solid {ANNETTE_CHAMPAGNE};border-radius:12px">'
+        '<p style="margin:0 0 14px;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
+        f'letter-spacing:3px;color:{ANNETTE_COPPER};text-transform:uppercase">Your entry code</p>'
+        f'<img src="{absolute_qr}" alt="Entry QR Code" width="190" height="190" '
+        'style="display:block;margin:0 auto;width:190px;height:190px;border:0" />'
+        '<p style="margin:12px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:11px;'
+        f'color:{ANNETTE_TEXT}">{note}</p>'
+        "</div>"
+    )
+
+
+def _build_annette_invite_message(
+    guest: Guest,
+    event: Event,
+    flyer_url: str | None,
+    qr_image_url: str | None = None,
+    qr_url: str | None = None,
+    message_id: int | None = None,
+    custom_subject: str | None = None,
+    custom_body: str | None = None,
+) -> tuple[str, str, str]:
+    """Designed black tie mail for Annette's BIG 40 (event 72 only)."""
+    rsvp_link = invite_link_for(event, guest)
+    rows = _annette_details(event)
+    row_map = dict(rows)
+
+    def _fill(text: str) -> str:
+        return (
+            text.replace("{{ guest_name }}", guest.name or "")
+            .replace("{{ event_title }}", event.title or "")
+            .replace("{{ event_date }}", row_map.get("Date", ""))
+            .replace("{{ event_time }}", row_map.get("Time", ""))
+            .replace("{{ venue }}", event.venue or "")
+            .replace("{{ rsvp_link }}", rsvp_link)
+            .replace("{{ host_name }}", event.host_name or "")
+            .replace("{{ dress_code }}", event.dress_code or "")
+            .replace("{guest name}", guest.name or "")
+        )
+
+    subject = _fill(custom_subject or event.invite_subject or f"You are invited: {event.title}")
+    paragraphs = [_fill(p) for p in _annette_copy_blocks(event, custom_body)]
+
+    body = (
+        f"Dear {guest.name},\n\n"
+        + "\n\n".join(paragraphs)
+        + "\n\n"
+        f"Date: {row_map.get('Date', '')}\n"
+        f"Time: {row_map.get('Time', '')}\n"
+        f"Venue: {row_map.get('Venue', '')}\n"
+        f"Dress Code: {row_map.get('Dress Code', '')}\n\n"
+        f"RSVP: {rsvp_link}\n"
+        + (f"Your QR code: {qr_url}\n" if qr_url else "")
+        + f"\n{ANNETTE_SIGNOFF[0]},\n{ANNETTE_SIGNOFF[1]}"
+    )
+
+    absolute_flyer = _absolute_url(flyer_url) if flyer_url else None
+    hero_html = (
+        f'<img src="{absolute_flyer}" alt="Annette" width="600" '
+        'style="width:100%;max-width:600px;height:auto;display:block;border:0" />'
+        if absolute_flyer
+        else ""
+    )
+    paras_html = "".join(
+        '<p style="margin:0 0 16px;font-size:15px;line-height:1.8;'
+        f'color:{ANNETTE_TEXT}">{p}</p>'
+        for p in paragraphs
+    )
+    tracking_pixel = (
+        f'<img src="{settings.FRONTEND_URL}/api/v1/track/open/{message_id}" alt="" width="1" height="1" style="display:none" />'
+        if message_id
+        else ""
+    )
+
+    inner = (
+        f"{hero_html}"
+        f"{_annette_title_band(event)}"
+        '<div style="padding:30px 28px 6px">'
+        f'<p style="margin:0 0 18px;font-size:17px;color:{ANNETTE_INK}">Dear {guest.name},</p>'
+        f"{paras_html}"
+        "</div>"
+        '<div style="padding:0 28px">'
+        f"{_annette_details_card(rows)}"
+        '<div style="text-align:center;padding:0 0 26px">'
+        f'<a href="{rsvp_link}" style="display:inline-block;background:{ANNETTE_COPPER};color:#FFFFFF;'
+        "padding:16px 46px;text-decoration:none;font-family:Arial,Helvetica,sans-serif;"
+        'font-size:12px;font-weight:bold;letter-spacing:3px;text-transform:uppercase">RSVP Now</a>'
+        "</div>"
+        f"{_annette_qr_card(qr_image_url)}"
+        "</div>"
+        '<div style="padding:0 28px 30px;text-align:center">'
+        f'<p style="margin:0 0 4px;font-size:13px;color:{ANNETTE_TEXT}">{ANNETTE_SIGNOFF[0]},</p>'
+        f'<p style="margin:0;font-size:19px;color:{ANNETTE_INK}">{ANNETTE_SIGNOFF[1]}</p>'
+        "</div>"
+    )
+
+    return subject, body, _annette_shell(inner, tracking_pixel)
+
+
+def _build_annette_qr_message(
+    guest: Guest,
+    event: Event,
+    qr_image_url: str | None,
+    flyer_url: str | None = None,
+) -> tuple[str, str, str]:
+    """Designed entry pass for Annette's BIG 40 (event 72 only)."""
+    rows = _annette_details(event)
+    row_map = dict(rows)
+    pass_link = f"{settings.FRONTEND_URL}/qr/{guest.rsvp_token}"
+
+    subject = f"Your Entry Pass: {event.title}"
+    body = (
+        f"Dear {guest.name},\n\n"
+        "Your entry pass for Annette's BIG 40 is enclosed. Please present the QR code at "
+        "the door for accreditation.\n\n"
+        f"Date: {row_map.get('Date', '')}\n\n"
+        f"Time: {row_map.get('Time', '')}\n\n"
+        f"Venue: {row_map.get('Venue', '')}\n\n"
+        f"Dress Code: {row_map.get('Dress Code', '')}\n\n"
+        "This pass admits one guest.\n\n"
+        f"View your pass: {pass_link}\n\n"
+        f"{ANNETTE_SIGNOFF[0]},\n{ANNETTE_SIGNOFF[1]}"
+    )
+
+    inner = (
+        f"{_annette_title_band(event)}"
+        '<div style="padding:30px 28px 6px;text-align:center">'
+        '<p style="margin:0 0 6px;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
+        f'letter-spacing:4px;color:{ANNETTE_COPPER};text-transform:uppercase">Your entry pass</p>'
+        f'<p style="margin:0 0 20px;font-size:23px;letter-spacing:1px;color:{ANNETTE_INK}">{guest.name}</p>'
+        "</div>"
+        '<div style="padding:0 28px">'
+        f"{_annette_qr_card(qr_image_url, 'Scan at the door')}"
+        f"{_annette_details_card(rows)}"
+        '<p style="margin:0 0 8px;text-align:center;font-family:Arial,Helvetica,sans-serif;'
+        f'font-size:10px;letter-spacing:2px;color:{ANNETTE_COPPER};text-transform:uppercase">'
+        "This pass admits one guest</p>"
+        '<p style="margin:0 0 26px;font-size:14px;line-height:1.7;color:' + ANNETTE_TEXT + ';text-align:center">'
+        "Please arrive promptly and have this pass ready at the entrance."
+        "</p>"
+        "</div>"
+    )
+
+    return subject, body, _annette_shell(inner)
+
+
 # ── Post-event thank you (opt in per event via events.thank_you_mode) ──
 # Once an event is over the invite shell is wrong: a date and venue table, an
 # entry code block and a "reserve your seat" button all ask the guest to do
@@ -1278,9 +1599,10 @@ async def _send_to_guest(
             from_addr = f"{event.title} <noreply@wristbandsng.com>"
             ok = await asyncio.wait_for(send_email(guest.email, subject, html, from_addr=from_addr), timeout=15)
         elif channel == "whatsapp" and guest.phone:
-            from app.api.event_registration import is_wedding_event as _is_wedding, is_gala_event as _is_gala
+            from app.api.event_registration import is_wedding_event as _is_wedding, is_gala_event as _is_gala, is_anchor_event as _is_anchor
 
             invite_content_sid = settings.TWILIO_WHATSAPP_INVITE_CONTENT_SID
+            annette_invite_template = False
             # The configured invite template (ACAMB v4) carries ACAMB's flyer
             # image + ACAMB wording, so it must only ever fire for event 67.
             # Every other event sends its own flyer + text free-form.
@@ -1317,8 +1639,35 @@ async def _send_to_guest(
                 # Template first, free-form flyer + text as the fallback.
                 invite_content_sid = settings.TWILIO_WHATSAPP_ANNIV_INVITE_CONTENT_SID
                 use_invite_template = True
+            if getattr(event, "id", None) == 72 and getattr(settings, "TWILIO_WHATSAPP_ANNETTE_INVITE_CONTENT_SID", ""):
+                # Annette's BIG 40 reminder template (portrait header +
+                # {{1}}=name, {{2}}=per-guest RSVP link). The QR travels by email,
+                # so WhatsApp never needs to carry media here.
+                invite_content_sid = settings.TWILIO_WHATSAPP_ANNETTE_INVITE_CONTENT_SID
+                use_invite_template = True
+                annette_invite_template = True
+            if _is_anchor(event) and getattr(settings, "TWILIO_WHATSAPP_ANCHOR_INVITE_CONTENT_SID", ""):
+                # Anchor Evening of Bliss (event 85): flier header + {{1}}=name
+                # and {{2}} = the guest's own RSVP link. Free-form flyer + text
+                # stays the fallback until Meta approves the template.
+                invite_content_sid = settings.TWILIO_WHATSAPP_ANCHOR_INVITE_CONTENT_SID
+                use_invite_template = True
             media_to_send = _absolute_url(flyer_url) if flyer_url else None
-            if include_qr:
+            if include_qr and annette_invite_template:
+                # Event 72 only: the approved template carries the wording and the
+                # RSVP link while the QR arrives by email. Free-form media is what
+                # WhatsApp rejects with 63016 outside the 24 hour window.
+                rsvp_link = invite_link_for(event, guest)
+                content_vars = {
+                    "1": guest.name or "",
+                    "2": rsvp_link,
+                    "_content_sid": invite_content_sid,
+                }
+                ok, provider_id = await _send_whatsapp(guest.phone, body, media_url=None, content_vars=content_vars)
+                if not ok:
+                    qr_media_url = _absolute_url(qr_image_url) if qr_image_url else None
+                    ok, provider_id = await _send_whatsapp(guest.phone, body, media_url=qr_media_url or media_to_send)
+            elif include_qr:
                 # Single media item on WhatsApp: the QR (flyer embedded in it).
                 qr_media_url = _absolute_url(qr_image_url) if qr_image_url else None
                 ok, provider_id = await _send_whatsapp(guest.phone, body, media_url=qr_media_url or media_to_send)
@@ -1327,7 +1676,7 @@ async def _send_to_guest(
                 # and wedding templates also take {{2}}=per-guest RSVP link)
                 rsvp_link = invite_link_for(event, guest)
                 content_vars = {"1": guest.name or "", "_content_sid": invite_content_sid}
-                if getattr(event, "id", None) == 67 or _is_wedding(event) or _is_gala(event) or _is_anniversary(event):
+                if getattr(event, "id", None) == 67 or _is_wedding(event) or _is_gala(event) or _is_anniversary(event) or _is_anchor(event):
                     content_vars["2"] = rsvp_link
                 ok, provider_id = await _send_whatsapp(guest.phone, body, media_url=None, content_vars=content_vars)
                 if not ok and media_to_send:
@@ -1375,10 +1724,16 @@ def _build_qr_message(guest: Guest, event: Event, qr_image_url: str | None = Non
     )
     if _bm and message_type == "qr_only" and not custom_message and not qr_message:
         return _build_bm_qr_message(guest, event, qr_image_url)
-    from app.api.event_registration import is_gala_event as _is_gala, is_anniversary_event as _is_anniv
+    from app.api.event_registration import is_gala_event as _is_gala, is_anniversary_event as _is_anniv, is_anchor_event as _is_anchor
 
+    if _is_anchor(event) and message_type == "qr_only" and not custom_message and not qr_message:
+        # Event 85 pass: event details plus the code, deliberately no flier.
+        return _build_anchor_qr_message(guest, event, qr_image_url)
     if _is_anniv(event) and message_type == "qr_only" and not custom_message and not qr_message:
         return _build_anniv_qr_message(guest, event, qr_image_url, flyer_url)
+    if _is_annette_event(event) and message_type == "qr_only" and not custom_message and not qr_message:
+        # Annette's BIG 40 entry pass, same plum and copper palette as the invite.
+        return _build_annette_qr_message(guest, event, qr_image_url, flyer_url)
     if _is_gala(event) and message_type == "qr_only" and not custom_message and not qr_message:
         return _build_gala_qr_message(guest, event, qr_image_url, flyer_url)
     subject = f"Your QR Access Code: {event.title}"
@@ -1523,6 +1878,13 @@ async def _send_qr_to_guest(
     qr_image_path = _upload_path_from_url(flyer_url) if flyer_url else None
     qr_image_url = qr_to_url(qr_token_url, image_path=qr_image_path, size=250)
 
+    from app.api.event_registration import is_anchor_event as _is_anchor_qr
+
+    if _is_anchor_qr(event):
+        # Event 85 keeps the pass clean: a bare code and no flier anywhere.
+        qr_image_url = qr_to_url(qr_token_url, size=250)
+        flyer_url = None
+
     bm_event = (getattr(event, "id", None) == 77) or (
         event.title == "BLACK MARKET Movie World Record Attempt"
     )
@@ -1596,6 +1958,26 @@ async def _send_qr_to_guest(
                         "1": guest.name or "",
                         "2": qr_token_url,
                         "_content_sid": anniv_qr_sid,
+                    }
+                    ok, provider_id = await _send_whatsapp(guest.phone, body, media_url=None, content_vars=content_vars)
+                annette_qr_sid = getattr(settings, "TWILIO_WHATSAPP_ANNETTE_QR_CONTENT_SID", "")
+                if not ok and getattr(event, "id", None) == 72 and annette_qr_sid:
+                    # Event 72: the utility template reaches a cold contact and
+                    # points at the pass, the QR image itself travels by email.
+                    # It carries a single name variable, so no link is passed.
+                    content_vars = {
+                        "1": guest.name or "",
+                        "_content_sid": annette_qr_sid,
+                    }
+                    ok, provider_id = await _send_whatsapp(guest.phone, body, media_url=None, content_vars=content_vars)
+                anchor_qr_sid = getattr(settings, "TWILIO_WHATSAPP_ANCHOR_QR_CONTENT_SID", "")
+                if not ok and _is_anchor_qr(event) and anchor_qr_sid:
+                    # Anchor Evening of Bliss (event 85): the utility template
+                    # confirms the pass to a cold contact. It carries a single
+                    # name variable, and the code itself travels by email.
+                    content_vars = {
+                        "1": guest.name or "",
+                        "_content_sid": anchor_qr_sid,
                     }
                     ok, provider_id = await _send_whatsapp(guest.phone, body, media_url=None, content_vars=content_vars)
             if not ok and settings.EVOLUTION_API_URL:
@@ -1675,26 +2057,35 @@ async def send_invites(
 
     total_sent = 0
     results_for_channels = {}
-    any_sent = False
+    sent_guest_ids: set[int] = set()
+    all_invalid_phone_guests: list[dict] = []
 
     for ch in channels:
+        invalid_phone_guests: list[dict] = []
         if ch in {"whatsapp", "sms"}:
             invalid_phone_guests = [
                 {"id": guest.id, "name": guest.name, "phone": guest.phone}
                 for guest in guests
-                if not is_valid_phone(guest.phone) and has_contact(guest, ch)
+                if has_contact(guest, ch) and not is_valid_phone(guest.phone)
             ]
+            all_invalid_phone_guests.extend(invalid_phone_guests)
+
+        if ch in {"whatsapp", "sms"}:
+            eligible = [g for g in guests if has_contact(g, ch) and is_valid_phone(g.phone)]
+        else:
+            eligible = [g for g in guests if has_contact(g, ch)]
+
+        if not eligible:
             if invalid_phone_guests:
+                # Nothing at all can go out on this channel, so this is the only
+                # case that stops the request: the whole list needs fixing.
                 raise HTTPException(
                     status_code=400,
                     detail={
-                        "message": f"Fix incorrect phone numbers before sending via {ch}.",
+                        "message": f"None of these guests has a usable phone number for {ch}. Fix these numbers and try again.",
                         "invalid_phone_guests": invalid_phone_guests,
                     },
                 )
-
-        eligible = [g for g in guests if has_contact(g, ch)]
-        if not eligible:
             results_for_channels[ch] = {"sent": 0, "total": 0, "skipped_max_attempts": 0, "message": "No guests with contact info for this channel"}
             continue
 
@@ -1709,23 +2100,36 @@ async def send_invites(
             if status == "max_attempts":
                 skipped_attempts += 1
                 continue
-            if status != "skipped":
-                any_sent = True
             if ok:
                 sent += 1
+                sent_guest_ids.add(guest.id)
             await db.flush()
 
         batch.total_sent = sent
         batch.status = "completed"
-        results_for_channels[ch] = {"batch_id": batch.id, "sent": sent, "total": len(eligible), "skipped_max_attempts": skipped_attempts}
+        results_for_channels[ch] = {
+            "batch_id": batch.id,
+            "sent": sent,
+            "total": len(eligible),
+            "skipped_max_attempts": skipped_attempts,
+        }
+        if invalid_phone_guests:
+            results_for_channels[ch]["skipped_invalid_phone"] = len(invalid_phone_guests)
+            results_for_channels[ch]["invalid_phone_guests"] = invalid_phone_guests
         total_sent += sent
 
-    if any_sent:
+    # Mark progress per guest so a retry only picks up the ones that did not go out.
+    if sent_guest_ids:
         for guest in guests:
-            guest.invite_sent = True
+            if guest.id in sent_guest_ids:
+                guest.invite_sent = True
 
     await db.commit()
-    return {"channels": results_for_channels, "total_sent": total_sent, "total_guests": len(guests)}
+    response = {"channels": results_for_channels, "total_sent": total_sent, "total_guests": len(guests)}
+    if all_invalid_phone_guests:
+        response["invalid_phone_guests"] = all_invalid_phone_guests
+        response["skipped_invalid_phone"] = len(all_invalid_phone_guests)
+    return response
 
 
 # ── Send invite to ONE specific guest ──
@@ -1863,29 +2267,37 @@ async def send_all_qrs(
     channels = req.get_channels()
     results_for_channels = {}
     total_sent = 0
+    all_invalid_phone_guests: list[dict] = []
 
     for ch in channels:
+        invalid_phone_guests: list[dict] = []
+        targets = list(guests)
         if ch in {"whatsapp", "sms"}:
             invalid_phone_guests = [
                 {"id": guest.id, "name": guest.name, "phone": guest.phone}
                 for guest in guests
-                if not is_valid_phone(guest.phone)
+                if guest.phone and not is_valid_phone(guest.phone)
             ]
-            if invalid_phone_guests:
-                raise HTTPException(
-                    status_code=400,
-                    detail={
-                        "message": f"Fix incorrect phone numbers before sending QR codes via {ch}.",
-                        "invalid_phone_guests": invalid_phone_guests,
-                    },
-                )
+            all_invalid_phone_guests.extend(invalid_phone_guests)
+            targets = [g for g in guests if is_valid_phone(g.phone)]
+            if not targets:
+                if invalid_phone_guests:
+                    raise HTTPException(
+                        status_code=400,
+                        detail={
+                            "message": f"None of these guests has a usable phone number for {ch}. Fix these numbers and try again.",
+                            "invalid_phone_guests": invalid_phone_guests,
+                        },
+                    )
+                results_for_channels[ch] = {"sent": 0, "total": 0, "message": "No guests with contact info for this channel"}
+                continue
 
         batch = InviteBatch(event_id=event_id, channel=ch)
         db.add(batch)
         await db.flush()
 
         sent = 0
-        for guest in guests:
+        for guest in targets:
             ok, status = await _send_qr_to_guest(guest, event, ch, batch.id, db)
             if ok:
                 sent += 1
@@ -1893,11 +2305,18 @@ async def send_all_qrs(
 
         batch.total_sent = sent
         batch.status = "completed"
-        results_for_channels[ch] = {"batch_id": batch.id, "sent": sent, "total": len(guests)}
+        results_for_channels[ch] = {"batch_id": batch.id, "sent": sent, "total": len(targets)}
+        if invalid_phone_guests:
+            results_for_channels[ch]["skipped_invalid_phone"] = len(invalid_phone_guests)
+            results_for_channels[ch]["invalid_phone_guests"] = invalid_phone_guests
         total_sent += sent
 
     await db.commit()
-    return {"channels": results_for_channels, "total_sent": total_sent, "total_guests": len(guests)}
+    response = {"channels": results_for_channels, "total_sent": total_sent, "total_guests": len(guests)}
+    if all_invalid_phone_guests:
+        response["invalid_phone_guests"] = all_invalid_phone_guests
+        response["skipped_invalid_phone"] = len(all_invalid_phone_guests)
+    return response
 
 
 # ── Re-send payment check ──
@@ -2014,22 +2433,36 @@ async def send_invites_batch(
     channels = req.get_channels()
     results_for_channels = {}
     total_sent = 0
-    any_sent = False
+    sent_guest_ids: set[int] = set()
+    all_invalid_phone_guests: list[dict] = []
 
     def has_contact(guest: Guest, ch: str) -> bool:
         return (ch == "email" and guest.email) or (ch in ("whatsapp", "sms") and guest.phone)
 
     for ch in channels:
+        invalid_phone_guests: list[dict] = []
         if ch in {"whatsapp", "sms"}:
-            invalid = [g for g in guests if not is_valid_phone(g.phone) and has_contact(g, ch)]
-            if invalid:
+            invalid_phone_guests = [
+                {"id": g.id, "name": g.name, "phone": g.phone}
+                for g in guests
+                if has_contact(g, ch) and not is_valid_phone(g.phone)
+            ]
+            all_invalid_phone_guests.extend(invalid_phone_guests)
+
+        if ch in {"whatsapp", "sms"}:
+            eligible = [g for g in guests if has_contact(g, ch) and is_valid_phone(g.phone)]
+        else:
+            eligible = [g for g in guests if has_contact(g, ch)]
+
+        if not eligible:
+            if invalid_phone_guests:
                 raise HTTPException(
                     status_code=400,
-                    detail={"message": f"Fix incorrect phone numbers before sending via {ch}.", "invalid_phone_guests": [{"id": g.id, "name": g.name, "phone": g.phone} for g in invalid]},
+                    detail={
+                        "message": f"None of these guests has a usable phone number for {ch}. Fix these numbers and try again.",
+                        "invalid_phone_guests": invalid_phone_guests,
+                    },
                 )
-
-        eligible = [g for g in guests if has_contact(g, ch)]
-        if not eligible:
             results_for_channels[ch] = {"sent": 0, "total": 0, "results": []}
             continue
 
@@ -2044,10 +2477,9 @@ async def send_invites_batch(
             if status == "max_attempts":
                 results.append({"guest_id": guest.id, "name": guest.name, "status": "max_attempts"})
                 continue
-            if status != "skipped":
-                any_sent = True
             if ok:
                 sent += 1
+                sent_guest_ids.add(guest.id)
                 results.append({"guest_id": guest.id, "name": guest.name, "status": "delivered"})
             else:
                 results.append({"guest_id": guest.id, "name": guest.name, "status": status})
@@ -2056,14 +2488,22 @@ async def send_invites_batch(
         batch.total_sent = sent
         batch.status = "completed"
         results_for_channels[ch] = {"batch_id": batch.id, "sent": sent, "total": len(eligible), "results": results}
+        if invalid_phone_guests:
+            results_for_channels[ch]["skipped_invalid_phone"] = len(invalid_phone_guests)
+            results_for_channels[ch]["invalid_phone_guests"] = invalid_phone_guests
         total_sent += sent
 
-    if any_sent:
+    if sent_guest_ids:
         for guest in guests:
-            guest.invite_sent = True
+            if guest.id in sent_guest_ids:
+                guest.invite_sent = True
 
     await db.commit()
-    return {"channels": results_for_channels, "total_sent": total_sent, "total_guests": len(guests)}
+    response = {"channels": results_for_channels, "total_sent": total_sent, "total_guests": len(guests)}
+    if all_invalid_phone_guests:
+        response["invalid_phone_guests"] = all_invalid_phone_guests
+        response["skipped_invalid_phone"] = len(all_invalid_phone_guests)
+    return response
 
 
 @router.get("/{event_id}/export-guests")

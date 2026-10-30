@@ -82,6 +82,15 @@ async def _send_qr_after_rsvp(guest_id: int, event_id: int):
             qr_image_path = _upload_path_from_url(flyer_url) if flyer_url else None
             qr_image_url = qr_to_url(qr_token_url, image_path=qr_image_path, size=250)
 
+            from app.api.event_registration import is_anchor_event as _is_anchor_pass
+
+            if _is_anchor_pass(event):
+                # Anchor Evening of Bliss (event 85): the pass carries a clean
+                # code and no flier, which is the only change from our normal
+                # RSVP-to-QR flow for this event.
+                qr_image_url = qr_to_url(qr_token_url, size=250)
+                flyer_url = None
+
             channels = []
             if guest.email:
                 channels.append("email")
@@ -146,6 +155,26 @@ async def _send_qr_after_rsvp(guest_id: int, event_id: int):
                                 "1": guest.name or "",
                                 "2": qr_token_url,
                                 "_content_sid": anniv_qr_sid,
+                            }
+                            ok, provider_id = await _shared_send_whatsapp(guest.phone, body, media_url=None, content_vars=content_vars)
+                        anchor_qr_sid = getattr(settings, "TWILIO_WHATSAPP_ANCHOR_QR_CONTENT_SID", "")
+                        if not ok and _is_anchor_pass(event) and anchor_qr_sid:
+                            # Anchor Evening of Bliss (event 85): the utility
+                            # template reaches a cold contact and confirms the
+                            # pass. The code itself travels by email.
+                            content_vars = {
+                                "1": guest.name or "",
+                                "_content_sid": anchor_qr_sid,
+                            }
+                            ok, provider_id = await _shared_send_whatsapp(guest.phone, body, media_url=None, content_vars=content_vars)
+                        annette_qr_sid = getattr(settings, "TWILIO_WHATSAPP_ANNETTE_QR_CONTENT_SID", "")
+                        if not ok and annette_qr_sid and getattr(event, "id", None) == 72:
+                            # Cold contact for event 72: the utility template
+                            # points at the pass, the QR itself travels by email.
+                            # It carries a single name variable.
+                            content_vars = {
+                                "1": guest.name or "",
+                                "_content_sid": annette_qr_sid,
                             }
                             ok, provider_id = await _shared_send_whatsapp(guest.phone, body, media_url=None, content_vars=content_vars)
                         elif not ok:

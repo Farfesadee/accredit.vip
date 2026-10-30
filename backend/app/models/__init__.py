@@ -1,5 +1,6 @@
 from app.models.user import User
 from app.models.event import Event
+from app.models.event_day import EventDay
 from app.models.guest import Guest
 from app.models.invite import InviteMessage, InviteBatch
 from app.models.qr_code import QRCode
@@ -30,7 +31,7 @@ from app.models.announcement import Announcement
 from app.models.platform_setting import PlatformSetting
 
 all_models = [
-    User, Event, Guest, InviteMessage, InviteBatch, QRCode, CheckIn,
+    User, Event, EventDay, Guest, InviteMessage, InviteBatch, QRCode, CheckIn,
     Payment, AuditLog, EventSetting, SupportTicket, Attachment,
     FlierAsset, AccreditationRequest, StaffAssignment, TicketPurchase,
     PasswordResetToken, TrialUsage, Subscription, CommunityPost,

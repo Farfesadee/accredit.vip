@@ -11,6 +11,9 @@ def _normalize_phone(raw: str) -> str:
     digits = re.sub(r"\D", "", s)
     if not digits:
         return raw
+    # A pasted country code doubles up more often than anything else (+234 234 810 ...).
+    if digits.startswith("234234") and len(digits) > 12:
+        digits = "234" + digits[6:]
     if has_plus and digits.startswith("2340") and len(digits) == 14:
         return "+234" + digits[4:]
     if has_plus:

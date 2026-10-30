@@ -13,4 +13,9 @@ class ScanAttempt(Base):
     device_info = Column(String, nullable=True)
     ip_address = Column(String, nullable=True)
     location = Column(String, nullable=True)
+    # Day the attempt was made against, so a rejected duplicate on day 2 can be
+    # told apart from the legitimate day 1 scan.
+    event_day_id = Column(
+        Integer, ForeignKey("event_days.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at = Column(DateTime(timezone=True), server_default=func.now())
