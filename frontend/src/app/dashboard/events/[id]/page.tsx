@@ -505,15 +505,27 @@ function EventDetailContent() {
       });
       setSendResult(res);
       const skipped: { id: number; name: string; phone: string | null }[] = res.invalid_phone_guests || [];
+      const noContact: { id: number; name: string; reason: string }[] = res.guests_with_no_contact || [];
+      const totalSent = res.total_sent ?? 0;
+      const totalGuests = res.total_guests ?? 0;
+
+      let toastMsg = `Invites sent: ${totalSent}/${totalGuests}`;
       if (skipped.length) {
         const names = skipped.slice(0, 3).map((g) => g.name).join(", ");
         const more = skipped.length > 3 ? ` and ${skipped.length - 3} more` : "";
-        showToast(
-          `Invites sent. ${skipped.length} guest(s) skipped for a wrong number: ${names}${more}. Fix their numbers in the guest list and send again.`,
-          "error"
-        );
-      } else {
+        toastMsg += `. ${skipped.length} guest(s) skipped for wrong number: ${names}${more}. Fix in guest list and send again.`;
+        showToast(toastMsg, "error");
+      } else if (noContact.length) {
+        const names = noContact.slice(0, 3).map((g) => g.name).join(", ");
+        const more = noContact.length > 3 ? ` and ${noContact.length - 3} more` : "";
+        toastMsg += `. ${noContact.length} guest(s) have no contact info for selected channels: ${names}${more}.`;
+        showToast(toastMsg, "error");
+      } else if (totalSent === totalGuests && totalGuests > 0) {
         showToast("Invites sent successfully");
+      } else if (totalSent > 0) {
+        showToast(toastMsg, "error");
+      } else {
+        showToast("No invites sent. Check guest contact info and selected channels.", "error");
       }
       loadLogs();
       loadGuests();
@@ -529,10 +541,14 @@ function EventDetailContent() {
         setSendError("Payment required to re-send invites.");
       } else {
         const bad: { name: string; phone: string | null }[] = detail?.invalid_phone_guests || [];
+        const noContact: { name: string; reason: string }[] = detail?.guests_with_no_contact || [];
         const badList = bad.length
           ? `\n\nWrong numbers:\n${bad.slice(0, 10).map((g) => `${g.name}: ${g.phone || "no number"}`).join("\n")}${bad.length > 10 ? `\nand ${bad.length - 10} more` : ""}`
           : "";
-        const errMsg = (typeof detail === "string" ? detail : detail?.message || "Could not send invites.") + badList;
+        const noContactList = noContact.length
+          ? `\n\nNo contact for any channel:\n${noContact.slice(0, 10).map((g) => `${g.name} (${g.reason})`).join("\n")}${noContact.length > 10 ? `\nand ${noContact.length - 10} more` : ""}`
+          : "";
+        const errMsg = (typeof detail === "string" ? detail : detail?.message || "Could not send invites.") + badList + noContactList;
         setSendError(errMsg);
         showToast("Could not send invites", "error");
       }
@@ -606,24 +622,43 @@ function EventDetailContent() {
       const res = await apiClient<any>(`/events/${id}/send-qrs`, { method: "POST", body: { channels } });
       setSendResult(res);
       const skipped: { id: number; name: string; phone: string | null }[] = res.invalid_phone_guests || [];
+      const noContact: { id: number; name: string; reason: string }[] = res.guests_with_no_contact || [];
+      const totalSent = res.total_sent ?? 0;
+      const totalGuests = res.total_guests ?? 0;
+
+      let toastMsg = `QR codes sent: ${totalSent}/${totalGuests}`;
       if (skipped.length) {
         const names = skipped.slice(0, 3).map((g) => g.name).join(", ");
         const more = skipped.length > 3 ? ` and ${skipped.length - 3} more` : "";
-        showToast(
-          `QR codes sent. ${skipped.length} guest(s) skipped for a wrong number: ${names}${more}.`,
-          "error"
-        );
+        toastMsg += `. ${skipped.length} guest(s) skipped for wrong number: ${names}${more}.`;
+        showToast(toastMsg, "error");
+      } else if (noContact.length) {
+        const names = noContact.slice(0, 3).map((g) => g.name).join(", ");
+        const more = noContact.length > 3 ? ` and ${noContact.length - 3} more` : "";
+        toastMsg += `. ${noContact.length} guest(s) have no contact info for selected channels: ${names}${more}.`;
+        showToast(toastMsg, "error");
+      } else if (totalSent === totalGuests && totalGuests > 0) {
+        showToast("QR codes sent successfully");
+      } else if (totalSent > 0) {
+        showToast(toastMsg, "error");
+      } else {
+        showToast("No QR codes sent. Check guest contact info and selected channels.", "error");
       }
       loadLogs();
       loadGuests();
     } catch (err: any) {
       const detail = err?.detail;
       const bad: { name: string; phone: string | null }[] = detail?.invalid_phone_guests || [];
+      const noContact: { name: string; reason: string }[] = detail?.guests_with_no_contact || [];
       const badList = bad.length
         ? `\n\nWrong numbers:\n${bad.slice(0, 10).map((g) => `${g.name}: ${g.phone || "no number"}`).join("\n")}${bad.length > 10 ? `\nand ${bad.length - 10} more` : ""}`
         : "";
-      const msg = (typeof detail === "string" ? detail : detail?.message || err?.message || "Could not send QR codes.") + badList;
-      setSendError(msg);
+      const noContactList = noContact.length
+        ? `\n\nNo contact for any channel:\n${noContact.slice(0, 10).map((g) => `${g.name} (${g.reason})`).join("\n")}${noContact.length > 10 ? `\nand ${noContact.length - 10} more` : ""}`
+        : "";
+      const errMsg = (typeof detail === "string" ? detail : detail?.message || "Could not send QR codes.") + badList + noContactList;
+      setSendError(errMsg);
+      showToast("Could not send QR codes", "error");
     }
     setSending(false);
   };

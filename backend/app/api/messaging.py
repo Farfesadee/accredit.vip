@@ -2059,9 +2059,11 @@ async def send_invites(
     results_for_channels = {}
     sent_guest_ids: set[int] = set()
     all_invalid_phone_guests: list[dict] = []
+    all_no_contact_guests: list[dict] = []  # guests with no contact for ANY selected channel
 
     for ch in channels:
         invalid_phone_guests: list[dict] = []
+        no_contact_guests: list[dict] = []
         if ch in {"whatsapp", "sms"}:
             invalid_phone_guests = [
                 {"id": guest.id, "name": guest.name, "phone": guest.phone}
@@ -2070,6 +2072,21 @@ async def send_invites(
             ]
             all_invalid_phone_guests.extend(invalid_phone_guests)
 
+            # Track guests who have phone but it's invalid (already captured above)
+            # Track guests who have NO phone for this channel
+            no_contact_guests = [
+                {"id": guest.id, "name": guest.name, "reason": f"no phone for {ch}"}
+                for guest in guests
+                if not has_contact(guest, ch)
+            ]
+        else:
+            # email channel
+            no_contact_guests = [
+                {"id": guest.id, "name": guest.name, "reason": "no email"}
+                for guest in guests
+                if not has_contact(guest, ch)
+            ]
+
         if ch in {"whatsapp", "sms"}:
             eligible = [g for g in guests if has_contact(g, ch) and is_valid_phone(g.phone)]
         else:
@@ -2077,8 +2094,6 @@ async def send_invites(
 
         if not eligible:
             if invalid_phone_guests:
-                # Nothing at all can go out on this channel, so this is the only
-                # case that stops the request: the whole list needs fixing.
                 raise HTTPException(
                     status_code=400,
                     detail={
@@ -2086,7 +2101,12 @@ async def send_invites(
                         "invalid_phone_guests": invalid_phone_guests,
                     },
                 )
-            results_for_channels[ch] = {"sent": 0, "total": 0, "skipped_max_attempts": 0, "message": "No guests with contact info for this channel"}
+            results_for_channels[ch] = {
+                "sent": 0, "total": 0, "skipped_max_attempts": 0,
+                "skipped_no_contact": len(no_contact_guests),
+                "no_contact_guests": no_contact_guests,
+                "message": "No guests with contact info for this channel"
+            }
             continue
 
         batch = InviteBatch(event_id=event_id, channel=ch)
@@ -2094,6 +2114,7 @@ async def send_invites(
         await db.flush()
 
         sent = 0
+        failed = 0
         skipped_attempts = 0
         for guest in eligible:
             ok, status = await _send_to_guest(guest, event, ch, batch.id, db, custom_subject=req.message_subject, custom_body=req.message_body)
@@ -2103,6 +2124,8 @@ async def send_invites(
             if ok:
                 sent += 1
                 sent_guest_ids.add(guest.id)
+            else:
+                failed += 1
             await db.flush()
 
         batch.total_sent = sent
@@ -2110,22 +2133,47 @@ async def send_invites(
         results_for_channels[ch] = {
             "batch_id": batch.id,
             "sent": sent,
+            "failed": failed,
             "total": len(eligible),
             "skipped_max_attempts": skipped_attempts,
+            "skipped_no_contact": len(no_contact_guests),
+            "no_contact_guests": no_contact_guests,
         }
         if invalid_phone_guests:
             results_for_channels[ch]["skipped_invalid_phone"] = len(invalid_phone_guests)
             results_for_channels[ch]["invalid_phone_guests"] = invalid_phone_guests
         total_sent += sent
 
-    # Mark progress per guest so a retry only picks up the ones that did not go out.
+    # Guests who had no contact info for ANY selected channel
+    for guest in guests:
+        has_any = any(has_contact(guest, ch) and (ch != "email" or guest.email) and (ch in ("whatsapp", "sms") and is_valid_phone(guest.phone) if ch in ("whatsapp", "sms") else True) for ch in channels)
+        # Simpler: check if guest has contact for at least one channel
+        guest_has_contact = False
+        for ch in channels:
+            if has_contact(guest, ch):
+                if ch in ("whatsapp", "sms"):
+                    if is_valid_phone(guest.phone):
+                        guest_has_contact = True
+                        break
+                else:
+                    guest_has_contact = True
+                    break
+        if not guest_has_contact:
+            all_no_contact_guests.append({"id": guest.id, "name": guest.name, "reason": "no contact info for any selected channel"})
+
     if sent_guest_ids:
         for guest in guests:
             if guest.id in sent_guest_ids:
                 guest.invite_sent = True
 
     await db.commit()
-    response = {"channels": results_for_channels, "total_sent": total_sent, "total_guests": len(guests)}
+    response = {
+        "channels": results_for_channels,
+        "total_sent": total_sent,
+        "total_guests": len(guests),
+        "guests_with_no_contact": all_no_contact_guests,
+        "skipped_no_contact_total": len(all_no_contact_guests),
+    }
     if all_invalid_phone_guests:
         response["invalid_phone_guests"] = all_invalid_phone_guests
         response["skipped_invalid_phone"] = len(all_invalid_phone_guests)
@@ -2243,13 +2291,8 @@ async def send_guest_qr(
 
 # ── Send QR codes to ALL unsent guests ──
 
-@router.post("/{event_id}/send-qrs")
-async def send_all_qrs(
-    event_id: int,
-    req: SendInvitesRequest,
-    user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
-):
+async def _send_qr_track(event_id: int, guests: list, channels: list, req, user, db) -> dict:
+    """Shared logic for sending QR codes with detailed tracking."""
     event_result = await db.execute(
         select(Event).where(Event.id == event_id, Event.organizer_id == user.id)
     )
@@ -2257,66 +2300,123 @@ async def send_all_qrs(
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
-    guests_result = await db.execute(
-        select(Guest).where(Guest.event_id == event_id)
-    )
-    guests = guests_result.scalars().all()
     if not guests:
         raise HTTPException(status_code=400, detail="No guests to send QR codes to")
 
-    channels = req.get_channels()
     results_for_channels = {}
     total_sent = 0
     all_invalid_phone_guests: list[dict] = []
+    all_no_contact_guests: list[dict] = []
+
+    def has_qr_contact(guest: Guest, ch: str) -> bool:
+        return (ch == "email" and guest.email) or (ch in ("whatsapp", "sms") and guest.phone)
 
     for ch in channels:
         invalid_phone_guests: list[dict] = []
-        targets = list(guests)
+        no_contact_guests: list[dict] = []
+
         if ch in {"whatsapp", "sms"}:
             invalid_phone_guests = [
-                {"id": guest.id, "name": guest.name, "phone": guest.phone}
-                for guest in guests
-                if guest.phone and not is_valid_phone(guest.phone)
+                {"id": g.id, "name": g.name, "phone": g.phone}
+                for g in guests if g.phone and not is_valid_phone(g.phone)
             ]
             all_invalid_phone_guests.extend(invalid_phone_guests)
-            targets = [g for g in guests if is_valid_phone(g.phone)]
-            if not targets:
-                if invalid_phone_guests:
-                    raise HTTPException(
-                        status_code=400,
-                        detail={
-                            "message": f"None of these guests has a usable phone number for {ch}. Fix these numbers and try again.",
-                            "invalid_phone_guests": invalid_phone_guests,
-                        },
-                    )
-                results_for_channels[ch] = {"sent": 0, "total": 0, "message": "No guests with contact info for this channel"}
-                continue
+
+            # Guests with no phone for this channel
+            no_contact_guests = [
+                {"id": g.id, "name": g.name, "reason": f"no phone for {ch}"}
+                for g in guests if not has_qr_contact(g, ch)
+            ]
+        else:
+            no_contact_guests = [
+                {"id": g.id, "name": g.name, "reason": "no email"}
+                for g in guests if not has_qr_contact(g, ch)
+            ]
+
+        if ch in {"whatsapp", "sms"}:
+            targets = [g for g in guests if has_qr_contact(g, ch) and is_valid_phone(g.phone)]
+        else:
+            targets = [g for g in guests if has_qr_contact(g, ch)]
+
+        if not targets:
+            if invalid_phone_guests:
+                raise HTTPException(
+                    status_code=400,
+                    detail={
+                        "message": f"None of these guests has a usable phone number for {ch}. Fix these numbers and try again.",
+                        "invalid_phone_guests": invalid_phone_guests,
+                    },
+                )
+            results_for_channels[ch] = {
+                "sent": 0, "total": 0, "failed": 0,
+                "skipped_no_contact": len(no_contact_guests),
+                "no_contact_guests": no_contact_guests,
+                "message": "No guests with contact info for this channel"
+            }
+            continue
 
         batch = InviteBatch(event_id=event_id, channel=ch)
         db.add(batch)
         await db.flush()
 
         sent = 0
+        failed = 0
         for guest in targets:
             ok, status = await _send_qr_to_guest(guest, event, ch, batch.id, db)
             if ok:
                 sent += 1
+            else:
+                failed += 1
             await db.flush()
 
         batch.total_sent = sent
         batch.status = "completed"
-        results_for_channels[ch] = {"batch_id": batch.id, "sent": sent, "total": len(targets)}
+        results_for_channels[ch] = {
+            "batch_id": batch.id,
+            "sent": sent,
+            "failed": failed,
+            "total": len(targets),
+            "skipped_no_contact": len(no_contact_guests),
+            "no_contact_guests": no_contact_guests,
+        }
         if invalid_phone_guests:
             results_for_channels[ch]["skipped_invalid_phone"] = len(invalid_phone_guests)
             results_for_channels[ch]["invalid_phone_guests"] = invalid_phone_guests
         total_sent += sent
 
+    # Guests with no contact for ANY selected channel
+    for guest in guests:
+        guest_has_contact = any(
+            has_qr_contact(guest, ch) and (ch not in ("whatsapp", "sms") or is_valid_phone(guest.phone))
+            for ch in channels
+        )
+        if not guest_has_contact:
+            all_no_contact_guests.append({"id": guest.id, "name": guest.name, "reason": "no contact info for any selected channel"})
+
     await db.commit()
-    response = {"channels": results_for_channels, "total_sent": total_sent, "total_guests": len(guests)}
-    if all_invalid_phone_guests:
-        response["invalid_phone_guests"] = all_invalid_phone_guests
-        response["skipped_invalid_phone"] = len(all_invalid_phone_guests)
-    return response
+    return {
+        "channels": results_for_channels,
+        "total_sent": total_sent,
+        "total_guests": len(guests),
+        "guests_with_no_contact": all_no_contact_guests,
+        "skipped_no_contact_total": len(all_no_contact_guests),
+        "invalid_phone_guests": all_invalid_phone_guests,
+        "skipped_invalid_phone": len(all_invalid_phone_guests),
+    }
+
+
+@router.post("/{event_id}/send-qrs")
+async def send_all_qrs(
+    event_id: int,
+    req: SendInvitesRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    guests_result = await db.execute(
+        select(Guest).where(Guest.event_id == event_id)
+    )
+    guests = guests_result.scalars().all()
+    return await _send_qr_track(event_id, guests, req.get_channels(), req, user, db)
 
 
 # ── Re-send payment check ──
@@ -2435,12 +2535,14 @@ async def send_invites_batch(
     total_sent = 0
     sent_guest_ids: set[int] = set()
     all_invalid_phone_guests: list[dict] = []
+    all_no_contact_guests: list[dict] = []
 
     def has_contact(guest: Guest, ch: str) -> bool:
         return (ch == "email" and guest.email) or (ch in ("whatsapp", "sms") and guest.phone)
 
     for ch in channels:
         invalid_phone_guests: list[dict] = []
+        no_contact_guests: list[dict] = []
         if ch in {"whatsapp", "sms"}:
             invalid_phone_guests = [
                 {"id": g.id, "name": g.name, "phone": g.phone}
@@ -2448,6 +2550,16 @@ async def send_invites_batch(
                 if has_contact(g, ch) and not is_valid_phone(g.phone)
             ]
             all_invalid_phone_guests.extend(invalid_phone_guests)
+
+            no_contact_guests = [
+                {"id": g.id, "name": g.name, "reason": f"no phone for {ch}"}
+                for g in guests if not has_contact(g, ch)
+            ]
+        else:
+            no_contact_guests = [
+                {"id": g.id, "name": g.name, "reason": "no email"}
+                for g in guests if not has_contact(g, ch)
+            ]
 
         if ch in {"whatsapp", "sms"}:
             eligible = [g for g in guests if has_contact(g, ch) and is_valid_phone(g.phone)]
@@ -2463,7 +2575,11 @@ async def send_invites_batch(
                         "invalid_phone_guests": invalid_phone_guests,
                     },
                 )
-            results_for_channels[ch] = {"sent": 0, "total": 0, "results": []}
+            results_for_channels[ch] = {
+                "sent": 0, "total": 0, "failed": 0, "results": [],
+                "skipped_no_contact": len(no_contact_guests),
+                "no_contact_guests": no_contact_guests,
+            }
             continue
 
         batch = InviteBatch(event_id=event_id, channel=ch)
@@ -2471,6 +2587,7 @@ async def send_invites_batch(
         await db.flush()
 
         sent = 0
+        failed = 0
         results = []
         for guest in eligible:
             ok, status = await _send_to_guest(guest, event, ch, batch.id, db, custom_subject=req.message_subject, custom_body=req.message_body)
@@ -2482,16 +2599,34 @@ async def send_invites_batch(
                 sent_guest_ids.add(guest.id)
                 results.append({"guest_id": guest.id, "name": guest.name, "status": "delivered"})
             else:
+                failed += 1
                 results.append({"guest_id": guest.id, "name": guest.name, "status": status})
             await db.flush()
 
         batch.total_sent = sent
         batch.status = "completed"
-        results_for_channels[ch] = {"batch_id": batch.id, "sent": sent, "total": len(eligible), "results": results}
+        results_for_channels[ch] = {
+            "batch_id": batch.id,
+            "sent": sent,
+            "failed": failed,
+            "total": len(eligible),
+            "results": results,
+            "skipped_no_contact": len(no_contact_guests),
+            "no_contact_guests": no_contact_guests,
+        }
         if invalid_phone_guests:
             results_for_channels[ch]["skipped_invalid_phone"] = len(invalid_phone_guests)
             results_for_channels[ch]["invalid_phone_guests"] = invalid_phone_guests
         total_sent += sent
+
+    # Guests with no contact for ANY selected channel
+    for guest in guests:
+        guest_has_contact = any(
+            has_contact(guest, ch) and (ch not in ("whatsapp", "sms") or is_valid_phone(guest.phone))
+            for ch in channels
+        )
+        if not guest_has_contact:
+            all_no_contact_guests.append({"id": guest.id, "name": guest.name, "reason": "no contact info for any selected channel"})
 
     if sent_guest_ids:
         for guest in guests:
@@ -2499,7 +2634,13 @@ async def send_invites_batch(
                 guest.invite_sent = True
 
     await db.commit()
-    response = {"channels": results_for_channels, "total_sent": total_sent, "total_guests": len(guests)}
+    response = {
+        "channels": results_for_channels,
+        "total_sent": total_sent,
+        "total_guests": len(guests),
+        "guests_with_no_contact": all_no_contact_guests,
+        "skipped_no_contact_total": len(all_no_contact_guests),
+    }
     if all_invalid_phone_guests:
         response["invalid_phone_guests"] = all_invalid_phone_guests
         response["skipped_invalid_phone"] = len(all_invalid_phone_guests)

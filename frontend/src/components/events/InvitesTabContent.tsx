@@ -23,11 +23,13 @@ type Guest = {
 };
 
 type SendResult = {
-  channels?: Record<string, any>;
+  channels?: Record<string, { sent: number; total: number; failed?: number; skipped_max_attempts?: number; skipped_invalid_phone?: number; skipped_no_contact?: number; no_contact_guests?: { id: number; name: string; reason: string }[] }>;
   total_sent?: number;
   total_guests?: number;
   skipped_invalid_phone?: number;
   invalid_phone_guests?: { id: number; name: string; phone: string | null }[];
+  guests_with_no_contact?: { id: number; name: string; reason: string }[];
+  skipped_no_contact_total?: number;
 };
 
 type BatchResult = {
@@ -36,6 +38,7 @@ type BatchResult = {
   remaining: number;
   batchGuests: string;
   error?: string;
+  channels?: Record<string, { sent: number; total: number; failed?: number; skipped_max_attempts?: number; skipped_invalid_phone?: number; skipped_no_contact?: number }>;
 };
 
 type InvitesTabContentProps = {
@@ -528,6 +531,20 @@ export default function InvitesTabContent({
                   <p className="text-sm font-medium text-emerald-900">
                     Sent to {batchResult.sent} of {batchResult.total} guest(s)
                   </p>
+                  {batchResult.channels && (
+                    <ul className="mt-1 space-y-1 text-xs">
+                      {Object.entries(batchResult.channels).map(([ch, info]: [string, any]) => (
+                        <li key={ch} className="flex flex-wrap gap-2 items-baseline">
+                          <span>{ch}:</span>
+                          <span className="font-medium">{info.sent}/{info.total} sent</span>
+                          {info.failed > 0 && <span className="text-red-600">({info.failed} failed)</span>}
+                          {info.skipped_max_attempts > 0 && <span className="text-amber-600">({info.skipped_max_attempts} max attempts)</span>}
+                          {info.skipped_invalid_phone > 0 && <span className="text-amber-600">({info.skipped_invalid_phone} invalid phone)</span>}
+                          {info.skipped_no_contact > 0 && <span className="text-slate-500">({info.skipped_no_contact} no contact)</span>}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                   <p className="text-xs text-emerald-700 mt-0.5">
                     {batchResult.batchGuests && <>Guests: {batchResult.batchGuests} &middot; </>}
                     {batchResult.remaining > 0 ? `${batchResult.remaining} guest(s) remaining` : "All contactable guests have been invited!"}
@@ -547,13 +564,31 @@ export default function InvitesTabContent({
               {sendResult.channels ? (
                 <ul className="mt-1 space-y-1">
                   {Object.entries(sendResult.channels).map(([ch, info]: [string, any]) => (
-                    <li key={ch}>{ch}: {info.sent}/{info.total} sent{info.skipped_max_attempts > 0 ? ` (${info.skipped_max_attempts} skipped)` : ""}{info.skipped_invalid_phone > 0 ? ` (${info.skipped_invalid_phone} wrong number)` : ""}</li>
+                    <li key={ch} className="flex flex-wrap gap-2 items-baseline">
+                      <span>{ch}:</span>
+                      <span className="font-medium">{info.sent}/{info.total} sent</span>
+                      {info.failed > 0 && <span className="text-red-600">({info.failed} failed)</span>}
+                      {info.skipped_max_attempts > 0 && <span className="text-amber-600">({info.skipped_max_attempts} max attempts)</span>}
+                      {info.skipped_invalid_phone > 0 && <span className="text-amber-600">({info.skipped_invalid_phone} invalid phone)</span>}
+                      {info.skipped_no_contact > 0 && <span className="text-slate-500">({info.skipped_no_contact} no contact)</span>}
+                    </li>
                   ))}
                 </ul>
               ) : (
                 <p>Sent {sendResult.total_sent ?? 0} of {sendResult.total_guests ?? 0}</p>
               )}
-              {!!sendResult.invalid_phone_guests?.length && (
+              {sendResult.guests_with_no_contact?.length && (
+                <div className="mt-3 rounded-md border border-slate-300 bg-slate-50 p-3">
+                  <p className="font-semibold text-slate-900">
+                    {sendResult.guests_with_no_contact.length} guest(s) have no contact info for ANY selected channel
+                  </p>
+                  <p className="mt-1 text-slate-700 text-xs">
+                    {sendResult.guests_with_no_contact.slice(0, 5).map((g) => `${g.name} (${g.reason})`).join(", ")}
+                    {sendResult.guests_with_no_contact.length > 5 ? ` and ${sendResult.guests_with_no_contact.length - 5} more` : ""}
+                  </p>
+                </div>
+              )}
+              {sendResult.invalid_phone_guests?.length && (
                 <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3">
                   <p className="font-semibold text-amber-900">
                     {sendResult.invalid_phone_guests.length} guest(s) skipped for a wrong number
@@ -586,11 +621,29 @@ export default function InvitesTabContent({
               {resendResult.channels ? (
                 <ul className="mt-1 space-y-1">
                   {Object.entries(resendResult.channels).map(([ch, info]: [string, any]) => (
-                    <li key={ch}>{ch}: {info.sent}/{info.total} sent</li>
+                    <li key={ch} className="flex flex-wrap gap-2 items-baseline">
+                      <span>{ch}:</span>
+                      <span className="font-medium">{info.sent}/{info.total} sent</span>
+                      {info.failed > 0 && <span className="text-red-600">({info.failed} failed)</span>}
+                      {info.skipped_max_attempts > 0 && <span className="text-amber-600">({info.skipped_max_attempts} max attempts)</span>}
+                      {info.skipped_invalid_phone > 0 && <span className="text-amber-600">({info.skipped_invalid_phone} invalid phone)</span>}
+                      {info.skipped_no_contact > 0 && <span className="text-slate-500">({info.skipped_no_contact} no contact)</span>}
+                    </li>
                   ))}
                 </ul>
               ) : (
                 <p>Sent {resendResult.total_sent ?? 0} of {resendResult.total_guests ?? 0}</p>
+              )}
+              {resendResult.guests_with_no_contact?.length && (
+                <div className="mt-3 rounded-md border border-slate-300 bg-slate-50 p-3">
+                  <p className="font-semibold text-slate-900">
+                    {resendResult.guests_with_no_contact.length} guest(s) have no contact info for ANY selected channel
+                  </p>
+                  <p className="mt-1 text-slate-700 text-xs">
+                    {resendResult.guests_with_no_contact.slice(0, 5).map((g) => `${g.name} (${g.reason})`).join(", ")}
+                    {resendResult.guests_with_no_contact.length > 5 ? ` and ${resendResult.guests_with_no_contact.length - 5} more` : ""}
+                  </p>
+                </div>
               )}
             </div>
           </div>
