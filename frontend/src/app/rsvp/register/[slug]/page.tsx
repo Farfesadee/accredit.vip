@@ -446,7 +446,11 @@ export default function EventRegistrationPage() {
                   <p className="text-sm font-semibold text-slate-800 mb-2">What happens next?</p>
                   <ul className="text-sm text-slate-700 space-y-2 list-disc list-inside leading-relaxed">
                     <li>Your registration details have been received and your event access is being processed.</li>
-                    <li>Once processed, your QR code will be sent via email or WhatsApp ahead of the event.</li>
+                    <li>
+                      {isAnchorEvent
+                        ? "Your host will send your QR code by email or WhatsApp ahead of the event."
+                        : "Once processed, your QR code will be sent via email or WhatsApp ahead of the event."}
+                    </li>
                     <li>This QR code is your access to the venue.</li>
                     <li>Entry to the venue is strictly by valid QR access code.</li>
                   </ul>

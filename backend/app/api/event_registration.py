@@ -209,6 +209,16 @@ def is_anchor_event(event: Event) -> bool:
     return (event.slug or "") in ANCHOR_SLUGS
 
 
+def auto_qr_on_rsvp(event: Event) -> bool:
+    """Whether an accepted RSVP delivers the guest's QR automatically.
+
+    Anchor Evening of Bliss (event 85) is the one exception: the client sends
+    every entry pass by hand from the dashboard, so registration and RSVP never
+    deliver a QR on their own. Every other event keeps the automatic flow.
+    """
+    return not is_anchor_event(event)
+
+
 def anniversary_content() -> dict:
     return {
         # The client's own invitation is the authority on the names, and on
@@ -695,7 +705,13 @@ async def submit_registration(
     # ACAMB-style flow (qr_later): the ONLY thing a registered guest receives is
     # their QR code (with the flyer) via email + WhatsApp. Trigger that delivery
     # here so it fires on registration, not only on the per-guest RSVP "Yes" flow.
-    if guest.rsvp_status == "accepted" and getattr(event, "qr_delivery", None) == "qr_later":
+    # Anchor Evening of Bliss (event 85) opts out: the client triggers every pass
+    # from the dashboard themselves.
+    if (
+        guest.rsvp_status == "accepted"
+        and getattr(event, "qr_delivery", None) == "qr_later"
+        and auto_qr_on_rsvp(event)
+    ):
         try:
             from app.api.rsvp import _send_qr_after_rsvp
             asyncio.create_task(_send_qr_after_rsvp(guest.id, event.id))
@@ -703,7 +719,10 @@ async def submit_registration(
             pass
 
     if guest.rsvp_status == "accepted":
-        message = "Your attendance has been recorded. You will receive your QR code via email or WhatsApp shortly."
+        if is_anchor_event(event):
+            message = "Your attendance has been recorded. Your host will send your entry pass separately."
+        else:
+            message = "Your attendance has been recorded. You will receive your QR code via email or WhatsApp shortly."
     else:
         message = "Your response has been recorded. Thank you."
 

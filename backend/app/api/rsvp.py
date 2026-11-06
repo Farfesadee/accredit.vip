@@ -71,6 +71,12 @@ async def _send_qr_after_rsvp(guest_id: int, event_id: int):
             if not guest or not event:
                 return
 
+            # Anchor Evening of Bliss (event 85): the client triggers every pass
+            # from the dashboard, so nothing is ever delivered on an RSVP.
+            from app.api.event_registration import auto_qr_on_rsvp
+            if not auto_qr_on_rsvp(event):
+                return
+
             qr = await get_or_create_guest_qr(db, event_id, guest_id)
             qr_token_url = f"{settings.FRONTEND_URL}/qr/{qr.token}"
 
@@ -309,9 +315,12 @@ async def submit_rsvp(
 
     await db.commit()
 
-    # Fire QR delivery asynchronously for accepted responses
+    # Fire QR delivery asynchronously for accepted responses. Anchor Evening of
+    # Bliss (event 85) opts out: the client sends every pass from the dashboard.
     if response_lower == "yes":
-        asyncio.create_task(_send_qr_after_rsvp(guest.id, event.id))
+        from app.api.event_registration import auto_qr_on_rsvp
+        if auto_qr_on_rsvp(event):
+            asyncio.create_task(_send_qr_after_rsvp(guest.id, event.id))
 
     return {
         "status": "success",

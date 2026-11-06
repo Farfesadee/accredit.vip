@@ -259,7 +259,9 @@ export default function RSVPPage() {
                 Thank you, {guestName || rsvpData?.guest_name || "Guest"}. Your attendance has been recorded.
               </p>
               <p className="mt-3 text-sm text-[#94a3b8] leading-relaxed">
-                Your unique QR code will be sent to your registered contact shortly. Please present it at the venue for entry.
+                {rsvpData?.event_slug === "anchor-evening-of-bliss"
+                  ? "Your entry pass will be sent to you by the host ahead of the event. Please present it at the venue for entry."
+                  : "Your unique QR code will be sent to your registered contact shortly. Please present it at the venue for entry."}
               </p>
             </>
           ) : (
