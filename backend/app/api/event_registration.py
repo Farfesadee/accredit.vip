@@ -69,7 +69,7 @@ def wedding_content() -> dict:
         },
         "reception": {
             "venue": "Los Angeles Event Center, Kado, Abuja",
-            "time": "3:00 PM",
+            "time": "2:00 PM",
         },
         # Two days, two looks. The white wedding is black tie and pastels; the
         # traditional, two days earlier, is green for the men and asoebi for
@@ -81,8 +81,8 @@ def wedding_content() -> dict:
                 "label": "The White Wedding",
                 "when": "Saturday, 19 December 2026",
                 "men": "Suit or black tie",
-                "women": "Pastel colours",
-                "note": "Gentlemen, a suit or black tie. Ladies, soft pastel tones.",
+                "women": "Pastel colours, with fascinators",
+                "note": "Gentlemen, a suit or black tie. Ladies, soft pastel tones, with fascinators.",
             },
             "traditional": {
                 "label": "The Traditional Wedding",
@@ -161,7 +161,7 @@ def wedding_content() -> dict:
             },
             {
                 "q": "Where do I go after the church?",
-                "a": "The reception follows from 3:00 PM at Los Angeles Event Center, Kado, Abuja. The When and Where section carries directions from wherever you are.",
+                "a": "The reception follows from 2:00 PM at Los Angeles Event Center, Kado, Abuja. The When and Where section carries directions from wherever you are.",
             },
             {
                 "q": "What should I wear to the traditional?",
@@ -169,7 +169,7 @@ def wedding_content() -> dict:
             },
             {
                 "q": "What should I wear to the white wedding?",
-                "a": "Gentlemen, a suit or black tie. Ladies, pastel colours in soft, sophisticated tones. The shade names are on the Dress Code section if you want a steer.",
+                "a": "Gentlemen, a suit or black tie. Ladies, pastel colours in soft, sophisticated tones, with fascinators. The shade names are on the Dress Code section if you want a steer.",
             },
             {
                 "q": "Who is the asoebi for, and how do I get it?",
