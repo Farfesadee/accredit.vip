@@ -72,8 +72,8 @@ def wedding_content() -> dict:
             "time": "2:00 PM",
         },
         # Two days, two looks. The white wedding is black tie and pastels; the
-        # traditional, two days earlier, is green for the men and asoebi for
-        # the women (client direction, October 2026).
+        # traditional, two days earlier, is dark green for the men and asoebi
+        # for the women (client direction, October 2026, refined 9 November).
         "dress_code": {
             "label": "Dress Code",
             "message": "Come dressed for each with us.",
@@ -87,9 +87,9 @@ def wedding_content() -> dict:
             "traditional": {
                 "label": "The Traditional Wedding",
                 "when": "Thursday, 17 December 2026",
-                "men": "Green, the colour of the day",
+                "men": "Dark green, the colour of the day",
                 "women": "Asoebi",
-                "note": "Gentlemen wear green, the colour of the day. Asoebi is for the ladies only.",
+                "note": "Gentlemen wear dark green, the colour of the day. Asoebi is for the ladies only.",
             },
             # Names only: the client asked us to drop the colour swatches and
             # keep the shade names as words.
@@ -130,13 +130,16 @@ def wedding_content() -> dict:
             {"name": "Belanova Apartment", "address": "Plot 3349 Lualaba Close, Off Madeira Street, Maitama District, Abuja"},
             {"name": "The Palms Hotel", "address": "Plot 269, Muhammadu Buhari Way, Central Business District, Abuja"},
         ],
-        # The traditional holds two days before the white wedding. Only the date
-        # and the dress direction are stated: the couple has not published a
-        # traditional venue, so the page never invents one.
+        # The traditional holds two days before the white wedding. The venue
+        # came from the client's own save-the-date: Maha Event Center, Garki
+        # Area 8, Abuja, 2 PM (client direction, 9 November 2026).
         "traditional": {
             "label": "The Traditional Wedding",
             "date": "Thursday, 17 December 2026",
-            "note": "The asoebi is worn at the traditional. Gentlemen wear green, the colour of the day.",
+            "time": "2:00 PM",
+            "venue": "Maha Event Center",
+            "location": "Garki Area 8, Abuja",
+            "note": "The asoebi is worn at the traditional. Gentlemen wear dark green, the colour of the day.",
         },
         # Friends of the couple asoebi: for the ladies, worn at the traditional
         # on 17 December. The client was explicit that men do not wear it.
@@ -145,7 +148,7 @@ def wedding_content() -> dict:
             "short": "Asoebi",
             "for_who": "For the ladies",
             "occasion": "Worn at the traditional wedding, Thursday, 17 December 2026.",
-            "note": "Asoebi is for the women only. Gentlemen, your colour of the day for the traditional is green.",
+            "note": "Asoebi is for the women only. Gentlemen, your colour of the day for the traditional is dark green.",
             "price": ASOEBI_PRICE,
             "items": ["3 yards of lace", "3 yards of lining", "Gele", "Souvenir from the couple"],
             "bank": ASOEBI_BANK,
@@ -165,7 +168,11 @@ def wedding_content() -> dict:
             },
             {
                 "q": "What should I wear to the traditional?",
-                "a": "The traditional holds on Thursday, 17 December 2026. Gentlemen wear green, the colour of the day. Ladies wear the friends of the couple asoebi.",
+                "a": "Gentlemen wear dark green, the colour of the day. Ladies wear the friends of the couple asoebi.",
+            },
+            {
+                "q": "Where is the traditional wedding?",
+                "a": "Maha Event Center, Garki Area 8, Abuja, on Thursday, 17 December 2026 from 2:00 PM. The When and Where section carries directions from wherever you are.",
             },
             {
                 "q": "What should I wear to the white wedding?",

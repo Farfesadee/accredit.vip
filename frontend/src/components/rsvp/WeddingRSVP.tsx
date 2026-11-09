@@ -736,10 +736,30 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
             </p>
             <p className="mt-1.5 font-serif text-lg" style={{ color: "#f8f2e6" }}>
               {content.traditional.date}
+              {content.traditional.time ? `, ${content.traditional.time}` : ""}
             </p>
+            {content.traditional.venue && (
+              <p className="mt-1" style={{ color: "rgba(248,242,230,0.85)" }}>
+                {content.traditional.venue}
+                {content.traditional.location ? `, ${content.traditional.location}` : ""}
+              </p>
+            )}
             <p className="mt-1 text-sm leading-relaxed" style={{ color: "rgba(248,242,230,0.72)" }}>
               {content.traditional.note}
             </p>
+            {content.traditional.venue && (
+              <a
+                href={dirUrl(
+                  [content.traditional.venue, content.traditional.location].filter(Boolean).join(", ")
+                )}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 inline-block text-xs font-bold underline underline-offset-4"
+                style={{ color: GOLD_LIGHT }}
+              >
+                Get directions
+              </a>
+            )}
           </div>
         )}
 
@@ -901,7 +921,7 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
           Pay once for one package or the whole family, and keep a reference you can look up any time.
         </p>
         <p className="mt-4 max-w-md text-sm leading-relaxed" style={{ color: "rgba(248,242,230,0.62)" }}>
-          {content.asoebi?.note || "Asoebi is for the women only. Gentlemen, your colour of the day is green."}
+          {content.asoebi?.note || "Asoebi is for the women only. Gentlemen, your colour of the day is dark green."}
         </p>
         <p className="mt-5 font-serif text-2xl" style={{ color: "#f8f2e6" }}>
           ₦{(content.asoebi?.price || 0).toLocaleString()}{" "}
