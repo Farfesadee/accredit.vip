@@ -65,6 +65,24 @@ function guestLimitFromRange(value?: string | null) {
   return numbers.length ? Math.max(...numbers) : null;
 }
 
+// Event 80 (Patrick & Sarah) is served from the couple's own domain, so any
+// link the couple copies out of this dashboard must stay on that domain
+// instead of handing a guest an accredit.vip address. Scoped to this event
+// only; every other event keeps the platform links.
+const WEDDING_DOMAIN = "https://sarahandpatrick.co.uk";
+
+function shareUrlFor(slug?: string | null) {
+  if (!slug) return "";
+  if (slug === "patrick-sarah-white-wedding") return `${WEDDING_DOMAIN}/`;
+  return typeof window !== "undefined" ? `${window.location.origin}/e/${slug}` : "";
+}
+
+function rsvpUrlFor(slug?: string | null) {
+  if (!slug) return "";
+  if (slug === "patrick-sarah-white-wedding") return `${WEDDING_DOMAIN}/`;
+  return typeof window !== "undefined" ? `${window.location.origin}/rsvp/register/${slug}` : "";
+}
+
 function isValidPhone(value?: string | null) {
     if (!value) return false;
     const compact = value.replace(/[\s().-]/g, "");
@@ -1152,7 +1170,7 @@ function EventDetailContent() {
                         Share This Event
                       </h3>
                       <div className="bg-white rounded-lg p-3 font-mono text-xs text-slate-700 break-all border border-blue-100 select-all">
-                        {typeof window !== "undefined" ? `${window.location.origin}/e/${event.slug}` : ""}
+                        {shareUrlFor(event.slug)}
                       </div>
                     </div>
                   )}
@@ -1167,12 +1185,12 @@ function EventDetailContent() {
                       <p className="text-xs text-slate-500 mb-2">Send this to anyone you forgot to add. They can RSVP without being on the guest list.</p>
                       <div className="flex items-center gap-2">
                         <div className="flex-1 bg-white rounded-lg p-3 font-mono text-xs text-slate-700 break-all border border-teal-100 select-all">
-                          {typeof window !== "undefined" ? `${window.location.origin}/rsvp/register/${event.slug}` : ""}
+                          {rsvpUrlFor(event.slug)}
                         </div>
                         <button
                           onClick={async () => {
                             try {
-                              await navigator.clipboard.writeText(`${window.location.origin}/rsvp/register/${event.slug}`);
+                              await navigator.clipboard.writeText(rsvpUrlFor(event.slug));
                               setCopiedRsvp(true);
                               setTimeout(() => setCopiedRsvp(false), 2000);
                             } catch {}
