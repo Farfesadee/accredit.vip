@@ -141,6 +141,26 @@ def _absolute_url(url: str | None) -> str | None:
     return url
 
 
+# The couple's own domain. Event 80 is the only event whose guest-facing links
+# live somewhere other than accredit.vip: the standalone static site serves the
+# invitation, and its pass page reads the same guest token.
+WEDDING_SITE_URL = "https://sarahandpatrick.co.uk"
+
+
+def guest_base_url(event: Event | None) -> str:
+    """The domain a guest's own links belong to.
+
+    Every event uses the platform domain. Event 80 (Patrick & Sarah) is white
+    labelled onto the couple's own site, so its invite and pass links must carry
+    that domain instead, or the guest is sent back to accredit.vip mid-flow.
+    """
+    from app.api.event_registration import is_wedding_event
+
+    if event is not None and is_wedding_event(event):
+        return WEDDING_SITE_URL
+    return f"{settings.FRONTEND_URL}".rstrip("/")
+
+
 def invite_link_for(event: Event, guest: Guest) -> str:
     """Where an invitation link takes the guest.
 
@@ -150,16 +170,22 @@ def invite_link_for(event: Event, guest: Guest) -> str:
     Every other event keeps the personal guest link, and QR passes always stay
     personal.
     """
-    from app.api.event_registration import experience_for, is_anchor_event
+    from app.api.event_registration import experience_for, is_anchor_event, is_wedding_event
+
+    # Event 80 lives on the couple's own domain, where the root of the site is
+    # the invitation. There is no per-guest page there, so an invite carries the
+    # public page, exactly as the platform link did before the move.
+    if is_wedding_event(event):
+        return f"{WEDDING_SITE_URL}/"
 
     # Anchor Evening of Bliss (event 85) is invited first from the dashboard, so
     # its invite must carry the guest's own link rather than the public page.
     if is_anchor_event(event):
-        return f"{settings.FRONTEND_URL}/rsvp/{guest.rsvp_token}"
+        return f"{guest_base_url(event)}/rsvp/{guest.rsvp_token}"
 
     if event.slug and experience_for(event) != "standard":
-        return f"{settings.FRONTEND_URL}/rsvp/register/{event.slug}"
-    return f"{settings.FRONTEND_URL}/rsvp/{guest.rsvp_token}"
+        return f"{guest_base_url(event)}/rsvp/register/{event.slug}"
+    return f"{guest_base_url(event)}/rsvp/{guest.rsvp_token}"
 
 
 def _upload_path_from_url(url: str) -> str:
@@ -1584,7 +1610,7 @@ async def _send_to_guest(
     qr_image_url = None
     if include_qr:
         qr = await get_or_create_guest_qr(db, event.id, guest.id)
-        qr_url = f"{settings.FRONTEND_URL}/qr/{qr.token}"
+        qr_url = f"{guest_base_url(event)}/qr/{qr.token}"
         qr_image_path = _upload_path_from_url(flyer_url) if flyer_url else None
         qr_image_url = qr_to_url(qr_url, image_path=qr_image_path, size=250)
 
@@ -1870,7 +1896,7 @@ async def _send_qr_to_guest(
     db: AsyncSession,
 ) -> tuple[bool, str]:
     qr = await get_or_create_guest_qr(db, event.id, guest.id)
-    qr_token_url = f"{settings.FRONTEND_URL}/qr/{qr.token}"
+    qr_token_url = f"{guest_base_url(event)}/qr/{qr.token}"
 
     flyer_result = await db.execute(select(FlierAsset).where(FlierAsset.event_id == event.id).order_by(FlierAsset.created_at.desc()))
     flyer = flyer_result.scalars().first()

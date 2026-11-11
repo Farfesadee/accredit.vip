@@ -78,7 +78,9 @@ async def _send_qr_after_rsvp(guest_id: int, event_id: int):
                 return
 
             qr = await get_or_create_guest_qr(db, event_id, guest_id)
-            qr_token_url = f"{settings.FRONTEND_URL}/qr/{qr.token}"
+            from app.api.messaging import guest_base_url
+
+            qr_token_url = f"{guest_base_url(event)}/qr/{qr.token}"
 
             flyer_result = await db.execute(
                 select(FlierAsset).where(FlierAsset.event_id == event_id).order_by(FlierAsset.created_at.desc())
