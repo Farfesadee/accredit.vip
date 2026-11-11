@@ -215,9 +215,6 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
   const [playingFilm, setPlayingFilm] = useState(false);
   const [fading, setFading] = useState(false);
   const filmRef = useRef<HTMLVideoElement | null>(null);
-  // Set by "Watch the Invitation": the curtain should start playing on its own
-  // as soon as it is mounted again, instead of waiting for a second tap.
-  const autoFilmRef = useRef(false);
 
   const [attendance, setAttendance] = useState<"yes" | "no" | null>(null);
   const [name, setName] = useState(guest?.name || "");
@@ -286,26 +283,6 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
     v.currentTime = 0;
     v.play().catch(() => reveal());
   };
-
-  // The house pattern for montage events: a button beside the main CTA that
-  // plays the opening film again. The click is the gesture, so the curtain
-  // starts by itself and parts onto the invitation when it ends.
-  const replayFilm = () => {
-    if (!filmUrl) return;
-    autoFilmRef.current = true;
-    setFading(false);
-    setPlayingFilm(false);
-    setEntered(false);
-    window.setTimeout(() => window.scrollTo({ top: 0 }), 50);
-  };
-
-  useEffect(() => {
-    if (entered || !autoFilmRef.current) return;
-    autoFilmRef.current = false;
-    const t = window.setTimeout(() => startFilm(), 60);
-    return () => window.clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [entered]);
 
   useEffect(() => {
     if (entered) return;
@@ -571,21 +548,6 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
             >
               RSVP
             </a>
-            <button
-              type="button"
-              onClick={replayFilm}
-              className="inline-flex h-12 items-center justify-center gap-2.5 rounded-full border px-6 text-[11px] font-semibold uppercase transition-colors hover:bg-white/10"
-              style={{
-                borderColor: "rgba(232,192,95,0.6)",
-                color: "#f8f2e6",
-                letterSpacing: "0.18em",
-              }}
-            >
-              <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" aria-hidden="true">
-                <path d="M8 5v14l11-7z" />
-              </svg>
-              Watch the Invitation
-            </button>
           </div>
           <div className="mt-8 flex items-center gap-3">
             <span className="h-px w-10" style={{ background: "rgba(232,192,95,0.75)" }} />
