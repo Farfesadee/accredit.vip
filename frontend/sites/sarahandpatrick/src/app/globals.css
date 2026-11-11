@@ -1,0 +1,8 @@
+/* The standalone wedding site.
+   Tailwind is told to scan the platform source tree as well, because the
+   invitation components are imported from there rather than copied, so there
+   is exactly one copy of the design in the repo. Path is relative to this
+   file: frontend/sites/sarahandpatrick/src/app -> frontend/src */
+@import "tailwindcss";
+
+@source "../../../../src";

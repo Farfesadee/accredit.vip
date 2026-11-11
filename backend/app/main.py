@@ -50,6 +50,13 @@ allowed_origins = [
     "https://accredit.vip",
     "https://www.accredit.vip",
     "https://app.accredit.vip",
+    # The standalone wedding site for event 80. It is a static copy of the
+    # invitation served from the couple's own domain, and its RSVP form posts
+    # to this API. Every other guest surface stays on accredit.vip.
+    "https://sarahandpatrick.co.uk",
+    "https://www.sarahandpatrick.co.uk",
+    "http://sarahandpatrick.co.uk",
+    "http://www.sarahandpatrick.co.uk",
 ]
 
 if settings.DEBUG:

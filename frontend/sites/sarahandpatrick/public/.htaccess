@@ -1,0 +1,53 @@
+# Sarah & Patrick wedding site: static export, served by Apache on cPanel.
+DirectoryIndex index.html
+ErrorDocument 404 /404.html
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # Always HTTPS. cPanel issues a free AutoSSL certificate for the domain, so
+  # this only ever redirects the http:// entry point, never a working URL.
+  RewriteCond %{HTTPS} !=on
+  RewriteCond %{HTTP:X-Forwarded-Proto} !https
+  RewriteRule ^(.*)$ https://%{HTTP_HOST}/$1 [R=301,L]
+
+  # A folder path without its trailing slash (for example an invitation link
+  # pasted without one) is redirected to the folder, which then serves
+  # index.html.
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteCond %{REQUEST_URI} !/$
+  RewriteRule ^(.*)$ /$1/ [R=301,L]
+</IfModule>
+
+# Never serve dotfiles or environment files, whatever ends up in the folder.
+<FilesMatch "^\.">
+  Require all denied
+</FilesMatch>
+<FilesMatch "(?i)\.(env|ini|log|bak|sql|py|json5)$">
+  Require all denied
+</FilesMatch>
+
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/plain text/css text/javascript
+  AddOutputFilterByType DEFLATE application/javascript application/json
+  AddOutputFilterByType DEFLATE image/svg+xml
+</IfModule>
+
+<IfModule mod_expires.c>
+  ExpiresActive On
+  # HTML is revalidated so a fix is never hidden behind a stale page.
+  ExpiresByType text/html "access plus 0 seconds"
+  # Everything else is versioned by Next, so it can be cached for good.
+  ExpiresByType text/css "access plus 1 year"
+  ExpiresByType application/javascript "access plus 1 year"
+  ExpiresByType image/jpeg "access plus 30 days"
+  ExpiresByType image/png "access plus 30 days"
+  ExpiresByType image/svg+xml "access plus 30 days"
+  ExpiresByType video/mp4 "access plus 30 days"
+  ExpiresByType font/woff2 "access plus 1 year"
+</IfModule>
+
+AddType video/mp4 .mp4
+AddType image/svg+xml .svg
+AddType font/woff2 .woff2

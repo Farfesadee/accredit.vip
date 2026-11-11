@@ -86,3 +86,13 @@ backend/.venv/
 frontend/.next/
 frontend/node_modules/
 frontend/out/
+
+# standalone site builds (frontend/sites/*)
+/frontend/sites/*/.next/
+/frontend/sites/*/out/
+/frontend/sites/*/next-env.d.ts
+/frontend/sites/*/tsconfig.tsbuildinfo
+
+# the standalone sites ship their own copy of the artwork they display
+!/frontend/sites/*/public/uploads/
+!/frontend/sites/*/public/uploads/**
