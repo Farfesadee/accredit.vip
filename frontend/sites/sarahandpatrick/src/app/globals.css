@@ -6,3 +6,34 @@
 @import "tailwindcss";
 
 @source "../../../../src";
+
+/* Tailwind v4 leaves native buttons on the browser's default arrow cursor, so
+   every control on the guest pages reads as plain text you cannot press. This
+   restores the pointer on anything clickable. It sits in the base layer so a
+   component can still opt out with a cursor utility (cursor-not-allowed on a
+   disabled control, for example). */
+@layer base {
+  button:not(:disabled),
+  input[type="button"]:not(:disabled),
+  input[type="submit"]:not(:disabled),
+  input[type="reset"]:not(:disabled),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled),
+  input[type="file"]:not(:disabled),
+  select:not(:disabled),
+  summary,
+  label[for],
+  [role="button"]:not([aria-disabled="true"]),
+  [role="tab"],
+  [role="option"] {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  input:disabled,
+  select:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+}
+
