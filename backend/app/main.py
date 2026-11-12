@@ -34,6 +34,9 @@ app.add_middleware(
         "www.accredit.vip",
         "api.accredit.vip",
         "app.accredit.vip",
+        # The couple's own dashboard address for event 80. It proxies /api/v1
+        # here so the session cookie stays on their domain.
+        "portal.sarahandpatrick.co.uk",
         "localhost",
         "127.0.0.1",
     ] if not settings.DEBUG else ["*"]
@@ -57,6 +60,9 @@ allowed_origins = [
     "https://www.sarahandpatrick.co.uk",
     "http://sarahandpatrick.co.uk",
     "http://www.sarahandpatrick.co.uk",
+    # The couple's dashboard on their own domain.
+    "https://portal.sarahandpatrick.co.uk",
+    "http://portal.sarahandpatrick.co.uk",
 ]
 
 if settings.DEBUG:
