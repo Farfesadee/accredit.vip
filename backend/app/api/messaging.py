@@ -768,7 +768,7 @@ def _build_invite_message(
             custom_subject=custom_subject, custom_body=custom_body,
         )
 
-    from app.api.event_registration import is_gala_event as _is_gala, is_anniversary_event as _is_anniv, is_anchor_event as _is_anchor
+    from app.api.event_registration import is_gala_event as _is_gala, is_anniversary_event as _is_anniv, is_anchor_event as _is_anchor, is_wedding_event as _is_wedding
 
     # Anchor Evening of Bliss (event 85 only): the client supplied the wording,
     # so their invitation goes out as written with the guest's own RSVP link.
@@ -783,6 +783,19 @@ def _build_invite_message(
     if _is_gala(event) and not custom_subject and not custom_body:
         return _build_gala_invite_message(
             guest, event, flyer_url, qr_image_url=qr_image_url, qr_url=qr_url, message_id=message_id
+        )
+    # Patrick & Sarah White Wedding (event 80): the RSVP link is for the white
+    # wedding only; the traditional wedding uses access cards. We add a clear
+    # note under the RSVP button so guests understand which ceremony they are
+    # confirming for.
+    if _is_wedding(event) and not custom_subject and not custom_body:
+        return _build_wedding_invite_message(
+            guest,
+            event,
+            flyer_url,
+            qr_image_url=qr_image_url,
+            qr_url=qr_url,
+            message_id=message_id,
         )
     # Mobola's BIG 10 (event 78 only): designed cream and gold reminder with the
     # estate gate code lifted into its own block. Her saved copy still drives the
@@ -839,9 +852,11 @@ def _build_invite_message(
         f"Venue: {event.venue}\n"
         f"Dress Code: {event.dress_code or 'Any'}\n\n"
         f"RSVP: {rsvp_link}\n"
-        f"{f'Your unique QR code: {qr_url}\n' if qr_url else ''}"
-        f"{f'\n{event.host_name}' if event.host_name else ''}"
     )
+    if qr_url:
+        body += f"Your unique QR code: {qr_url}\n"
+    if event.host_name:
+        body += f"\n{event.host_name}"
     qr_html = ""
     if qr_image_url:
         absolute_qr = _absolute_url(qr_image_url)
@@ -1249,6 +1264,253 @@ def _annette_qr_card(qr_image_url: str | None, note: str = "Show this code at th
         f'color:{ANNETTE_TEXT}">{note}</p>'
         "</div>"
     )
+
+
+# Wedding colours from the client's palette
+WEDDING_GOLD = "#C9A227"
+WEDDING_INK = "#1F1B16"
+WEDDING_CREAM = "#FAF7F0"
+WEDDING_MUTED = "#8A8074"
+
+
+def _build_wedding_invite_message(
+    guest: Guest,
+    event: Event,
+    flyer_url: str | None,
+    qr_image_url: str | None = None,
+    qr_url: str | None = None,
+    message_id: int | None = None,
+) -> tuple[str, str, str]:
+    """Designed cream and gold invitation for Patrick & Sarah White Wedding (event 80).
+
+    The RSVP link is for the white wedding only; the traditional wedding uses
+    access cards. A clear note is included under the RSVP button.
+    """
+    rsvp_link = invite_link_for(event, guest)
+    from datetime import date as dt_date, time as dt_time
+    formatted_date = _format_date(event.event_date)
+    formatted_time = _format_time(event.event_time, event.timezone or "WAT")
+    date_parts = str(formatted_date).split(" ", 1)
+    if len(date_parts) == 2 and date_parts[0].endswith("day"):
+        formatted_date = f"{date_parts[0]}, {date_parts[1]}"
+    time_parts = str(formatted_time).split(" ", 1)
+    if len(time_parts) == 2 and time_parts[0].isdigit():
+        formatted_time = f"{time_parts[0]}:00 {time_parts[1]}"
+
+    subject = f"You are invited: {event.title}"
+
+    absolute_flyer = _absolute_url(flyer_url) if flyer_url else None
+    absolute_qr = _absolute_url(qr_image_url) if qr_image_url else None
+    tracking_pixel = (
+        f'<img src="{settings.FRONTEND_URL}/api/v1/track/open/{message_id}" alt="" width="1" height="1" style="display:none" />'
+        if message_id
+        else ""
+    )
+
+    hero_html = (
+        f'<img src="{absolute_flyer}" alt="Patrick & Sarah" width="600" '
+        'style="width:100%;max-width:600px;height:auto;display:block;border:0;border-radius:10px 10px 0 0" />'
+        if absolute_flyer
+        else ""
+    )
+
+    qr_html = ""
+    if absolute_qr:
+        qr_html = (
+            '<div style="text-align:center;padding:20px;margin:0 0 26px;background:#FFFFFF;'
+            f'border:1px solid {WEDDING_GOLD};border-radius:12px">'
+            '<p style="margin:0 0 14px;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
+            f'letter-spacing:3px;color:{WEDDING_GOLD};text-transform:uppercase">Your entry code</p>'
+            f'<img src="{absolute_qr}" alt="Entry QR Code" width="190" height="190" '
+            'style="display:block;margin:0 auto;width:190px;height:190px;border:0" />'
+            '<p style="margin:12px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:11px;'
+            f'color:{WEDDING_MUTED}">Show this code at the White Wedding venue entrance</p>'
+            "</div>"
+        )
+    elif qr_url:
+        qr_html = (
+            f'<p style="padding:14px;border:1px dashed {WEDDING_GOLD};border-radius:12px;text-align:center;color:{WEDDING_INK}">Your unique QR access code is attached to this email</p>'
+        )
+
+    tracking_pixel_html = (
+        f'<img src="{settings.FRONTEND_URL}/api/v1/track/open/{message_id}" alt="" width="1" height="1" style="display:none" />'
+        if message_id
+        else ""
+    )
+
+    inner = (
+        f'{hero_html}'
+        '<div style="padding:32px 28px;background:' + WEDDING_CREAM + '">'
+        '<p style="margin:0 0 8px;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
+        f'letter-spacing:4px;color:{WEDDING_GOLD};text-transform:uppercase">You are invited</p>'
+        '<h1 style="margin:0 0 20px;font-family:Georgia,serif;font-size:32px;line-height:1.1;'
+        f'color:{WEDDING_INK}">The White Wedding</h1>'
+        f'<p style="margin:0 0 24px;font-family:Georgia,serif;font-size:15px;line-height:1.7;color:{WEDDING_INK}">'
+        'We are delighted to invite you to share in our joy as we celebrate our White Wedding in Abuja.'
+        '</p>'
+        '<table style="width:100%;border-collapse:collapse;margin:0 0 24px">'
+        '<tr>'
+        f'<td style="padding:8px 0;width:100px;vertical-align:top;font-family:Arial,Helvetica,sans-serif;'
+        f'font-size:10px;letter-spacing:2px;color:{WEDDING_GOLD};text-transform:uppercase">Date</td>'
+        f'<td style="padding:8px 0;font-size:15px;color:{WEDDING_INK};font-weight:bold">{formatted_date}</td>'
+        '</tr>'
+        '<tr>'
+        f'<td style="padding:8px 0;width:100px;vertical_align:top;font-family:Arial,Helvetica,sans-serif;'
+        f'font-size:10px;letter-spacing:2px;color:{WEDDING_GOLD};text-transform:uppercase">Time</td>'
+        f'<td style="padding:8px 0;font-size:15px;color:{WEDDING_INK};font-weight:bold">{formatted_time}</td>'
+        '</tr>'
+        '<tr>'
+        f'<td style="padding:8px 0;width:100px;vertical_align:top;font-family:Arial,Helvetica,sans-serif;'
+        f'font-size:10px;letter-spacing:2px;color:{WEDDING_GOLD};text-transform:uppercase">Venue</td>'
+        f'<td style="padding:8px 0;font-size:15px;color:{WEDDING_INK};font-weight:bold">{event.venue}</td>'
+        '</tr>'
+        '<tr>'
+        f'<td style="padding:8px 0;width:100px;vertical_align:top;font-family:Arial,Helvetica,sans-serif;'
+        f'font-size:10px;letter-spacing:2px;color:{WEDDING_GOLD};text-transform:uppercase">Dress Code</td>'
+        f'<td style="padding:8px 0;font-size:15px;color:{WEDDING_INK};font-weight:bold">Black Tie & Pastels</td>'
+        '</tr>'
+        '</table>'
+        '<div style="text-align:center;margin:24px 0">'
+        f'<a href="{rsvp_link}" style="display:inline-block;background:{WEDDING_GOLD};color:{WEDDING_INK};'
+        'padding:14px 40px;border-radius:50px;text-decoration:none;font-weight:bold;'
+        'font-size:15px;font-family:Arial,sans-serif">RSVP NOW</a>'
+        '</div>'
+        '<p style="margin:16px 0 0;text-align:center;font-size:13px;line-height:1.5;'
+        f'color:{WEDDING_MUTED}">'
+        'This RSVP is for the <strong>White Wedding</strong> on Saturday, 19 December 2026. '
+        'The Traditional Wedding on Thursday, 17 December 2026 uses access cards only.'
+        '</p>'
+        f'{qr_html}'
+        '</div>'
+        '<div style="background:' + WEDDING_INK + ';padding:22px 26px;text-align:center;'
+        'border-top:3px solid ' + WEDDING_GOLD + '">'
+        '<p style="margin:0 0 6px;font-family:Arial,Helvetica,sans-serif;font-size:9px;'
+        f'letter-spacing:4px;color:{WEDDING_GOLD};text-transform:uppercase">Accredit Interactive</p>'
+        '<p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
+        'letter-spacing:2px;color:#9A8388">Premium Event Infrastructure</p>'
+        "</div>"
+        f"{tracking_pixel_html}"
+    )
+    html = _annette_shell(inner, tracking_pixel_html)
+
+    body = (
+        f"Dear {guest.name},\n\n"
+        "We are delighted to invite you to share in our joy as we celebrate our White Wedding in Abuja.\n\n"
+        f"Date: {formatted_date}\n"
+        f"Time: {formatted_time}\n"
+        f"Venue: {event.venue}\n"
+        f"Dress Code: Black Tie & Pastels\n\n"
+        f"RSVP: {rsvp_link}\n\n"
+        "This RSVP is for the White Wedding on Saturday, 19 December 2026. "
+        "The Traditional Wedding on Thursday, 17 December 2026 uses access cards only.\n\n"
+        f"With love,\nPatrick & Sarah"
+    )
+    return subject, body, html
+
+
+def _build_wedding_qr_message(
+    guest: Guest,
+    event: Event,
+    qr_image_url: str | None = None,
+    flyer_url: str | None = None,
+) -> tuple[str, str, str]:
+    """Designed cream and gold entry pass for Patrick & Sarah White Wedding (event 80).
+
+    Same palette as the invitation. The flyer is optional; the pass works with
+    just the QR code and event details.
+    """
+    from datetime import date as dt_date, time as dt_time
+    formatted_date = _format_date(event.event_date)
+    formatted_time = _format_time(event.event_time, event.timezone or "WAT")
+    date_parts = str(formatted_date).split(" ", 1)
+    if len(date_parts) == 2 and date_parts[0].endswith("day"):
+        formatted_date = f"{date_parts[0]}, {date_parts[1]}"
+    time_parts = str(formatted_time).split(" ", 1)
+    if len(time_parts) == 2 and time_parts[0].isdigit():
+        formatted_time = f"{time_parts[0]}:00 {time_parts[1]}"
+
+    subject = f"Your Entry Pass: {event.title}"
+
+    absolute_qr = _absolute_url(qr_image_url) if qr_image_url else None
+    absolute_flyer = _absolute_url(flyer_url) if flyer_url else None
+
+    qr_html = ""
+    if absolute_qr:
+        qr_html = (
+            '<div style="text-align:center;padding:20px;margin:0 0 26px;background:#FFFFFF;'
+            f'border:1px solid {WEDDING_GOLD};border-radius:12px">'
+            '<p style="margin:0 0 14px;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
+            f'letter-spacing:3px;color:{WEDDING_GOLD};text-transform:uppercase">Your entry code</p>'
+            f'<img src="{absolute_qr}" alt="Entry QR Code" width="190" height="190" '
+            'style="display:block;margin:0 auto;width:190px;height:190px;border:0" />'
+            '<p style="margin:12px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:11px;'
+            f'color:{WEDDING_MUTED}">Show this code at the White Wedding venue entrance</p>'
+            "</div>"
+        )
+
+    flyer_html = (
+        f'<img src="{absolute_flyer}" alt="Patrick & Sarah" width="600" '
+        'style="width:100%;max-width:600px;height:auto;display:block;border:0;border-radius:10px 10px 0 0" />'
+        if absolute_flyer
+        else ""
+    )
+
+    inner = (
+        f'{flyer_html}'
+        '<div style="padding:32px 28px;background:' + WEDDING_CREAM + '">'
+        '<p style="margin:0 0 8px;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
+        f'letter-spacing:4px;color:{WEDDING_GOLD};text-transform:uppercase">Your entry pass</p>'
+        '<h1 style="margin:0 0 20px;font-family:Georgia,serif;font-size:32px;line-height:1.1;'
+        f'color:{WEDDING_INK}">The White Wedding</h1>'
+        f'<p style="margin:0 0 24px;font-family:Georgia,serif;font-size:15px;line-height:1.7;color:{WEDDING_INK}">'
+        f'Dear {guest.name}, your entry code for the White Wedding is ready.'
+        '</p>'
+        '<table style="width:100%;border-collapse:collapse;margin:0 0 24px">'
+        '<tr>'
+        f'<td style="padding:8px 0;width:100px;vertical_align:top;font-family:Arial,Helvetica,sans-serif;'
+        f'font-size:10px;letter-spacing:2px;color:{WEDDING_GOLD};text-transform:uppercase">Date</td>'
+        f'<td style="padding:8px 0;font-size:15px;color:{WEDDING_INK};font-weight:bold">{formatted_date}</td>'
+        '</tr>'
+        '<tr>'
+        f'<td style="padding:8px 0;width:100px;vertical_align:top;font-family:Arial,Helvetica,sans-serif;'
+        f'font-size:10px;letter-spacing:2px;color:{WEDDING_GOLD};text-transform:uppercase">Time</td>'
+        f'<td style="padding:8px 0;font-size:15px;color:{WEDDING_INK};font-weight:bold">{formatted_time}</td>'
+        '</tr>'
+        '<tr>'
+        f'<td style="padding:8px 0;width:100px;vertical_align:top;font-family:Arial,Helvetica,sans-serif;'
+        f'font-size:10px;letter-spacing:2px;color:{WEDDING_GOLD};text-transform:uppercase">Venue</td>'
+        f'<td style="padding:8px 0;font-size:15px;color:{WEDDING_INK};font-weight:bold">{event.venue}</td>'
+        '</tr>'
+        '<tr>'
+        f'<td style="padding:8px 0;width:100px;vertical_align:top;font-family:Arial,Helvetica,sans-serif;'
+        f'font-size:10px;letter-spacing:2px;color:{WEDDING_GOLD};text-transform:uppercase">Dress Code</td>'
+        f'<td style="padding:8px 0;font-size:15px;color:{WEDDING_INK};font-weight:bold">Black Tie & Pastels</td>'
+        '</tr>'
+        '</table>'
+        f'{qr_html}'
+        '</div>'
+        '<div style="background:' + WEDDING_INK + ';padding:22px 26px;text-align:center;'
+        'border-top:3px solid ' + WEDDING_GOLD + '">'
+        '<p style="margin:0 0 6px;font-family:Arial,Helvetica,sans-serif;font-size:9px;'
+        f'letter-spacing:4px;color:{WEDDING_GOLD};text-transform:uppercase">Accredit Interactive</p>'
+        '<p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
+        'letter-spacing:2px;color:#9A8388">Premium Event Infrastructure</p>'
+        "</div>"
+    )
+    html = _annette_shell(inner, "")
+
+    body = (
+        f"Dear {guest.name},\n\n"
+        f"Your entry code for the White Wedding is ready.\n\n"
+        f"Date: {formatted_date}\n"
+        f"Time: {formatted_time}\n"
+        f"Venue: {event.venue}\n"
+        f"Dress Code: Black Tie & Pastels\n\n"
+        "This pass is for the White Wedding on Saturday, 19 December 2026. "
+        "The Traditional Wedding on Thursday, 17 December 2026 uses access cards only.\n\n"
+        f"With love,\nPatrick & Sarah"
+    )
+    return subject, body, html
 
 
 def _build_annette_invite_message(
@@ -1750,7 +2012,7 @@ def _build_qr_message(guest: Guest, event: Event, qr_image_url: str | None = Non
     )
     if _bm and message_type == "qr_only" and not custom_message and not qr_message:
         return _build_bm_qr_message(guest, event, qr_image_url)
-    from app.api.event_registration import is_gala_event as _is_gala, is_anniversary_event as _is_anniv, is_anchor_event as _is_anchor
+    from app.api.event_registration import is_gala_event as _is_gala, is_anniversary_event as _is_anniv, is_anchor_event as _is_anchor, is_wedding_event as _is_wedding
 
     if _is_anchor(event) and message_type == "qr_only" and not custom_message and not qr_message:
         # Event 85 pass: event details plus the code, deliberately no flier.
@@ -1762,6 +2024,9 @@ def _build_qr_message(guest: Guest, event: Event, qr_image_url: str | None = Non
         return _build_annette_qr_message(guest, event, qr_image_url, flyer_url)
     if _is_gala(event) and message_type == "qr_only" and not custom_message and not qr_message:
         return _build_gala_qr_message(guest, event, qr_image_url, flyer_url)
+    if _is_wedding(event) and message_type == "qr_only" and not custom_message and not qr_message:
+        # Patrick & Sarah White Wedding entry pass, same cream and gold palette as the invite.
+        return _build_wedding_qr_message(guest, event, qr_image_url, flyer_url)
     subject = f"Your QR Access Code: {event.title}"
     body = custom_message or (
         f"==============================\n"
