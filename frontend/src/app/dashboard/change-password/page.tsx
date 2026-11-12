@@ -7,6 +7,7 @@ import Link from "next/link";
 import { CheckCircle2, Eye, EyeOff } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
 import { apiClient } from "@/lib/api-client";
+import { PORTAL, PORTAL_HOME } from "@/lib/portal";
 
 export default function ChangePasswordPage() {
   const { user, loading } = useAuth();
@@ -97,7 +98,7 @@ export default function ChangePasswordPage() {
           <CheckCircle2 className="mx-auto h-14 w-14 text-[#10b981]" />
           <h1 className="text-2xl font-semibold">Password Changed</h1>
           <p className="text-sm text-muted-foreground">Your password has been updated successfully.</p>
-          <Link href="/dashboard"><Button className="w-full">Back to Dashboard</Button></Link>
+          <Link href={PORTAL ? PORTAL_HOME : "/dashboard"}><Button className="w-full">Back to Dashboard</Button></Link>
         </div>
       </div>
     );
@@ -107,7 +108,7 @@ export default function ChangePasswordPage() {
     <div className="flex min-h-screen flex-col items-center justify-start px-4 py-2 sm:py-4">
       <div className="w-full max-w-sm space-y-0">
         <Link
-          href="/dashboard"
+          href={PORTAL ? PORTAL_HOME : "/dashboard"}
           className="mb-3 inline-flex h-10 items-center gap-2 rounded-xl border border-[rgba(255,255,255,0.18)] bg-[#0D1B2A] px-4 text-sm font-bold text-white shadow-md transition-all hover:bg-[#13283d] hover:border-[#1ABC9C]"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -117,14 +118,18 @@ export default function ChangePasswordPage() {
           Back
         </Link>
         <div className="text-center pt-0">
-          <Link href="/" className="inline-block mb-4">
-            <Image
-              src="/logo-mark.png"
-              alt="Accredit Interactive"
-              width={4071}
-              height={761}
-              className="h-8 w-auto object-contain"
-            />
+          <Link href={PORTAL ? PORTAL_HOME : "/"} className="inline-block mb-4">
+            {PORTAL ? (
+              <span className="font-serif text-lg text-[#1F1B16]">{PORTAL}</span>
+            ) : (
+              <Image
+                src="/logo-mark.png"
+                alt="Accredit Interactive"
+                width={4071}
+                height={761}
+                className="h-8 w-auto object-contain"
+              />
+            )}
           </Link>
           <h1 className="text-2xl font-semibold">Change Password</h1>
           <p className="mt-1 text-sm text-muted-foreground">

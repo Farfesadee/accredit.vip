@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
+import { PORTAL } from "@/lib/portal";
 
 const PROTECTED_ROUTES = ["/dashboard", "/admin", "/create-event"];
 
@@ -23,8 +24,10 @@ export function SessionGuard({ children }: { children: React.ReactNode }) {
     // Unauthenticated visitors get sent to login. Authenticated users are
     // NEVER logged out for navigating: sessions persist across public
     // pages, tab switches, and browser restarts (until token/idle expiry).
+    // The couple's portal has only one login, so its /admin shortcut goes
+    // there rather than to the platform's admin gate, which it does not serve.
     if (!user && isProtectedRoute && !isPickupRoute) {
-      router.push(pathname.startsWith("/admin") ? "/admin/login" : "/login");
+      router.push(PORTAL || !pathname.startsWith("/admin") ? "/login" : "/admin/login");
     }
   }, [pathname, user, loading, router]);
 

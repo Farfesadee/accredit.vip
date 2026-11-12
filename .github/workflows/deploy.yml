@@ -133,6 +133,11 @@ jobs:
           # Names the tab after the couple instead of the platform. The sidebar
           # also hides the account email's host when this is set.
           NEXT_PUBLIC_PORTAL_NAME: "Patrick & Sarah"
+          # The couple's event, used by /admin on their domain.
+          NEXT_PUBLIC_PORTAL_EVENT_ID: "80"
+          # Their public wedding site, linked from the sign-in screen.
+          NEXT_PUBLIC_PORTAL_SITE_URL: https://sarahandpatrick.co.uk
+          NEXT_PUBLIC_PORTAL_TAGLINE: 19 December 2026, Abuja
           NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${{ secrets.NEXT_PUBLIC_GOOGLE_CLIENT_ID }}
           NEXT_TELEMETRY_DISABLED: "1"
         run: |

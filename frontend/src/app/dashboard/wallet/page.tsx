@@ -14,6 +14,12 @@ import { SUPPORTED_CURRENCIES, formatCurrencyAmount as formatAmount } from "@/li
 import { Toast } from "@/components/shared/toast";
 import { Menu, X, LayoutGrid, Calendar, Plus, Wallet as WalletIcon, Compass, LogOut, Lock, RefreshCw, AlertTriangle } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
+import { PORTAL, PORTAL_HOME, PORTAL_INITIALS, PORTAL_ACCENT, PORTAL_ACCENT_DARK, PORTAL_SIDEBAR_BG } from "@/lib/portal";
+import { PortalMark } from "@/components/portal/portal-mark";
+
+const ACCENT = PORTAL ? PORTAL_ACCENT : "#1ABC9C";
+const ACCENT_DARK = PORTAL ? PORTAL_ACCENT_DARK : "#16A085";
+const SIDEBAR_BG = PORTAL ? PORTAL_SIDEBAR_BG : "#0D1B2A";
 
 interface Wallet {
   id: number;
@@ -332,14 +338,20 @@ export default function WalletPage() {
           mobileNavOpen ? "translate-x-0" : "-translate-x-full"
         } lg:translate-x-0 lg:static lg:flex`}
         style={{
-          background: "#0D1B2A",
+          background: SIDEBAR_BG,
           width: sidebarOpen ? "256px" : "80px",
         }}
       >
         <div className="flex items-center justify-between h-24 px-4 flex-shrink-0" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-          <Link href="/" onClick={() => setMobileNavOpen(false)} className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden">
-            <Image src="/logo-mark.png" alt="" width={366} height={372} className="h-10 w-auto object-contain flex-shrink-0" />
-            {sidebarOpen && <Image src="/logo-text.png" alt="Accredit Interactive" width={594} height={152} className="h-8 w-auto object-contain min-w-0" />}
+          <Link href={PORTAL ? PORTAL_HOME : "/"} onClick={() => setMobileNavOpen(false)} className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden">
+            {PORTAL ? (
+              <PortalMark open={sidebarOpen} />
+            ) : (
+              <>
+                <Image src="/logo-mark.png" alt="" width={366} height={372} className="h-10 w-auto object-contain flex-shrink-0" />
+                {sidebarOpen && <Image src="/logo-text.png" alt="Accredit Interactive" width={594} height={152} className="h-8 w-auto object-contain min-w-0" />}
+              </>
+            )}
           </Link>
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -353,9 +365,9 @@ export default function WalletPage() {
         <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
           {sidebarOpen && <p className="px-3 text-[10px] font-bold text-white/25 uppercase tracking-widest mb-3">Main Menu</p>}
           {[
-            { href: "/dashboard", label: "Dashboard", icon: <LayoutGrid className="w-4 h-4" /> },
+            { href: PORTAL ? PORTAL_HOME : "/dashboard", label: PORTAL ? "Event dashboard" : "Dashboard", icon: <LayoutGrid className="w-4 h-4" /> },
             { href: "/dashboard/events", label: "Events", icon: <Calendar className="w-4 h-4" /> },
-            { href: "/dashboard/create", label: "Create Event", icon: <Plus className="w-4 h-4" /> },
+            ...(PORTAL ? [] : [{ href: "/dashboard/create", label: "Create Event", icon: <Plus className="w-4 h-4" /> }]),
             { href: "/dashboard/wallet", label: "Wallet", icon: <WalletIcon className="w-4 h-4" />, active: true },
             { href: "/dashboard/failed-messages", label: "Failed Messages", icon: <AlertTriangle className="w-4 h-4" /> },
           ].map((item) => (
@@ -365,17 +377,17 @@ export default function WalletPage() {
               onClick={() => setMobileNavOpen(false)}
               className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all group"
               style={{
-                background: item.active ? "rgba(26, 188, 156,0.15)" : "transparent",
-                color: item.active ? "#1ABC9C" : "rgba(255,255,255,0.6)",
+                background: item.active ? `${ACCENT}26` : "transparent",
+                color: item.active ? ACCENT : "rgba(255,255,255,0.6)",
               }}
               title={!sidebarOpen ? item.label : ""}
             >
-              <span className={item.active ? "text-[#1ABC9C]" : "text-white/40"}>{item.icon}</span>
+              <span className={item.active ? "" : "text-white/40"} style={item.active ? { color: ACCENT } : undefined}>{item.icon}</span>
               {sidebarOpen && <span>{item.label}</span>}
             </Link>
           ))}
 
-          {sidebarOpen && (
+          {sidebarOpen && !PORTAL && (
             <div className="pt-4 mt-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
               <p className="px-3 text-[10px] font-bold text-white/25 uppercase tracking-widest mb-3">Discover</p>
               <Link
@@ -392,7 +404,7 @@ export default function WalletPage() {
 
         <div className="px-3 py-4 flex-shrink-0 space-y-3" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
           <div className="flex items-center gap-3 px-3 py-3 rounded-xl" style={{ background: "rgba(255,255,255,0.04)" }}>
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0" style={{ background: "linear-gradient(135deg, #1ABC9C, #16A085)" }}>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0" style={{ background: `linear-gradient(135deg, ${ACCENT}, ${ACCENT_DARK})` }}>
               {user.full_name?.charAt(0) || "U"}
             </div>
             {sidebarOpen && (
@@ -407,7 +419,8 @@ export default function WalletPage() {
             <>
               <Link
                 href="/dashboard/change-password"
-                className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-[#1ABC9C] bg-[#1ABC9C]/10 hover:bg-[#1ABC9C]/20 transition-all w-full"
+                className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all w-full"
+                style={{ color: ACCENT, background: `${ACCENT}1A` }}
               >
                 <Lock className="w-4 h-4" />
                 Change Password

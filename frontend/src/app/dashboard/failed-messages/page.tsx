@@ -6,6 +6,12 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { Menu, X, LayoutGrid, Calendar, Plus, Wallet as WalletIcon, AlertTriangle, Download, Filter, RefreshCw, LogOut, Lock, ChevronDown, ChevronUp, MessageCircle, Mail } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
+import { PORTAL, PORTAL_HOME, PORTAL_ACCENT, PORTAL_ACCENT_DARK, PORTAL_SIDEBAR_BG } from "@/lib/portal";
+import { PortalMark } from "@/components/portal/portal-mark";
+
+const ACCENT = PORTAL ? PORTAL_ACCENT : "#1ABC9C";
+const ACCENT_DARK = PORTAL ? PORTAL_ACCENT_DARK : "#16A085";
+const SIDEBAR_BG = PORTAL ? PORTAL_SIDEBAR_BG : "#0D1B2A";
 
 interface FailedMessage {
   id: number;
@@ -147,14 +153,20 @@ export default function FailedMessagesPage() {
           mobileNavOpen ? "translate-x-0" : "-translate-x-full"
         } lg:translate-x-0 lg:static lg:flex`}
         style={{
-          background: "#0D1B2A",
+          background: SIDEBAR_BG,
           width: sidebarOpen ? "256px" : "80px",
         }}
       >
         <div className="flex items-center justify-between h-24 px-4 flex-shrink-0" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-          <Link href="/" onClick={() => setMobileNavOpen(false)} className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden">
-            <Image src="/logo-mark.png" alt="" width={366} height={372} className="h-10 w-auto object-contain flex-shrink-0" />
-            {sidebarOpen && <Image src="/logo-text.png" alt="Accredit Interactive" width={594} height={152} className="h-8 w-auto object-contain min-w-0" />}
+          <Link href={PORTAL ? PORTAL_HOME : "/"} onClick={() => setMobileNavOpen(false)} className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden">
+            {PORTAL ? (
+              <PortalMark open={sidebarOpen} />
+            ) : (
+              <>
+                <Image src="/logo-mark.png" alt="" width={366} height={372} className="h-10 w-auto object-contain flex-shrink-0" />
+                {sidebarOpen && <Image src="/logo-text.png" alt="Accredit Interactive" width={594} height={152} className="h-8 w-auto object-contain min-w-0" />}
+              </>
+            )}
           </Link>
           <button
             onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -168,9 +180,9 @@ export default function FailedMessagesPage() {
         <nav className="flex-1 px-3 py-6 space-y-1 overflow-y-auto">
           {sidebarOpen && <p className="px-3 text-[10px] font-bold text-white/25 uppercase tracking-widest mb-3">Main Menu</p>}
           {[
-            { href: "/dashboard", label: "Dashboard", icon: <LayoutGrid className="w-4 h-4" /> },
+            { href: PORTAL ? PORTAL_HOME : "/dashboard", label: PORTAL ? "Event dashboard" : "Dashboard", icon: <LayoutGrid className="w-4 h-4" /> },
             { href: "/dashboard/events", label: "Events", icon: <Calendar className="w-4 h-4" /> },
-            { href: "/dashboard/create", label: "Create Event", icon: <Plus className="w-4 h-4" /> },
+            ...(PORTAL ? [] : [{ href: "/dashboard/create", label: "Create Event", icon: <Plus className="w-4 h-4" /> }]),
             { href: "/dashboard/wallet", label: "Wallet", icon: <WalletIcon className="w-4 h-4" /> },
             { href: "/dashboard/failed-messages", label: "Failed Messages", icon: <AlertTriangle className="w-4 h-4" /> },
           ].map((item) => {
@@ -193,7 +205,7 @@ export default function FailedMessagesPage() {
             );
           })}
 
-          {sidebarOpen && (
+          {sidebarOpen && !PORTAL && (
             <div className="pt-4 mt-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
               <p className="px-3 text-[10px] font-bold text-white/25 uppercase tracking-widest mb-3">Discover</p>
               <Link
@@ -210,7 +222,7 @@ export default function FailedMessagesPage() {
 
         <div className="px-3 py-4 flex-shrink-0 space-y-3" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
           <div className="flex items-center gap-3 px-3 py-3 rounded-xl" style={{ background: "rgba(255,255,255,0.04)" }}>
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0" style={{ background: "linear-gradient(135deg, #1ABC9C, #16A085)" }}>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0" style={{ background: `linear-gradient(135deg, ${ACCENT}, ${ACCENT_DARK})` }}>
               {user?.full_name?.charAt(0) || "U"}
             </div>
             {sidebarOpen && (
@@ -223,7 +235,7 @@ export default function FailedMessagesPage() {
 
           {sidebarOpen && (
             <>
-              <Link href="/dashboard/change-password" className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-[#1ABC9C] bg-[#1ABC9C]/10 hover:bg-[#1ABC9C]/20 transition-all w-full">
+              <Link href="/dashboard/change-password" className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all w-full" style={{ color: ACCENT, background: `${ACCENT}1A` }}>
                 <Lock className="w-4 h-4" />
                 Change Password
               </Link>

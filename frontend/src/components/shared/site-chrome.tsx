@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { apiClient } from "@/lib/api-client";
+import { PORTAL, PORTAL_ACCENT } from "@/lib/portal";
 
 const UTM_KEYS = ["utm_source", "utm_medium", "utm_campaign"] as const;
 
@@ -224,12 +225,16 @@ export function SiteChrome() {
         <div className="fixed bottom-0 left-0 right-0 z-[85] px-4 pb-4">
           <div className="max-w-3xl mx-auto rounded-2xl bg-[#0D1B2A] text-white px-5 py-4 shadow-2xl flex flex-col sm:flex-row items-start sm:items-center gap-3">
             <p className="text-xs leading-relaxed text-white/80 flex-1">
-              We use basic cookies to keep you signed in and remember your preferences. By using Accredit Interactive you accept this.
+              We use basic cookies to keep you signed in and remember your preferences. By using {PORTAL || "Accredit Interactive"} you accept this.
             </p>
             <button
               onClick={acceptCookies}
-              className="flex-shrink-0 rounded-xl px-5 py-2.5 text-xs font-bold text-white transition-transform hover:scale-105"
-              style={{ background: "linear-gradient(135deg, #1ABC9C, #16A085)" }}
+              className="flex-shrink-0 rounded-xl px-5 py-2.5 text-xs font-bold transition-transform hover:scale-105"
+              style={
+                PORTAL
+                  ? { background: PORTAL_ACCENT, color: "#20180A" }
+                  : { background: "linear-gradient(135deg, #1ABC9C, #16A085)", color: "#fff" }
+              }
             >
               Got it
             </button>

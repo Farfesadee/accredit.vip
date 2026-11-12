@@ -11,6 +11,7 @@ import {
   User,
   Users,
 } from "lucide-react";
+import { PORTAL } from "@/lib/portal";
 
 const STORAGE_KEY = "accredit_onboarding_done";
 
@@ -29,7 +30,7 @@ const stepIcons = {
 const steps = [
   {
     icon: "party",
-    title: "Welcome to Accredit Interactive",
+    title: PORTAL ? `Welcome to ${PORTAL}` : "Welcome to Accredit Interactive",
     description: "Invitations, guest lists, tickets and QR entry in one dashboard.",
     detail: ["This is a one minute tour. You can leave it at any point and nothing is lost."],
   },

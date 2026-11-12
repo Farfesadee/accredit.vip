@@ -16,11 +16,24 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
+import { PORTAL, PORTAL_HOME, PORTAL_INITIALS, PORTAL_ACCENT, PORTAL_ACCENT_DARK, PORTAL_SIDEBAR_BG } from "@/lib/portal";
+import { PortalMark } from "@/components/portal/portal-mark";
+
+// The couple's own dashboard build carries their names and their gold, and it
+// has no reason to offer "Create Event". Every other build keeps the platform
+// wordmark, the platform teal and the full menu, byte for byte.
+const ACCENT = PORTAL ? PORTAL_ACCENT : "#1ABC9C";
+const ACCENT_DARK = PORTAL ? PORTAL_ACCENT_DARK : "#16A085";
+const SIDEBAR_BG = PORTAL ? PORTAL_SIDEBAR_BG : "#0D1B2A";
 
 const NAV_ITEMS = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutGrid },
+  {
+    href: PORTAL ? PORTAL_HOME : "/dashboard",
+    label: PORTAL ? "Event dashboard" : "Dashboard",
+    icon: LayoutGrid,
+  },
   { href: "/dashboard/events", label: "Events", icon: CalendarDays },
-  { href: "/dashboard/create", label: "Create Event", icon: Plus },
+  ...(PORTAL ? [] : [{ href: "/dashboard/create", label: "Create Event", icon: Plus }]),
   { href: "/dashboard/wallet", label: "Wallet", icon: Wallet },
   { href: "/dashboard/failed-messages", label: "Failed Messages", icon: AlertTriangle },
 ];
@@ -65,14 +78,20 @@ export function DashboardSidebar({
           mobileNavOpen ? "translate-x-0" : "-translate-x-full"
         } lg:translate-x-0`}
         style={{
-          background: "#0D1B2A",
+          background: SIDEBAR_BG,
           width: sidebarOpen ? "256px" : "80px",
         }}
       >
         <div className="flex items-center justify-between h-24 px-4 flex-shrink-0" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-          <Link href="/" onClick={onMobileNavClose} className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden">
-            <Image src="/logo-mark.png" alt="" width={366} height={372} className="h-10 w-auto object-contain flex-shrink-0" />
-            {sidebarOpen && <Image src="/logo-text.png" alt="Accredit Interactive" width={594} height={152} className="h-8 w-auto object-contain min-w-0" />}
+          <Link href={PORTAL ? PORTAL_HOME : "/"} onClick={onMobileNavClose} className="flex items-center gap-2 flex-1 min-w-0 overflow-hidden">
+            {PORTAL ? (
+              <PortalMark open={sidebarOpen} />
+            ) : (
+              <>
+                <Image src="/logo-mark.png" alt="" width={366} height={372} className="h-10 w-auto object-contain flex-shrink-0" />
+                {sidebarOpen && <Image src="/logo-text.png" alt="Accredit Interactive" width={594} height={152} className="h-8 w-auto object-contain min-w-0" />}
+              </>
+            )}
           </Link>
           <button
             onClick={onToggleSidebar}
@@ -95,12 +114,12 @@ export function DashboardSidebar({
                 onClick={onMobileNavClose}
                 className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all"
                 style={{
-                  background: active ? "rgba(26, 188, 156,0.15)" : "transparent",
-                  color: active ? "#1ABC9C" : "rgba(255,255,255,0.6)",
+                  background: active ? `${ACCENT}26` : "transparent",
+                  color: active ? ACCENT : "rgba(255,255,255,0.6)",
                 }}
                 title={!sidebarOpen ? item.label : ""}
               >
-                <span className={active ? "text-[#1ABC9C]" : "text-white/40"}><item.icon className="w-4 h-4" /></span>
+                <span className={active ? "" : "text-white/40"} style={active ? { color: ACCENT } : undefined}><item.icon className="w-4 h-4" /></span>
                 {sidebarOpen && <span>{item.label}</span>}
               </Link>
             );
@@ -109,7 +128,7 @@ export function DashboardSidebar({
 
         <div className="px-3 py-4 flex-shrink-0 space-y-3" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
           <div className="flex items-center gap-3 px-3 py-3 rounded-xl" style={{ background: "rgba(255,255,255,0.04)" }}>
-            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0" style={{ background: "linear-gradient(135deg, #1ABC9C, #16A085)" }}>
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0" style={{ background: `linear-gradient(135deg, ${ACCENT}, ${ACCENT_DARK})` }}>
               {user?.full_name?.charAt(0) || "U"}
             </div>
             {sidebarOpen && (
@@ -122,7 +141,7 @@ export function DashboardSidebar({
 
           {sidebarOpen && (
             <>
-              <Link href="/dashboard/change-password" className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-[#1ABC9C] bg-[#1ABC9C]/10 hover:bg-[#1ABC9C]/20 transition-all w-full">
+              <Link href="/dashboard/change-password" className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all w-full" style={{ color: ACCENT, background: `${ACCENT}1A` }}>
                 <Lock className="w-4 h-4" />
                 Change Password
               </Link>

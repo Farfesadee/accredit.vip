@@ -6,6 +6,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { Check, Circle } from "lucide-react";
 import { useAuth } from "@/contexts/auth-context";
+import PortalLogin from "@/components/portal/portal-login";
+import { PORTAL } from "@/lib/portal";
 
 const QR_PATTERN = [
   1,1,1,0,1,0,1,1,
@@ -393,6 +395,12 @@ function LoginForm() {
 }
 
 export default function LoginPage() {
+  // The couple's portal build renders its own sign-in screen, in the wedding's
+  // palette and with none of the platform branding. Every other build keeps
+  // the page below unchanged.
+  if (PORTAL) {
+    return <PortalLogin />;
+  }
   return (
     <Suspense fallback={null}>
       <LoginForm />
