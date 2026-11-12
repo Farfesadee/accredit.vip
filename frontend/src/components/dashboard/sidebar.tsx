@@ -50,6 +50,11 @@ export function DashboardSidebar({
     if (!local || !domain) return email;
     const visibleStart = local.slice(0, Math.min(8, local.length));
     const visibleEnd = local.length > 1 ? local.slice(-1) : "";
+    // The couple's portal build drops the host, so their own dashboard never
+    // shows the platform domain. The name above already identifies the account.
+    if (process.env.NEXT_PUBLIC_PORTAL_NAME) {
+      return `${visibleStart}******${visibleEnd}`;
+    }
     return `${visibleStart}******${visibleEnd}@${domain}`;
   }
 

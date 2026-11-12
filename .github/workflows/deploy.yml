@@ -130,6 +130,9 @@ jobs:
         working-directory: frontend
         env:
           NEXT_PUBLIC_API_URL: https://portal.sarahandpatrick.co.uk/api/v1
+          # Names the tab after the couple instead of the platform. The sidebar
+          # also hides the account email's host when this is set.
+          NEXT_PUBLIC_PORTAL_NAME: "Patrick & Sarah"
           NEXT_PUBLIC_GOOGLE_CLIENT_ID: ${{ secrets.NEXT_PUBLIC_GOOGLE_CLIENT_ID }}
           NEXT_TELEMETRY_DISABLED: "1"
         run: |

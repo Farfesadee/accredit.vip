@@ -19,11 +19,20 @@ const inter = Inter({
   display: "swap",
 });
 
+// The couple's own dashboard build (portal.sarahandpatrick.co.uk) is compiled
+// with NEXT_PUBLIC_PORTAL_NAME set, so their browser tab carries their name
+// rather than the platform's. Every other build is untouched.
+const PORTAL_NAME = process.env.NEXT_PUBLIC_PORTAL_NAME;
+
+const SITE_TITLE = PORTAL_NAME
+  ? `${PORTAL_NAME} | Dashboard`
+  : "Accredit Interactive | Event Ticketing Platform & Marketplace in Nigeria";
+
 export const metadata: Metadata = {
   metadataBase: new URL("https://accredit.vip"),
   title: {
-    default: "Accredit Interactive | Event Ticketing Platform & Marketplace in Nigeria",
-    template: "%s | Accredit Interactive",
+    default: SITE_TITLE,
+    template: PORTAL_NAME ? `%s | ${PORTAL_NAME}` : "%s | Accredit Interactive",
   },
   description:
     "Accredit Interactive is Nigeria's event ticketing platform and event marketplace: create events, sell tickets online, send WhatsApp/SMS/email invitations, generate QR access codes, and track attendance: all in one place.",
@@ -45,15 +54,15 @@ export const metadata: Metadata = {
   robots: { index: true, follow: true },
   openGraph: {
     type: "website",
-    siteName: "Accredit Interactive",
-    title: "Accredit Interactive | Event Ticketing Platform & Marketplace in Nigeria",
+    siteName: PORTAL_NAME || "Accredit Interactive",
+    title: SITE_TITLE,
     description:
       "Create events, sell tickets online, send invitations, generate QR codes, and track attendance: all from one platform built for Africa.",
-    images: [{ url: "/logo-full.png", width: 1200, height: 630, alt: "Accredit Interactive" }],
+    images: [{ url: "/logo-full.png", width: 1200, height: 630, alt: PORTAL_NAME || "Accredit Interactive" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Accredit Interactive | Event Ticketing Platform & Marketplace in Nigeria",
+    title: SITE_TITLE,
     description:
       "Create events, sell tickets online, send invitations, generate QR codes, and track attendance.",
     images: ["/logo-full.png"],
