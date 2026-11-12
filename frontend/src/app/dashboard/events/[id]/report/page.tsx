@@ -7,6 +7,10 @@ import { Printer, ArrowLeft, AlertTriangle, Loader } from "lucide-react";
 import Link from "next/link";
 import { DashboardSidebar } from "@/components/dashboard/sidebar";
 import { DashboardTopbar } from "@/components/dashboard/topbar";
+import { PORTAL, PORTAL_ACCENT } from "@/lib/portal";
+
+const ACCENT = PORTAL ? PORTAL_ACCENT : "#1ABC9C";
+const ACCENT_DARK = PORTAL ? "#A8871F" : "#16A085";
 
 type Guest = {
   id: number;
@@ -211,21 +215,21 @@ export default function EventReportPage() {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
-          <div className="rounded-lg bg-indigo-50 p-4">
-            <p className="text-xs font-medium text-indigo-600">RSVP Rate</p>
-            <p className="text-xl font-bold text-indigo-900 mt-1">{rsvpRate}%</p>
+          <div className="rounded-lg" style={{ background: `${ACCENT}15` }}>
+            <p className="text-xs font-medium" style={{ color: ACCENT }}>RSVP Rate</p>
+            <p className="text-xl font-bold mt-1" style={{ color: ACCENT }}>{rsvpRate}%</p>
           </div>
-          <div className="rounded-lg bg-teal-50 p-4">
-            <p className="text-xs font-medium text-teal-600">Response Rate</p>
-            <p className="text-xl font-bold text-teal-900 mt-1">{responseRate}%</p>
+          <div className="rounded-lg" style={{ background: `${ACCENT}15` }}>
+            <p className="text-xs font-medium" style={{ color: ACCENT }}>Response Rate</p>
+            <p className="text-xl font-bold mt-1" style={{ color: ACCENT }}>{responseRate}%</p>
           </div>
-          <div className="rounded-lg bg-blue-50 p-4">
-            <p className="text-xs font-medium text-blue-600">Invite Sent</p>
-            <p className="text-xl font-bold text-blue-900 mt-1">{sent.length}</p>
+          <div className="rounded-lg" style={{ background: `#3B82F6` + `15` }}>
+            <p className="text-xs font-medium" style={{ color: `#3B82F6` }}>Invite Sent</p>
+            <p className="text-xl font-bold mt-1" style={{ color: `#3B82F6` }}>{sent.length}</p>
           </div>
-          <div className="rounded-lg bg-purple-50 p-4">
-            <p className="text-xs font-medium text-purple-600">Invite Viewed</p>
-            <p className="text-xl font-bold text-purple-900 mt-1">{viewed.length}</p>
+          <div className="rounded-lg" style={{ background: `#8B5CF6` + `15` }}>
+            <p className="text-xs font-medium" style={{ color: `#8B5CF6` }}>Invite Viewed</p>
+            <p className="text-xl font-bold mt-1" style={{ color: `#8B5CF6` }}>{viewed.length}</p>
           </div>
         </div>
 
@@ -264,7 +268,7 @@ export default function EventReportPage() {
                     <p className="text-xs font-medium text-white/60">Checked in</p>
                     <p className="text-3xl font-black mt-1">{accred.checked_in} <span className="text-base font-semibold text-white/50">/ {accred.total_guests}</span></p>
                   </div>
-                  <p className="text-2xl font-black text-teal-300">
+                  <p className="text-2xl font-black" style={{ color: ACCENT }}>
                     {accred.total_guests > 0 ? Math.round((accred.checked_in / accred.total_guests) * 100) : 0}%
                   </p>
                 </div>
@@ -273,7 +277,7 @@ export default function EventReportPage() {
                     className="h-full rounded-full transition-all"
                     style={{
                       width: `${accred.total_guests > 0 ? Math.round((accred.checked_in / accred.total_guests) * 100) : 0}%`,
-                      background: "linear-gradient(90deg, #1ABC9C, #16A085)",
+                      background: `linear-gradient(90deg, ${ACCENT}, ${ACCENT_DARK})`,
                     }}
                   />
                 </div>
@@ -287,7 +291,7 @@ export default function EventReportPage() {
                       <div className="flex items-center justify-between">
                         <p className="text-sm font-bold text-slate-900 truncate">{c.category}</p>
                         {premium && (
-                          <span className="text-[10px] font-black uppercase tracking-wider text-teal-700 bg-teal-100 px-2 py-0.5 rounded-full flex-shrink-0 ml-2">VIP</span>
+                          <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full flex-shrink-0 ml-2" style={{ background: `${ACCENT}20`, color: ACCENT }}>VIP</span>
                         )}
                       </div>
                       <p className="text-2xl font-black text-slate-900 mt-2">
@@ -296,7 +300,7 @@ export default function EventReportPage() {
                       <div className="h-2 rounded-full bg-slate-100 mt-3 overflow-hidden">
                         <div
                           className="h-full rounded-full transition-all"
-                          style={{ width: `${pct}%`, background: premium ? "linear-gradient(90deg, #1ABC9C, #0D1B2A)" : "#1ABC9C" }}
+                          style={{ width: `${pct}%`, background: premium ? `linear-gradient(90deg, ${ACCENT}, ${ACCENT_DARK})` : ACCENT }}
                         />
                       </div>
                       <p className="text-[11px] text-slate-500 mt-1.5">{pct}% accredited</p>
@@ -317,17 +321,17 @@ export default function EventReportPage() {
           ) : (
             <>
               <div className="grid grid-cols-3 gap-4 mb-4">
-                <div className="rounded-lg bg-emerald-50 p-4">
-                  <p className="text-xs font-medium text-emerald-600">Orders</p>
-                  <p className="text-xl font-bold text-emerald-900 mt-1">{sales.length}</p>
+                <div className="rounded-lg" style={{ background: `#10B981` + `15` }}>
+                  <p className="text-xs font-medium" style={{ color: `#10B981` }}>Orders</p>
+                  <p className="text-xl font-bold mt-1" style={{ color: `#10B981` }}>{sales.length}</p>
                 </div>
-                <div className="rounded-lg bg-teal-50 p-4">
-                  <p className="text-xs font-medium text-teal-600">Tickets sold</p>
-                  <p className="text-xl font-bold text-teal-900 mt-1">{totalTicketsSold}</p>
+                <div className="rounded-lg" style={{ background: `${ACCENT}15` }}>
+                  <p className="text-xs font-medium" style={{ color: ACCENT }}>Tickets sold</p>
+                  <p className="text-xl font-bold mt-1" style={{ color: ACCENT }}>{totalTicketsSold}</p>
                 </div>
-                <div className="rounded-lg bg-blue-50 p-4">
-                  <p className="text-xs font-medium text-blue-600">Revenue</p>
-                  <p className="text-xl font-bold text-blue-900 mt-1">{totalRevenue.toLocaleString()}</p>
+                <div className="rounded-lg" style={{ background: `#3B82F6` + `15` }}>
+                  <p className="text-xs font-medium" style={{ color: `#3B82F6` }}>Revenue</p>
+                  <p className="text-xl font-bold mt-1" style={{ color: `#3B82F6` }}>{totalRevenue.toLocaleString()}</p>
                 </div>
               </div>
               <div className="overflow-x-auto">

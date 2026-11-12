@@ -1385,9 +1385,9 @@ def _build_wedding_invite_message(
         '<div style="background:' + WEDDING_INK + ';padding:22px 26px;text-align:center;'
         'border-top:3px solid ' + WEDDING_GOLD + '">'
         '<p style="margin:0 0 6px;font-family:Arial,Helvetica,sans-serif;font-size:9px;'
-        f'letter-spacing:4px;color:{WEDDING_GOLD};text-transform:uppercase">Accredit Interactive</p>'
+        f'letter-spacing:4px;color:{WEDDING_GOLD};text-transform:uppercase">Patrick & Sarah</p>'
         '<p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
-        'letter-spacing:2px;color:#9A8388">Premium Event Infrastructure</p>'
+        'letter-spacing:2px;color:#9A8388">White Wedding · Abuja · 19 December 2026</p>'
         "</div>"
         f"{tracking_pixel_html}"
     )
@@ -1492,9 +1492,9 @@ def _build_wedding_qr_message(
         '<div style="background:' + WEDDING_INK + ';padding:22px 26px;text-align:center;'
         'border-top:3px solid ' + WEDDING_GOLD + '">'
         '<p style="margin:0 0 6px;font-family:Arial,Helvetica,sans-serif;font-size:9px;'
-        f'letter-spacing:4px;color:{WEDDING_GOLD};text-transform:uppercase">Accredit Interactive</p>'
+        f'letter-spacing:4px;color:{WEDDING_GOLD};text-transform:uppercase">Patrick & Sarah</p>'
         '<p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
-        'letter-spacing:2px;color:#9A8388">Premium Event Infrastructure</p>'
+        'letter-spacing:2px;color:#9A8388">White Wedding · Abuja · 19 December 2026</p>'
         "</div>"
     )
     html = _annette_shell(inner, "")

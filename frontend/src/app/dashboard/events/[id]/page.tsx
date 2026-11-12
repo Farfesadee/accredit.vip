@@ -23,6 +23,9 @@ import TemplatesTabContent from "@/components/events/TemplatesTabContent";
 import WaitlistTabContent from "@/components/events/WaitlistTabContent";
 import InvitesTabContent from "@/components/events/InvitesTabContent";
 import NBCLocationDashboard from "@/components/events/NBCLocationDashboard";
+import { PORTAL, PORTAL_ACCENT } from "@/lib/portal";
+
+const ACCENT = PORTAL ? PORTAL_ACCENT : "#1ABC9C";
 
 type Guest = {
   id: number;
@@ -1164,12 +1167,12 @@ function EventDetailContent() {
 
                   {/* Share */}
                   {event.slug && (
-                    <div className="rounded-xl bg-blue-50 border border-blue-200 p-4">
-                      <h3 className="text-sm font-bold text-secondary mb-2 flex items-center gap-2">
-                        <Share2 className="w-4 h-4 text-blue-600" />
+                    <div className="rounded-xl" style={{ background: `${ACCENT}15`, border: `1px solid ${ACCENT}40` }}>
+                      <h3 className="text-sm font-bold mb-2 flex items-center gap-2" style={{ color: ACCENT }}>
+                        <Share2 className="w-4 h-4" />
                         Share This Event
                       </h3>
-                      <div className="bg-white rounded-lg p-3 font-mono text-xs text-slate-700 break-all border border-blue-100 select-all">
+                      <div className="bg-white rounded-lg p-3 font-mono text-xs break-all select-all" style={{ color: "#334155", border: `1px solid ${ACCENT}30` }}>
                         {shareUrlFor(event.slug)}
                       </div>
                     </div>
@@ -1177,14 +1180,14 @@ function EventDetailContent() {
 
                   {/* Generic RSVP link: works for anyone, even guests not on the list */}
                   {event.slug && (
-                    <div className="rounded-xl bg-teal-50 border border-teal-200 p-4">
-                      <h3 className="text-sm font-bold text-secondary mb-2 flex items-center gap-2">
-                        <Copy className="w-4 h-4 text-teal-600" />
+                    <div className="rounded-xl" style={{ background: `${ACCENT}15`, border: `1px solid ${ACCENT}40` }}>
+                      <h3 className="text-sm font-bold mb-2 flex items-center gap-2" style={{ color: ACCENT }}>
+                        <Copy className="w-4 h-4" />
                         Generic RSVP Link
                       </h3>
-                      <p className="text-xs text-slate-500 mb-2">Send this to anyone you forgot to add. They can RSVP without being on the guest list.</p>
+                      <p className="text-xs mb-2" style={{ color: "#64748b" }}>Send this to anyone you forgot to add. They can RSVP without being on the guest list.</p>
                       <div className="flex items-center gap-2">
-                        <div className="flex-1 bg-white rounded-lg p-3 font-mono text-xs text-slate-700 break-all border border-teal-100 select-all">
+                        <div className="flex-1 bg-white rounded-lg p-3 font-mono text-xs break-all select-all" style={{ color: "#334155", border: `1px solid ${ACCENT}30` }}>
                           {rsvpUrlFor(event.slug)}
                         </div>
                         <button
@@ -1195,7 +1198,8 @@ function EventDetailContent() {
                               setTimeout(() => setCopiedRsvp(false), 2000);
                             } catch {}
                           }}
-                          className="flex-shrink-0 h-10 px-4 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold transition-colors"
+                          className="flex-shrink-0 h-10 px-4 rounded-lg text-white text-xs font-bold transition-colors"
+                          style={{ background: ACCENT, color: "white" }}
                         >
                           {copiedRsvp ? "Copied!" : "Copy"}
                         </button>

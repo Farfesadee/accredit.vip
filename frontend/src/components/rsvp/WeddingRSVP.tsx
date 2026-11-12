@@ -24,6 +24,7 @@ const GOLD = "#b8892f";
 const GOLD_LIGHT = "#e8c05f";
 const CREAM = "#f5f0e6";
 const INK = "#2b2118";
+const MUTED = "#9a8a78";
 
 function dirUrl(destination: string) {
   // No origin means Google Maps routes from the guest's current location.
@@ -953,6 +954,10 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
         ) : attendance === null ? (
           <div className="text-center">
             <p className="text-[11px] uppercase font-bold mb-1" style={{ color: GOLD, letterSpacing: "0.3em" }}>{guestToken ? "Kindly respond" : "Step 1 of 2"}</p>
+            <p className="text-xs text-center mb-4" style={{ color: MUTED, maxWidth: "320px", margin: "0 auto 1.5rem" }}>
+              This RSVP is for the <strong>White Wedding</strong> on Saturday, 19 December 2026.<br />
+              The Traditional Wedding on Thursday, 17 December 2026 uses access cards only.
+            </p>
             <p className="font-serif text-2xl mb-2">Will you be attending?</p>
             {guestToken && guest?.name && (
               <p className="text-[10px] uppercase opacity-60 mb-4" style={{ letterSpacing: "0.28em" }}>
