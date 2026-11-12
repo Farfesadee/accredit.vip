@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Menu, Plus } from "lucide-react";
 import { NotificationBell } from "@/components/notification-bell";
+import { PORTAL } from "@/lib/portal";
 
 export function DashboardTopbar({
   title,
@@ -27,13 +28,13 @@ export function DashboardTopbar({
         </div>
       </div>
       <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-        <NotificationBell />
-        {actions || (
+        {!PORTAL && <NotificationBell />}
+        {actions || (!PORTAL && (
           <Link href="/dashboard/create" className="btn-primary text-xs py-1.5 sm:py-2 px-2 sm:px-4 inline-flex items-center gap-1 sm:gap-2">
             <Plus className="w-4 h-4" />
             <span className="max-[400px]:hidden">New Event</span>
           </Link>
-        )}
+        ))}
       </div>
     </header>
   );

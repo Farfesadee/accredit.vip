@@ -12,6 +12,7 @@ import {
   CheckCircle,
   Clock,
 } from "lucide-react";
+import { PORTAL } from "@/lib/portal";
 
 interface UserEvent {
   id: number;
@@ -139,12 +140,14 @@ export default function ManageEventsPage() {
             Back to Dashboard
           </button>
           <h1 className="text-2xl font-bold text-[#0D1B2A]">My Events</h1>
-          <button
-            onClick={() => router.push("/create-event")}
-            className="px-6 py-2 bg-[#1ABC9C] text-white rounded-lg font-bold text-sm hover:bg-[#16A085] transition-colors"
-          >
-            Create Event
-          </button>
+          {!PORTAL && (
+            <button
+              onClick={() => router.push("/create-event")}
+              className="px-6 py-2 bg-[#1ABC9C] text-white rounded-lg font-bold text-sm hover:bg-[#16A085] transition-colors"
+            >
+              Create Event
+            </button>
+          )}
         </div>
       </header>
 
@@ -158,12 +161,14 @@ export default function ManageEventsPage() {
           <div className="text-center py-12">
             <AlertCircle className="h-12 w-12 text-[#94a3b8] mx-auto mb-4" />
             <p className="text-[#64748b] font-medium mb-4">No events yet</p>
-            <button
-              onClick={() => router.push("/create-event")}
-              className="px-6 py-2 bg-[#1ABC9C] text-white rounded-lg font-bold text-sm hover:bg-[#16A085] transition-colors"
-            >
-              Create Your First Event
-            </button>
+            {!PORTAL && (
+              <button
+                onClick={() => router.push("/create-event")}
+                className="px-6 py-2 bg-[#1ABC9C] text-white rounded-lg font-bold text-sm hover:bg-[#16A085] transition-colors"
+              >
+                Create Your First Event
+              </button>
+            )}
           </div>
         ) : (
           <div className="space-y-4">

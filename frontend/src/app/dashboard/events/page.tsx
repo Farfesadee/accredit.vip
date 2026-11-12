@@ -9,6 +9,7 @@ import { DashboardSidebar } from "@/components/dashboard/sidebar";
 import { DashboardTopbar } from "@/components/dashboard/topbar";
 import { EventCard, EventCardSkeleton } from "@/components/dashboard/event-card";
 import { CalendarDays } from "lucide-react";
+import { PORTAL } from "@/lib/portal";
 
 export default function EventsPage() {
   const { user, loading } = useAuth();
@@ -47,10 +48,12 @@ export default function EventsPage() {
               </div>
               <h3 className="text-lg font-bold text-[#0D1B2A] mb-2">No events yet</h3>
               <p className="text-sm text-gray-400 mb-6">Create your first event to get started.</p>
-              <a href="/dashboard/create" className="btn-primary inline-flex items-center gap-2">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
-                Create Your First Event
-              </a>
+              {!PORTAL && (
+                <a href="/dashboard/create" className="btn-primary inline-flex items-center gap-2">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" /></svg>
+                  Create Your First Event
+                </a>
+              )}
             </div>
           ) : (
             <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
