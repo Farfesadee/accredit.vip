@@ -6,6 +6,9 @@ import { PhoneInput } from "@/components/shared/phone-input";
 import { apiClient, API_BASE } from "@/lib/api-client";
 import Link from "next/link";
 import { Plus, Upload, Users, Mail, Trash2, Edit2, Loader, Search, Check, Download, QrCode, Tag, Send, Eye, X, Circle, Minus, Printer, ChevronDown, MoreHorizontal, Clock } from "lucide-react";
+import { PORTAL, PORTAL_ACCENT } from "@/lib/portal";
+
+const ACCENT = PORTAL ? PORTAL_ACCENT : "#1ABC9C";
 
 type Guest = {
   id: number;
@@ -282,7 +285,7 @@ export default function GuestsTabContent({
   }, [guests, guestRsvpFilter]);
 
   const renderCustomField = (field: CustomField, value: any, onChange: (val: any) => void) => {
-    const baseClasses = "flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary";
+    const baseClasses = "flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[${ACCENT}]";
 
     switch (field.type) {
       case "select":
@@ -418,7 +421,7 @@ export default function GuestsTabContent({
                 placeholder="Guest name"
                 value={guestName}
                 onChange={(e) => { setGuestName(e.target.value); setFieldErrors((prev) => ({ ...prev, name: "" })); }}
-                className={`flex h-10 w-full rounded-lg border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary ${fieldErrors.name ? "border-red-400 focus:ring-red-400" : "border-slate-200"}`}
+                className={`flex h-10 w-full rounded-lg border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[${ACCENT}] ${fieldErrors.name ? "border-red-400 focus:ring-red-400" : "border-slate-200"}`}
               />
               {fieldErrors.name && <p className="text-xs text-red-500 mt-1">{fieldErrors.name}</p>}
             </div>
@@ -438,7 +441,7 @@ export default function GuestsTabContent({
                 placeholder="Email address"
                 value={guestEmail}
                 onChange={(e) => { setGuestEmail(e.target.value); setFieldErrors((prev) => ({ ...prev, email: "" })); }}
-                className={`flex h-10 w-full rounded-lg border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary ${fieldErrors.email ? "border-red-400 focus:ring-red-400" : "border-slate-200"}`}
+                className={`flex h-10 w-full rounded-lg border bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[${ACCENT}] ${fieldErrors.email ? "border-red-400 focus:ring-red-400" : "border-slate-200"}`}
               />
               {fieldErrors.email && <p className="text-xs text-red-500 mt-1">{fieldErrors.email}</p>}
             </div>
@@ -449,7 +452,7 @@ export default function GuestsTabContent({
               <select
                 value={guestCategory}
                 onChange={(e) => setGuestCategory(e.target.value)}
-                className="flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                className="flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[${ACCENT}]"
               >
                 <option value="">No category</option>
                 <option value="General Access">General Access</option>
@@ -488,7 +491,7 @@ export default function GuestsTabContent({
           <Button
             type="submit"
             disabled={guestLimit !== null && totalGuests >= guestLimit}
-            className="bg-primary hover:bg-primary/90 text-white h-9 px-4 font-medium text-sm"
+            className="text-white h-9 px-4 font-medium text-sm" style={{ background: ACCENT, borderColor: ACCENT }}
           >
             Add Guest
           </Button>
@@ -550,7 +553,7 @@ export default function GuestsTabContent({
             <select
               value={exportStatus}
               onChange={(e) => setExportStatus?.(e.target.value)}
-              className="flex h-10 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+              className="flex h-10 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[${ACCENT}]"
             >
               <option value="all">All Guests</option>
               <option value="sent">Invite Sent</option>
@@ -627,7 +630,7 @@ export default function GuestsTabContent({
           <div className="flex items-center gap-4 flex-wrap">
             <div className="flex gap-2">
               {["email", "whatsapp", "sms"].map((ch) => (
-                <label key={ch} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium cursor-pointer transition-colors ${channels.includes(ch) ? "bg-primary text-white border-primary" : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"}`}>
+                <label key={ch} className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium cursor-pointer transition-colors ${channels.includes(ch) ? "text-white border-0" : "bg-white text-slate-600 border-slate-200 hover:border-slate-400"}`} style={{ background: channels.includes(ch) ? ACCENT : "transparent" }}>
                   <input type="checkbox" checked={channels.includes(ch)} onChange={() => setChannels(channels.includes(ch) ? channels.filter(c => c !== ch) : [...channels, ch])} className="sr-only" />
                   <span className="capitalize">{ch}</span>
                 </label>
@@ -644,17 +647,17 @@ export default function GuestsTabContent({
             </div>
 
             <div className="flex gap-2 flex-wrap">
-              <Button onClick={() => sendInvites(false)} disabled={sending || !canSendInvites} className="bg-primary hover:bg-primary/90 text-white h-9 px-3 font-medium rounded-lg disabled:opacity-50 flex items-center gap-1.5 text-xs">
+              <Button onClick={() => sendInvites(false)} disabled={sending || !canSendInvites} className="text-white h-9 px-3 font-medium rounded-lg disabled:opacity-50 flex items-center gap-1.5 text-xs" style={{ background: ACCENT, borderColor: ACCENT }}>
                 {sending ? <Loader className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                 {sending ? "Sending..." : <><span className="hidden sm:inline">Send </span>Invites</>}
               </Button>
-              <Button onClick={() => sendInvites(true)} disabled={sending || !canSendInvites} variant="outline" className="h-9 px-3 font-medium rounded-lg text-xs">
+              <Button onClick={() => sendInvites(true)} disabled={sending || !canSendInvites} variant="outline" className="h-9 px-3 font-medium rounded-lg text-xs" style={{ borderColor: ACCENT, color: ACCENT }}>
                 Resend
               </Button>
-              <Button onClick={sendAllQrs} variant="outline" className="h-9 px-3 font-medium rounded-lg text-xs">
+              <Button onClick={sendAllQrs} variant="outline" className="h-9 px-3 font-medium rounded-lg text-xs" style={{ borderColor: ACCENT, color: ACCENT }}>
                 Send QR
               </Button>
-              <Button onClick={testSend} variant="outline" className="h-9 px-3 font-medium rounded-lg text-xs">
+              <Button onClick={testSend} variant="outline" className="h-9 px-3 font-medium rounded-lg text-xs" style={{ borderColor: ACCENT, color: ACCENT }}>
                 Test
               </Button>
             </div>
@@ -683,7 +686,7 @@ export default function GuestsTabContent({
             {guestSearch || guestRsvpFilter ? (
               <div>
                 <p className="text-sm font-medium text-slate-700 mb-1">No guests match your search</p>
-                <button onClick={() => { setGuestSearch(""); setGuestRsvpFilter(""); triggerSearch("", "", 0); }} className="text-sm text-primary hover:underline">Clear filters</button>
+                <button onClick={() => { setGuestSearch(""); setGuestRsvpFilter(""); triggerSearch("", "", 0); }} className="text-sm hover:underline" style={{ color: ACCENT }}>Clear filters</button>
               </div>
             ) : (
               <p className="text-sm text-slate-600">No guests yet. Add your first guest above.</p>
@@ -707,7 +710,7 @@ export default function GuestsTabContent({
                         triggerSearch(e.target.value, guestRsvpFilter, 0);
                       }, 300);
                     }}
-                    className="flex h-10 w-full rounded-lg border border-slate-200 bg-white pl-10 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="flex h-10 w-full rounded-lg border border-slate-200 bg-white pl-10 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[${ACCENT}]"
                   />
                 </div>
                 <select
@@ -718,7 +721,7 @@ export default function GuestsTabContent({
                     const backendFilter = ["accepted", "pending", "declined"].includes(val) ? val : "";
                     triggerSearch(guestSearch, backendFilter, 0);
                   }}
-                  className="flex h-10 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="flex h-10 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[${ACCENT}]"
                   title="Filter by status"
                 >
                   <option value="">RSVP: All</option>
@@ -983,12 +986,13 @@ export default function GuestsTabContent({
                                   variant="ghost"
                                   onClick={() => setSendReviewGuest(guest)}
                                   title="Send message"
-                                  className="h-11 w-11 p-0 hover:bg-blue-50"
+                                  className="h-11 w-11 p-0"
+                                  style={{ color: ACCENT }}
                                 >
-                                  <Mail className="w-4 h-4 text-blue-600" />
+                                  <Mail className="w-4 h-4" />
                                 </Button>
                                 {(guest.invite_attempts ?? 0) > 0 && (
-                                  <span className="absolute -top-0.5 -right-0.5 bg-blue-500 text-white text-[9px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-1 leading-none">
+                                  <span className="absolute -top-0.5 -right-0.5 text-white text-[9px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-1 leading-none" style={{ background: ACCENT }}>
                                     {guest.invite_attempts}
                                   </span>
                                 )}
@@ -1197,13 +1201,14 @@ export default function GuestsTabContent({
                         <div className="relative">
                           <button
                             onClick={() => setSendReviewGuest(guest)}
-                            className="h-11 w-11 flex items-center justify-center rounded-lg hover:bg-blue-50 transition-colors"
+                            className="h-11 w-11 flex items-center justify-center rounded-lg transition-colors"
                             title="Send Invite"
+                            style={{ color: ACCENT }}
                           >
-                            <Send className="w-4 h-4 text-blue-600" />
+                            <Send className="w-4 h-4" />
                           </button>
                           {(guest.invite_attempts ?? 0) > 0 && (
-                            <span className="absolute -top-0.5 -right-0.5 bg-blue-500 text-white text-[9px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-1 leading-none">
+                            <span className="absolute -top-0.5 -right-0.5 text-white text-[9px] font-bold rounded-full min-w-[14px] h-[14px] flex items-center justify-center px-1 leading-none" style={{ background: ACCENT }}>
                               {guest.invite_attempts}
                             </span>
                           )}
@@ -1269,7 +1274,7 @@ export default function GuestsTabContent({
                     }
                     if (pageNum < 0 || pageNum >= pageCount) return null;
                     return (
-                      <button key={pageNum} onClick={() => goToPage(pageNum)} className={`min-w-[44px] h-11 px-2 text-xs rounded border ${pageNum === currentPage ? "bg-primary text-white border-primary font-bold" : "border-slate-200 hover:bg-slate-50"}`}>{pageNum + 1}</button>
+                      <button key={pageNum} onClick={() => goToPage(pageNum)} className={`min-w-[44px] h-11 px-2 text-xs rounded border font-bold ${pageNum === currentPage ? "text-white border-0" : "border-slate-200 hover:bg-slate-50"}`} style={{ background: pageNum === currentPage ? ACCENT : "transparent" }}>{pageNum + 1}</button>
                     );
                   })}
                   <button className="min-w-[44px] h-11 px-2 text-xs rounded border border-slate-200 hover:bg-slate-50 disabled:opacity-30" disabled={currentPage >= pageCount - 1} onClick={() => goToPage(currentPage + 1)} title="Next page">›</button>
@@ -1384,7 +1389,7 @@ export default function GuestsTabContent({
                   setSendReviewForce(false);
                 }}
                 disabled={sendReviewGuest.invite_sent && !sendReviewForce}
-                className="flex-1 bg-primary hover:bg-primary/90 text-white h-9 font-medium rounded-lg text-sm disabled:opacity-50"
+                className="flex-1 h-9 font-medium rounded-lg text-sm disabled:opacity-50" style={{ background: ACCENT, borderColor: ACCENT, color: "white" }}
               >
                 Send Invite
               </Button>
@@ -1418,7 +1423,7 @@ export default function GuestsTabContent({
                 </div>
               )}
             </div>
-            <Button onClick={() => { setBulkResult(null); setShowChannelModal(false); setSelectedGuests(new Set()); }} className="w-full bg-primary hover:bg-primary/90 text-white h-9 text-sm font-medium rounded-lg">
+            <Button onClick={() => { setBulkResult(null); setShowChannelModal(false); setSelectedGuests(new Set()); }} className="w-full h-9 text-sm font-medium rounded-lg" style={{ background: ACCENT, borderColor: ACCENT, color: "white" }}>
               Done
             </Button>
           </div>
@@ -1515,7 +1520,7 @@ export default function GuestsTabContent({
                   setBulkResult({ sent, failed, total, errors });
                 }}
                 disabled={bulkChannels.length === 0 || bulkSending}
-                className="flex-1 bg-primary hover:bg-primary/90 text-white h-9 text-sm font-medium rounded-lg disabled:opacity-50"
+                className="flex-1 h-9 text-sm font-medium rounded-lg disabled:opacity-50" style={{ background: ACCENT, borderColor: ACCENT, color: "white" }}
               >
                 {bulkSending
                   ? <><Loader className="w-4 h-4 animate-spin" /> Sending {bulkProgress.current} of {bulkProgress.total}...</>
@@ -1559,7 +1564,7 @@ export default function GuestsTabContent({
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
                   placeholder="Enter guest name"
-                  className="flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[${ACCENT}]"
                 />
                 {!editName.trim() && (
                   <p className="text-xs text-red-600 mt-1.5">Name is required</p>
@@ -1583,7 +1588,7 @@ export default function GuestsTabContent({
                     value={editEmail}
                     onChange={(e) => setEditEmail(e.target.value)}
                     placeholder={guests.find(g => g.id === editingGuest)?.email || "Enter email"}
-                    className="flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                    className="flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[${ACCENT}]"
                   />
                 </div>
               </div>
@@ -1595,7 +1600,7 @@ export default function GuestsTabContent({
                 <select
                   value={editCategory}
                   onChange={(e) => setEditCategory(e.target.value)}
-                  className="flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  className="flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[${ACCENT}]"
                 >
                   <option value="">No category</option>
                   <option value="General Access">General Access</option>
@@ -1615,7 +1620,7 @@ export default function GuestsTabContent({
                   onChange={(e) => setEditNotes(e.target.value)}
                   placeholder="Internal notes about this guest"
                   rows={2}
-                  className="flex w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+                  className="flex w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[${ACCENT}] resize-none"
                 />
               </div>
 
@@ -1648,7 +1653,7 @@ export default function GuestsTabContent({
               <Button
                 onClick={() => saveEdit(editingGuest, customFieldValues)}
                 disabled={!editName.trim() || savingGuest !== null}
-                className="flex-1 bg-primary hover:bg-primary/90 text-white h-9 text-sm font-medium rounded-lg flex items-center justify-center gap-2 disabled:opacity-50"
+                className="flex-1 h-9 text-sm font-medium rounded-lg flex items-center justify-center gap-2 disabled:opacity-50" style={{ background: ACCENT, borderColor: ACCENT, color: "white" }}
               >
                 {savingGuest !== null ? (
                   <>
