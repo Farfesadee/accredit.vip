@@ -821,7 +821,7 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
         <Reveal>
           <div className="text-center mb-7">
             <Eyebrow>Getting you there</Eyebrow>
-            <h2 className="font-serif text-3xl leading-tight sm:text-4xl">Where to stay</h2>
+            <h2 className="font-serif text-3xl leading-tight sm:text-4xl">Recommendations</h2>
             <p className="text-sm opacity-60 mt-3 max-w-md mx-auto leading-relaxed">{content.hotels_note}</p>
           </div>
         </Reveal>
