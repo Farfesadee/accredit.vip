@@ -959,6 +959,9 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
               The Traditional Wedding on Thursday, 17 December 2026 uses access cards only.
             </p>
             <p className="font-serif text-2xl mb-2">Will you be attending?</p>
+            <p className="text-xs text-center mb-4 opacity-60" style={{ maxWidth: "320px", margin: "0 auto 1.5rem" }}>
+              This RSVP checks against the guest list. If your name is not listed, please contact the host.
+            </p>
             {guestToken && guest?.name && (
               <p className="text-[10px] uppercase opacity-60 mb-4" style={{ letterSpacing: "0.28em" }}>
                 Reserved for {guest.name}

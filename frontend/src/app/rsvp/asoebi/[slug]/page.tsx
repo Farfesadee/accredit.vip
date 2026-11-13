@@ -95,7 +95,6 @@ export default function WeddingAsoEbiPage() {
   }
 
   const asoebi = content.asoebi || {};
-  const price = asoebi.price || 0;
 
   return (
     <div className="min-h-screen" style={{ background: CREAM, color: INK }}>
@@ -145,9 +144,6 @@ export default function WeddingAsoEbiPage() {
                   </li>
                 ))}
               </ul>
-              <p className="mt-5 text-xl font-black">
-                ₦{price.toLocaleString()} <span className="text-xs font-normal opacity-50">per package</span>
-              </p>
             </div>
 
             {/* PAY + FORM */}
@@ -180,7 +176,6 @@ export default function WeddingAsoEbiPage() {
                     <span className="font-bold w-6 text-center">{abQty}</span>
                     <button type="button" onClick={() => setAbQty((q) => Math.min(20, q + 1))} className="w-10 h-10 rounded-lg border text-lg font-bold" style={{ borderColor: "#d8c9a6" }}>+</button>
                   </div>
-                  <span className="ml-auto font-black">₦{(price * abQty).toLocaleString()}</span>
                 </div>
               </div>
               {abError && <p className="mt-3 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg p-3">{abError}</p>}
@@ -206,7 +201,7 @@ export default function WeddingAsoEbiPage() {
             <p className="text-[11px] uppercase" style={{ color: GOLD, letterSpacing: "0.3em" }}>Aso Ebi Receipt</p>
             <p className="font-mono font-black text-3xl mt-2">{receipt.reference}</p>
             <p className="text-sm opacity-70 mt-3">
-              {receipt.buyer_name}, {receipt.quantity} package{receipt.quantity !== 1 ? "s" : ""}, ₦{receipt.amount.toLocaleString()}
+              {receipt.buyer_name}, {receipt.quantity} package{receipt.quantity !== 1 ? "s" : ""}
             </p>
             <button
               onClick={async () => {

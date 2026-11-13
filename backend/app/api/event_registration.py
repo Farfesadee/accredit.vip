@@ -80,9 +80,9 @@ def wedding_content() -> dict:
             "wedding": {
                 "label": "The White Wedding",
                 "when": "Saturday, 19 December 2026",
-                "men": "Suit or black tie",
+                "men": "Dark green or white",
                 "women": "Pastel colours, with fascinators",
-                "note": "Gentlemen, a suit or black tie. Ladies, soft pastel tones, with fascinators.",
+                "note": "Gentlemen: dark green or white. Ladies: soft pastel tones, with fascinators.",
             },
             "traditional": {
                 "label": "The Traditional Wedding",
@@ -122,8 +122,6 @@ def wedding_content() -> dict:
         "monogram_url": "/uploads/wedding-crest-cream.png",
         "hotels_note": "For our guests coming from outside Nigeria or far from Abuja who need a place to stay before the wedding.",
         "hotels": [
-            {"name": "Fraser Suites", "address": "Plot 294, Leventis Close, Central Business District, Abuja"},
-            {"name": "Transcorp Hilton", "address": "1 Aguiyi Ironsi Street, Maitama District, Abuja"},
             {"name": "Summerset Continental Hotels", "address": "73 Usuma St, Maitama, Abuja 900271, FCT"},
             {"name": "John Woods", "address": "6 Sokode Crescent, Wuse Zone 5, Abuja, FCT"},
             {"name": "Bolton White", "address": "7 Gwandu Street, Area 11, Garki, opposite Sahad Stores, Abuja, FCT"},
