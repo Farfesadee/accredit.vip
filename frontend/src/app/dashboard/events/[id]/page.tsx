@@ -1043,7 +1043,7 @@ function EventDetailContent() {
                 <div className="p-6 sm:p-8 space-y-6">
                   {/* Stats Dashboard. The couple's portal runs cream and gold
                       only; traffic-light colours belong to the platform. */}
-                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                  <div className={`grid gap-3 ${PORTAL ? "grid-cols-2 sm:grid-cols-4" : "grid-cols-1 sm:grid-cols-4"}`}>
                     {PORTAL ? (
                       [
                         { label: "Total Guests", value: totalGuests },

@@ -96,6 +96,58 @@
   --sidebar-accent:             #2B2419;
   --sidebar-border:             #2B2419;
   --sidebar-ring:               #C9A227;
+
+  /* Status colours. Tailwind emits bg-emerald-50 as var(--color-emerald-50),
+     so re-mapping the families here re-skins every badge, stat card and send
+     button on the portal in one place. Red stays red: errors must still read
+     as errors. */
+  --color-emerald-50:  #F4EFE2;
+  --color-emerald-100: #EDE4CE;
+  --color-emerald-200: #E0D2AE;
+  --color-emerald-300: #D4C08D;
+  --color-emerald-400: #CBB167;
+  --color-emerald-500: #C9A227;
+  --color-emerald-600: #A8871F;
+  --color-emerald-700: #8C6F1A;
+  --color-emerald-800: #6E5717;
+  --color-emerald-900: #3E3410;
+  --color-emerald-950: #241D08;
+
+  --color-green-50:  #F4EFE2;
+  --color-green-100: #EDE4CE;
+  --color-green-200: #E0D2AE;
+  --color-green-300: #D4C08D;
+  --color-green-400: #CBB167;
+  --color-green-500: #C9A227;
+  --color-green-600: #A8871F;
+  --color-green-700: #8C6F1A;
+  --color-green-800: #6E5717;
+  --color-green-900: #3E3410;
+  --color-green-950: #241D08;
+
+  --color-blue-50:  #F3F0EA;
+  --color-blue-100: #E8E2D6;
+  --color-blue-200: #D9D0BE;
+  --color-blue-300: #C2B7A0;
+  --color-blue-400: #9C8F76;
+  --color-blue-500: #7A6D55;
+  --color-blue-600: #5F5542;
+  --color-blue-700: #4E4635;
+  --color-blue-800: #3A3428;
+  --color-blue-900: #26221A;
+  --color-blue-950: #191610;
+
+  --color-amber-50:  #FBF4E4;
+  --color-amber-100: #F6E8C9;
+  --color-amber-200: #EDD6A2;
+  --color-amber-300: #DFBE74;
+  --color-amber-400: #CDA349;
+  --color-amber-500: #B08A3E;
+  --color-amber-600: #96742F;
+  --color-amber-700: #7A5C25;
+  --color-amber-800: #5F471D;
+  --color-amber-900: #3D2E13;
+  --color-amber-950: #241A0B;
 }
 
 .dark {
