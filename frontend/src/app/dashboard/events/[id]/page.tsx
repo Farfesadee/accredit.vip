@@ -1041,37 +1041,66 @@ function EventDetailContent() {
                 </div>
 
                 <div className="p-6 sm:p-8 space-y-6">
-                  {/* Stats Dashboard */}
+                  {/* Stats Dashboard. The couple's portal runs cream and gold
+                      only; traffic-light colours belong to the platform. */}
                   <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                    <div className="rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200 p-3 sm:p-4">
-                      <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Total Guests</p>
-                      <p className="text-2xl font-bold text-slate-900">{totalGuests}</p>
-                    </div>
-                    <div className="rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100 border border-emerald-200 p-3 sm:p-4">
-                      <p className="text-xs font-medium text-emerald-600 uppercase tracking-wide mb-1">Accepted</p>
-                      <p className="text-2xl font-bold text-emerald-900">{rsvpStats?.accepted ?? 0}</p>
-                    </div>
-                    <div className="rounded-xl bg-gradient-to-br from-amber-50 to-amber-100 border border-amber-200 p-3 sm:p-4">
-                      <p className="text-xs font-medium text-amber-600 uppercase tracking-wide mb-1">Pending</p>
-                      <p className="text-2xl font-bold text-amber-900">{rsvpStats?.pending ?? 0}</p>
-                    </div>
-                    <div className="rounded-xl bg-gradient-to-br from-red-50 to-red-100 border border-red-200 p-3 sm:p-4">
-                      <p className="text-xs font-medium text-red-600 uppercase tracking-wide mb-1">Declined</p>
-                      <p className="text-2xl font-bold text-red-900">{rsvpStats?.declined ?? 0}</p>
-                    </div>
+                    {PORTAL ? (
+                      [
+                        { label: "Total Guests", value: totalGuests },
+                        { label: "Accepted", value: rsvpStats?.accepted ?? 0 },
+                        { label: "Pending", value: rsvpStats?.pending ?? 0 },
+                        { label: "Declined", value: rsvpStats?.declined ?? 0 },
+                      ].map((stat) => (
+                        <div key={stat.label} className="rounded-xl p-3 sm:p-4" style={{ background: "#F8F3E7", border: "1px solid #E8DDC4" }}>
+                          <p className="text-xs font-medium uppercase tracking-wide mb-1" style={{ color: "#8A7A5E" }}>{stat.label}</p>
+                          <p className="text-2xl font-bold" style={{ color: "#1F1B16" }}>{stat.value}</p>
+                        </div>
+                      ))
+                    ) : (
+                      <>
+                        <div className="rounded-xl bg-gradient-to-br from-slate-50 to-slate-100 border border-slate-200 p-3 sm:p-4">
+                          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-1">Total Guests</p>
+                          <p className="text-2xl font-bold text-slate-900">{totalGuests}</p>
+                        </div>
+                        <div className="rounded-xl bg-gradient-to-br from-emerald-50 to-emerald-100 border border-emerald-200 p-3 sm:p-4">
+                          <p className="text-xs font-medium text-emerald-600 uppercase tracking-wide mb-1">Accepted</p>
+                          <p className="text-2xl font-bold text-emerald-900">{rsvpStats?.accepted ?? 0}</p>
+                        </div>
+                        <div className="rounded-xl bg-gradient-to-br from-amber-50 to-amber-100 border border-amber-200 p-3 sm:p-4">
+                          <p className="text-xs font-medium text-amber-600 uppercase tracking-wide mb-1">Pending</p>
+                          <p className="text-2xl font-bold text-amber-900">{rsvpStats?.pending ?? 0}</p>
+                        </div>
+                        <div className="rounded-xl bg-gradient-to-br from-red-50 to-red-100 border border-red-200 p-3 sm:p-4">
+                          <p className="text-xs font-medium text-red-600 uppercase tracking-wide mb-1">Declined</p>
+                          <p className="text-2xl font-bold text-red-900">{rsvpStats?.declined ?? 0}</p>
+                        </div>
+                      </>
+                    )}
                   </div>
 
                   {/* Check-in Progress */}
                   {checkinStats && (
-                    <div className="rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <p className="text-sm font-bold text-blue-900">Check-in Progress</p>
-                        <span className="text-xs font-medium text-blue-600">{checkinStats.checked_in} / {checkinStats.total_guests} checked in</span>
+                    PORTAL ? (
+                      <div className="rounded-xl p-4" style={{ background: "#F8F3E7", border: "1px solid #E8DDC4" }}>
+                        <div className="flex items-center justify-between mb-3">
+                          <p className="text-sm font-bold" style={{ color: "#1F1B16" }}>Check-in Progress</p>
+                          <span className="text-xs font-medium" style={{ color: "#8A7A5E" }}>{checkinStats.checked_in} / {checkinStats.total_guests} checked in</span>
+                        </div>
+                        <div className="w-full rounded-full h-3 overflow-hidden" style={{ background: "#E8DDC4" }}>
+                          <div className="h-full rounded-full transition-all duration-500" style={{ background: ACCENT, width: `${checkinStats.total_guests > 0 ? (checkinStats.checked_in / checkinStats.total_guests) * 100 : 0}%` }} />
+                        </div>
                       </div>
-                      <div className="w-full bg-white/60 rounded-full h-3 overflow-hidden">
-                        <div className="h-full rounded-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-500" style={{ width: `${checkinStats.total_guests > 0 ? (checkinStats.checked_in / checkinStats.total_guests) * 100 : 0}%` }} />
+                    ) : (
+                      <div className="rounded-xl bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <p className="text-sm font-bold text-blue-900">Check-in Progress</p>
+                          <span className="text-xs font-medium text-blue-600">{checkinStats.checked_in} / {checkinStats.total_guests} checked in</span>
+                        </div>
+                        <div className="w-full bg-white/60 rounded-full h-3 overflow-hidden">
+                          <div className="h-full rounded-full bg-gradient-to-r from-blue-500 to-blue-600 transition-all duration-500" style={{ width: `${checkinStats.total_guests > 0 ? (checkinStats.checked_in / checkinStats.total_guests) * 100 : 0}%` }} />
+                        </div>
                       </div>
-                    </div>
+                    )
                   )}
 
                   {/* Location Summary */}

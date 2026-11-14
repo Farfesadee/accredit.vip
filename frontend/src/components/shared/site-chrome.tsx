@@ -144,7 +144,7 @@ export function SiteChrome() {
       {/* Scroll progress */}
       {!hideChrome && (
         <div className="fixed top-0 left-0 right-0 z-[90] h-1 bg-transparent pointer-events-none" aria-hidden="true">
-          <div className="h-full transition-[width] duration-100" style={{ width: `${progress * 100}%`, background: "linear-gradient(90deg, #1ABC9C, #16A085)" }} />
+          <div className="h-full transition-[width] duration-100" style={{ width: `${progress * 100}%`, background: PORTAL ? PORTAL_ACCENT : "linear-gradient(90deg, #1ABC9C, #16A085)" }} />
         </div>
       )}
 
@@ -220,8 +220,9 @@ export function SiteChrome() {
         </button>
       )}
 
-      {/* Cookie banner */}
-      {!cookieOk && !hideChrome && (
+      {/* Cookie banner. The couple's portal is a private dashboard, not a
+          marketing site, so it carries no cookie notice. */}
+      {!PORTAL && !cookieOk && !hideChrome && (
         <div className="fixed bottom-0 left-0 right-0 z-[85] px-4 pb-4">
           <div className="max-w-3xl mx-auto rounded-2xl bg-[#0D1B2A] text-white px-5 py-4 shadow-2xl flex flex-col sm:flex-row items-start sm:items-center gap-3">
             <p className="text-xs leading-relaxed text-white/80 flex-1">
