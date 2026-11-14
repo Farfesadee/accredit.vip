@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { apiClient } from "@/lib/api-client";
 import { Send, AlertCircle, Lightbulb, CheckCircle, AlertTriangle, Loader, Mail, Download, MessageSquare, Save } from "lucide-react";
 import type { JSX } from "react";
+import { PORTAL } from "@/lib/portal";
 
 type Guest = {
   id: number;
@@ -379,7 +380,9 @@ export default function InvitesTabContent({
 
         {messageEditor}
 
-        {guestCountRange && channels.length > 0 && totalPrice > 0 && (
+        {/* Cost Estimate: a platform billing concept, hidden on the couple's
+            portal where sends are part of the package. */}
+        {!PORTAL && guestCountRange && channels.length > 0 && totalPrice > 0 && (
           <div className="rounded-lg border border-slate-200 bg-white p-4">
             <h3 className="text-sm font-semibold text-slate-900 mb-3">Cost Estimate</h3>
             <div className="space-y-2 text-sm">
