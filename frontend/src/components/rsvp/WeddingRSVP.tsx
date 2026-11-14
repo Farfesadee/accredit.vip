@@ -218,6 +218,8 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
   const filmRef = useRef<HTMLVideoElement | null>(null);
 
   const [attendance, setAttendance] = useState<"yes" | "no" | null>(null);
+  // Which day(s) the guest is attending: white_wedding | traditional | both
+  const [eventAttendance, setEventAttendance] = useState<"white_wedding" | "traditional" | "both">("white_wedding");
   const [name, setName] = useState(guest?.name || "");
   const [email, setEmail] = useState(guest?.email || "");
   const [phone, setPhone] = useState(guest?.phone || "");
@@ -230,6 +232,8 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
   // A public "no" is answered with a short note, never a form: the invitation
   // stays exactly where it is behind it.
   const [thanksOpen, setThanksOpen] = useState(false);
+  // Whether we are showing the event attendance picker (after clicking Yes)
+  const [showEventPicker, setShowEventPicker] = useState(false);
 
   const cd = useCountdown(content.countdown_to);
   const filmUrl = content.invite_video_url || content.video_url;
@@ -301,7 +305,7 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
     try {
       await apiClient(`/rsvp/register/${slug}`, {
         method: "POST",
-        body: { name: name.trim(), phone: phone.trim(), email: email.trim(), response: "accepted" },
+        body: { name: name.trim(), phone: phone.trim(), email: email.trim(), response: "accepted", attendance: eventAttendance },
       });
       setDone(true);
     } catch (err: any) {
@@ -326,7 +330,7 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
     try {
       await apiClient(`/rsvp/${guestToken}`, {
         method: "POST",
-        body: { response },
+        body: { response, attendance: eventAttendance },
       });
       setDeclined(response === "no");
       setDone(true);
@@ -884,7 +888,7 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
           Pay once for one package or the whole family, and keep a reference you can look up any time.
         </p>
         <p className="mt-4 max-w-md text-sm leading-relaxed" style={{ color: "rgba(248,242,230,0.62)" }}>
-          {content.asoebi?.note || "Asoebi is for the women only. Gentlemen, your colour of the day is dark green."}
+          {content.asoebi?.note || "Asoebi is for the women only. Gentlemen, your colour of the day for the traditional is dark green or white."}
         </p>
         <Link
           href={`/rsvp/asoebi/${slug}`}
@@ -949,53 +953,101 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
           </div>
         ) : attendance === null ? (
           <div className="text-center">
-            <p className="text-[11px] uppercase font-bold mb-1" style={{ color: GOLD, letterSpacing: "0.3em" }}>{guestToken ? "Kindly respond" : "Step 1 of 2"}</p>
-            <p className="text-xs text-center mb-4" style={{ color: MUTED, maxWidth: "320px", margin: "0 auto 1.5rem" }}>
-              This RSVP is for the <strong>White Wedding</strong> on Saturday, 19 December 2026.<br />
-              The Traditional Wedding on Thursday, 17 December 2026 uses access cards only.
-            </p>
-            <p className="font-serif text-2xl mb-2">Will you be attending?</p>
-            <p className="text-xs text-center mb-4 opacity-60" style={{ maxWidth: "320px", margin: "0 auto 1.5rem" }}>
-              This RSVP checks against the guest list. If your name is not listed, please contact the host.
-            </p>
-            {guestToken && guest?.name && (
-              <p className="text-[10px] uppercase opacity-60 mb-4" style={{ letterSpacing: "0.28em" }}>
-                Reserved for {guest.name}
-              </p>
+            <p className="text-[11px] uppercase font-bold mb-1" style={{ color: GOLD, letterSpacing: "0.3em" }}>{guestToken ? "Kindly respond" : "Step 1 of 3"}</p>
+            {!showEventPicker ? (
+              <>
+                <p className="text-xs text-center mb-4" style={{ color: MUTED, maxWidth: "320px", margin: "0 auto 1.5rem" }}>
+                  This RSVP is for the <strong>White Wedding</strong> on Saturday, 19 December 2026.<br />
+                  The Traditional Wedding on Thursday, 17 December 2026 uses access cards only.
+                </p>
+                <p className="font-serif text-2xl mb-2">Will you be attending?</p>
+                <p className="text-xs text-center mb-4 opacity-60" style={{ maxWidth: "320px", margin: "0 auto 1.5rem" }}>
+                  This RSVP checks against the guest list. If your name is not listed, please contact the host.
+                </p>
+                {guestToken && guest?.name && (
+                  <p className="text-[10px] uppercase opacity-60 mb-4" style={{ letterSpacing: "0.28em" }}>
+                    Reserved for {guest.name}
+                  </p>
+                )}
+                <div className="grid grid-cols-2 gap-3 max-w-md mx-auto">
+                  <button
+                    onClick={() => guestToken ? submitPersonal("yes") : setShowEventPicker(true)}
+                    disabled={submitting}
+                    className="rounded-2xl border-2 bg-white p-5 flex flex-col items-center gap-2 transition-all active:scale-95 disabled:opacity-60"
+                    style={{ borderColor: GOLD, boxShadow: "0 8px 24px rgba(184,137,47,0.18)" }}
+                  >
+                    <span className="w-11 h-11 rounded-full flex items-center justify-center text-white" style={{ background: `linear-gradient(160deg, ${GOLD_LIGHT}, ${GOLD})` }}>
+                      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20 6L9 17l-5-5" />
+                      </svg>
+                    </span>
+                    <span className="font-bold text-sm">{submitting && attendance === "yes" ? "Sending..." : "Yes, I Will Attend"}</span>
+                  </button>
+                  <button
+                    onClick={() => guestToken ? submitPersonal("no") : setThanksOpen(true)}
+                    disabled={submitting}
+                    className="rounded-2xl border-2 bg-white p-5 flex flex-col items-center gap-2 transition-all active:scale-95 disabled:opacity-60"
+                    style={{ borderColor: "#e2d5b8" }}
+                  >
+                    <span className="w-11 h-11 rounded-full flex items-center justify-center border-2" style={{ borderColor: "#d8c9a6", color: "#a89570" }}>
+                      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+                        <path d="M18 6L6 18M6 6l12 12" />
+                      </svg>
+                    </span>
+                    <span className="font-bold text-sm opacity-70">{submitting && attendance === "no" ? "Sending..." : "No"}</span>
+                  </button>
+                </div>
+                {error && <p className="mt-4 text-xs text-red-700">{error}</p>}
+              </>
+            ) : (
+              <div className="max-w-md mx-auto text-left">
+                <p className="text-[11px] uppercase font-bold mb-1" style={{ color: GOLD, letterSpacing: "0.3em" }}>Step 2 of 3 — Which day(s) will you attend?</p>
+                <p className="text-xs mb-4 opacity-70" style={{ color: MUTED }}>Select the celebration(s) you will join. The dress code differs for each.</p>
+                {content.attendance_options?.map((opt: any) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => { setEventAttendance(opt.value); setShowEventPicker(false); setAttendance("yes"); }}
+                    disabled={submitting}
+                    className="w-full mb-3 p-4 rounded-xl border-2 bg-white text-left transition-all active:scale-[0.99] disabled:opacity-60"
+                    style={{ borderColor: eventAttendance === opt.value ? GOLD : "#e2d5b8", boxShadow: eventAttendance === opt.value ? "0 8px 24px rgba(184,137,47,0.18)" : "none" }}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: eventAttendance === opt.value ? `linear-gradient(160deg, ${GOLD_LIGHT}, ${GOLD})` : "#f5f0e6", borderColor: eventAttendance === opt.value ? GOLD : "#e2d5b8", borderWidth: 2 }}>
+                        {eventAttendance === opt.value ? (
+                          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M20 6L9 17l-5-5" />
+                          </svg>
+                        ) : null}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold text-base" style={{ color: INK }}>{opt.label}</p>
+                        <p className="text-[11px] mt-0.5" style={{ color: MUTED }}>{opt.date}</p>
+                        {opt.value === "white_wedding" && (
+                          <p className="text-[10px] mt-1 font-medium" style={{ color: GOLD }}>Dress code: Gentlemen black tie, Ladies pastels with fascinators</p>
+                        )}
+                        {opt.value === "traditional" && (
+                          <p className="text-[10px] mt-1 font-medium" style={{ color: GOLD }}>Dress code: Gentlemen dark green or white, Ladies asoebi</p>
+                        )}
+                        {opt.value === "both" && (
+                          <p className="text-[10px] mt-1 font-medium" style={{ color: GOLD }}>White wedding: black tie (men) / pastels (women). Traditional: dark green or white (men) / asoebi (women).</p>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+                <button
+                  onClick={() => setShowEventPicker(false)}
+                  className="w-full text-xs opacity-50 underline underline-offset-4 mt-2"
+                >
+                  Back
+                </button>
+                {error && <p className="mt-4 text-xs text-red-700">{error}</p>}
+              </div>
             )}
-            <div className="grid grid-cols-2 gap-3 max-w-md mx-auto">
-              <button
-                onClick={() => (guestToken ? submitPersonal("yes") : setAttendance("yes"))}
-                disabled={submitting}
-                className="rounded-2xl border-2 bg-white p-5 flex flex-col items-center gap-2 transition-all active:scale-95 disabled:opacity-60"
-                style={{ borderColor: GOLD, boxShadow: "0 8px 24px rgba(184,137,47,0.18)" }}
-              >
-                <span className="w-11 h-11 rounded-full flex items-center justify-center text-white" style={{ background: `linear-gradient(160deg, ${GOLD_LIGHT}, ${GOLD})` }}>
-                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M20 6L9 17l-5-5" />
-                  </svg>
-                </span>
-                <span className="font-bold text-sm">{submitting && attendance === "yes" ? "Sending..." : "Yes, I Will Attend"}</span>
-              </button>
-              <button
-                onClick={() => (guestToken ? submitPersonal("no") : setThanksOpen(true))}
-                disabled={submitting}
-                className="rounded-2xl border-2 bg-white p-5 flex flex-col items-center gap-2 transition-all active:scale-95 disabled:opacity-60"
-                style={{ borderColor: "#e2d5b8" }}
-              >
-                <span className="w-11 h-11 rounded-full flex items-center justify-center border-2" style={{ borderColor: "#d8c9a6", color: "#a89570" }}>
-                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
-                    <path d="M18 6L6 18M6 6l12 12" />
-                  </svg>
-                </span>
-                <span className="font-bold text-sm opacity-70">{submitting && attendance === "no" ? "Sending..." : "No"}</span>
-              </button>
-            </div>
-            {error && <p className="mt-4 text-xs text-red-700">{error}</p>}
           </div>
         ) : (
           <div className="rounded-2xl border bg-white p-5 space-y-4 max-w-md mx-auto" style={{ borderColor: "#e2d5b8" }}>
-            <p className="text-[11px] uppercase font-bold" style={{ color: GOLD, letterSpacing: "0.3em" }}>Step 2 of 2, your details</p>
+            <p className="text-[11px] uppercase font-bold" style={{ color: GOLD, letterSpacing: "0.3em" }}>Step 3 of 3, your details</p>
             <div>
               <label className={labelCls} style={{ color: INK }}>Name: <span style={{ color: GOLD }}>*</span></label>
               <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Enter your full name" className={inputCls} style={{ borderColor: "#e2d5b8" }} />

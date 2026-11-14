@@ -28,6 +28,8 @@ class RSVPResponse(BaseModel):
     # Event 82 (gala) only: one companion on the same pass. Ignored elsewhere.
     plus_one: bool | None = None
     plus_one_name: str | None = None
+    # Wedding (event 80) only: which day(s) the guest is attending.
+    attendance: str | None = None
 
 
 async def _send_whatsapp(to: str, message: str, media_url: str | None = None) -> tuple[bool, str | None]:
@@ -311,6 +313,18 @@ async def submit_rsvp(
                 data.pop("plus_one_name", None)
                 data.pop("party_size", None)
             guest.custom_data = data
+
+    # Wedding (event 80): store which day(s) the guest is attending
+    if rsvp.attendance is not None:
+        try:
+            from app.api.event_registration import is_wedding_event
+        except Exception:
+            is_wedding_event = None
+        if is_wedding_event is not None and is_wedding_event(event):
+            guest.custom_data = {
+                **(guest.custom_data or {}),
+                "attendance": rsvp.attendance,
+            }
 
     from datetime import datetime
     guest.rsvped_at = datetime.utcnow()

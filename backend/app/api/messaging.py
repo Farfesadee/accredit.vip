@@ -1513,6 +1513,147 @@ def _build_wedding_qr_message(
     return subject, body, html
 
 
+def _build_wedding_confirmation(
+    guest: Guest,
+    event: Event,
+    attendance_type: str,  # "white_wedding" | "both"
+) -> tuple[str, str, str]:
+    """Confirmation message for Patrick & Sarah White Wedding (event 80).
+
+    Sent when a guest RSVPs yes and selects White Wedding or Both.
+    Traditional-only attendees get no confirmation (invites sent later from dashboard).
+    """
+    from datetime import date as dt_date
+    formatted_date = _format_date(event.event_date)
+    formatted_time = _format_time(event.event_time, event.timezone or "WAT")
+    date_parts = str(formatted_date).split(" ", 1)
+    if len(date_parts) == 2 and date_parts[0].endswith("day"):
+        formatted_date = f"{date_parts[0]}, {date_parts[1]}"
+    time_parts = str(formatted_time).split(" ", 1)
+    if len(time_parts) == 2 and time_parts[0].isdigit():
+        formatted_time = f"{time_parts[0]}:00 {time_parts[1]}"
+
+    if attendance_type == "both":
+        subject = f"Confirmed: You're attending both celebrations, {guest.name}!"
+        event_lines = (
+            f"White Wedding: Saturday, 19 December 2026 at 10:00 AM\n"
+            f"  Church of the Assumption, Asokoro Abuja\n"
+            f"  Reception: 1:00 PM at Los Angeles Event Center, Kado Abuja\n\n"
+            f"Traditional Wedding: Thursday, 17 December 2026 at 2:00 PM\n"
+            f"  Maha Event Center, Garki Area 8, Abuja"
+        )
+        dress_lines = (
+            "White Wedding: Gentlemen — Black tie. Ladies — Pastels with fascinators.\n"
+            "Traditional Wedding: Gentlemen — Dark green or white. Ladies — Asoebi."
+        )
+    else:
+        subject = f"Confirmed: You're attending our White Wedding, {guest.name}!"
+        event_lines = (
+            f"Saturday, 19 December 2026\n"
+            f"  Ceremony: 10:00 AM at Church of the Assumption, Asokoro Abuja\n"
+            f"  Reception: 1:00 PM at Los Angeles Event Center, Kado Abuja"
+        )
+        dress_lines = "Gentlemen — Black tie. Ladies — Pastels with fascinators."
+
+    absolute_flyer = None
+    flyer_asset = None
+    if event.id:
+        from app.core.database import async_session
+        from app.models.flier import FlierAsset
+        # Note: this is a sync call, but we only need the flyer URL
+        # We'll just use the event's cover or first flier
+        if event.cover_image:
+            absolute_flyer = _absolute_url(event.cover_image)
+        else:
+            # Try to get the invite flier
+            pass
+
+    hero_html = (
+        f'<img src="{absolute_flyer}" alt="Patrick & Sarah" width="600" '
+        'style="width:100%;max-width:600px;height:auto;display:block;border:0;border-radius:10px 10px 0 0" />'
+        if absolute_flyer
+        else ""
+    )
+
+    inner = (
+        f'{hero_html}'
+        '<div style="padding:32px 28px;background:' + WEDDING_CREAM + '">'
+        '<p style="margin:0 0 8px;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
+        f'letter-spacing:4px;color:{WEDDING_GOLD};text-transform:uppercase">Confirmed</p>'
+        '<h1 style="margin:0 0 20px;font-family:Georgia,serif;font-size:32px;line-height:1.1;'
+        f'color:{WEDDING_INK}">Thank you for your RSVP</h1>'
+        f'<p style="margin:0 0 24px;font-family:Georgia,serif;font-size:15px;line-height:1.7;color:{WEDDING_INK}">'
+        f'We are delighted that you will be joining us, {guest.name}.</p>'
+        '<table style="width:100%;border-collapse:collapse;margin:0 0 24px">'
+        '<tr>'
+        f'<td style="padding:8px 0;width:100px;vertical-align:top;font-family:Arial,Helvetica,sans-serif;'
+        f'font-size:10px;letter-spacing:2px;color:{WEDDING_GOLD};text-transform:uppercase">Event(s)</td>'
+        f'<td style="padding:8px 0;font-size:15px;color:{WEDDING_INK};font-weight:bold">{event_lines.replace(chr(10), "<br>")}</td>'
+        '</tr>'
+        '<tr>'
+        f'<td style="padding:8px 0;width:100px;vertical_align:top;font-family:Arial,Helvetica,sans-serif;'
+        f'font-size:10px;letter-spacing:2px;color:{WEDDING_GOLD};text-transform:uppercase">Dress Code</td>'
+        f'<td style="padding:8px 0;font-size:15px;color:{WEDDING_INK};font-weight:bold">{dress_lines.replace(chr(10), "<br>")}</td>'
+        '</tr>'
+        '</table>'
+        '<p style="margin:16px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:1.5;'
+        f'color:{WEDDING_MUTED}">'
+        'Your entry QR code will be sent to you closer to the event date via email and WhatsApp. '
+        'Please keep an eye on your inbox.'
+        '</p>'
+        '</div>'
+        '<div style="background:' + WEDDING_INK + ';padding:22px 26px;text-align:center;'
+        'border-top:3px solid ' + WEDDING_GOLD + '">'
+        '<p style="margin:0 0 6px;font-family:Arial,Helvetica,sans-serif;font-size:9px;'
+        f'letter-spacing:4px;color:{WEDDING_GOLD};text-transform:uppercase">Patrick & Sarah</p>'
+        '<p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
+        'letter-spacing:2px;color:#9A8388">White Wedding · Abuja · 19 December 2026</p>'
+        "</div>"
+    )
+    html = _annette_shell(inner, "")
+
+    body = (
+        f"Dear {guest.name},\n\n"
+        f"Thank you for confirming your attendance!\n\n"
+        f"{event_lines}\n\n"
+        f"Dress Code:\n{dress_lines}\n\n"
+        "Your entry QR code will be sent to you closer to the event date via email and WhatsApp.\n\n"
+        f"With love,\nPatrick & Sarah"
+    )
+    return subject, body, html
+
+
+async def _send_wedding_confirmation(guest_id: int, event_id: int, attendance_type: str):
+    """Send wedding confirmation (email + WhatsApp) for event 80 guests."""
+    from app.core.database import async_session
+    from app.models.guest import Guest
+    from app.models.event import Event
+    from app.services.email_service import send_email
+    from app.services.whatsapp_service import send_whatsapp
+
+    async with async_session() as db:
+        guest = (await db.execute(select(Guest).where(Guest.id == guest_id))).scalar_one_or_none()
+        event = (await db.execute(select(Event).where(Event.id == event_id))).scalar_one_or_none()
+        if not guest or not event:
+            return
+
+        subject, body, html = _build_wedding_confirmation(guest, event, attendance_type)
+
+        # Send email
+        if guest.email:
+            try:
+                await send_email(guest.email, subject, html)
+            except Exception:
+                pass
+
+        # Send WhatsApp
+        if guest.phone:
+            try:
+                await send_whatsapp(guest.phone, body)
+            except Exception:
+                pass
+
+
 def _build_annette_invite_message(
     guest: Guest,
     event: Event,

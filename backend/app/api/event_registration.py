@@ -36,6 +36,8 @@ class RegistrationRequest(BaseModel):
     # Event 82 (gala) only: one companion on the same pass. Ignored elsewhere.
     plus_one: bool = False
     plus_one_name: str = ""
+    # Wedding (event 80) only: which day(s) the guest is attending.
+    attendance: str = "white_wedding"  # "white_wedding" | "traditional" | "both"
 
 
 # Wedding experience (Patrick & Sarah, Dec 19 2026). Everything gated on
@@ -72,24 +74,24 @@ def wedding_content() -> dict:
             "time": "1:00 PM",
         },
         # Two days, two looks. The white wedding is black tie and pastels; the
-        # traditional, two days earlier, is dark green for the men and asoebi
-        # for the women (client direction, October 2026, refined 9 November).
+        # traditional, two days earlier, is dark green or white for the men and asoebi
+        # for the women (client direction, November 2026).
         "dress_code": {
             "label": "Dress Code",
             "message": "Come dressed for each with us.",
             "wedding": {
                 "label": "The White Wedding",
                 "when": "Saturday, 19 December 2026",
-                "men": "Dark green or white",
+                "men": "Black tie",
                 "women": "Pastel colours, with fascinators",
-                "note": "Gentlemen: dark green or white. Ladies: soft pastel tones, with fascinators.",
+                "note": "Gentlemen: black tie. Ladies: soft pastel tones, with fascinators.",
             },
             "traditional": {
                 "label": "The Traditional Wedding",
                 "when": "Thursday, 17 December 2026",
-                "men": "Dark green, the colour of the day",
+                "men": "Dark green or white",
                 "women": "Asoebi",
-                "note": "Gentlemen wear dark green, the colour of the day. Asoebi is for the ladies only.",
+                "note": "Gentlemen: dark green or white. Ladies: the friends of the couple asoebi.",
             },
             # Names only: the client asked us to drop the colour swatches and
             # keep the shade names as words.
@@ -104,6 +106,11 @@ def wedding_content() -> dict:
             ],
             "colors_note": "Pastel shades for the ladies at the white wedding.",
         },
+        "attendance_options": [
+            { "value": "white_wedding", "label": "White Wedding", "date": "Saturday, 19 December 2026" },
+            { "value": "traditional", "label": "Traditional Wedding", "date": "Thursday, 17 December 2026" },
+            { "value": "both", "label": "Both", "date": "Both days" },
+        ],
         "video_url": "/uploads/wedding-0cd6a8bc64df.mp4",
         # Opening curtain the client supplied (their montage). Silent clip: the
         # music below plays over it. reveal_at is the moment the curtain has
@@ -137,7 +144,7 @@ def wedding_content() -> dict:
             "time": "2:00 PM",
             "venue": "Maha Event Center",
             "location": "Garki Area 8, Abuja",
-            "note": "The asoebi is worn at the traditional. Gentlemen wear dark green, the colour of the day.",
+            "note": "The asoebi is worn at the traditional. Gentlemen wear dark green or white.",
         },
         # Friends of the couple asoebi: for the ladies, worn at the traditional
         # on 17 December. The client was explicit that men do not wear it.
@@ -146,7 +153,7 @@ def wedding_content() -> dict:
             "short": "Asoebi",
             "for_who": "For the ladies",
             "occasion": "Worn at the traditional wedding, Thursday, 17 December 2026.",
-            "note": "Asoebi is for the women only. Gentlemen, your colour of the day for the traditional is dark green.",
+            "note": "Asoebi is for the women only. Gentlemen, your colour of the day for the traditional is dark green or white.",
             "items": ["3 yards of lace", "3 yards of lining", "Gele", "Souvenir from the couple"],
             "bank": ASOEBI_BANK,
             "whatsapp": ASOEBI_WHATSAPP,
@@ -165,7 +172,7 @@ def wedding_content() -> dict:
             },
             {
                 "q": "What should I wear to the traditional?",
-                "a": "Gentlemen wear dark green, the colour of the day. Ladies wear the friends of the couple asoebi.",
+                "a": "Gentlemen: dark green or white. Ladies: the friends of the couple asoebi.",
             },
             {
                 "q": "Where is the traditional wedding?",
@@ -173,7 +180,7 @@ def wedding_content() -> dict:
             },
             {
                 "q": "What should I wear to the white wedding?",
-                "a": "Gentlemen, dark green or white. Ladies, pastel colours in soft, sophisticated tones, with fascinators. The shade names are on the Dress Code section if you want a steer.",
+                "a": "Gentlemen: black tie. Ladies: pastel colours in soft, sophisticated tones, with fascinators. The shade names are on the Dress Code section if you want a steer.",
             },
             {
                 "q": "Who is the asoebi for, and how do I get it?",
@@ -703,18 +710,25 @@ async def submit_registration(
             data["party_size"] = 2
         guest.custom_data = data
 
+    # Wedding (event 80): store which day(s) the guest is attending
+    if is_wedding_event(event) and attendance:
+        guest.custom_data = {
+            **(guest.custom_data or {}),
+            "attendance": attendance,
+        }
+
     await db.commit()
     await db.refresh(guest)
 
-    # ACAMB-style flow (qr_later): the ONLY thing a registered guest receives is
-    # their QR code (with the flyer) via email + WhatsApp. Trigger that delivery
-    # here so it fires on registration, not only on the per-guest RSVP "Yes" flow.
-    # Anchor Evening of Bliss (event 85) opts out: the client triggers every pass
-    # from the dashboard themselves.
+    # Wedding (event 80): no auto-QR on RSVP. Instead, send a confirmation
+    # message for White Wedding or Both attendees. Traditional-only attendees
+    # get no confirmation (the client will send invites later from the dashboard).
+    # Anchor Evening of Bliss (event 85) also opts out of auto-QR.
     if (
         guest.rsvp_status == "accepted"
         and getattr(event, "qr_delivery", None) == "qr_later"
         and auto_qr_on_rsvp(event)
+        and not is_wedding_event(event)
     ):
         try:
             from app.api.rsvp import _send_qr_after_rsvp
@@ -722,7 +736,17 @@ async def submit_registration(
         except Exception:
             pass
 
-    if guest.rsvp_status == "accepted":
+    # Send confirmation message for wedding attendees (white_wedding or both)
+    if guest.rsvp_status == "accepted" and is_wedding_event(event):
+        attendance_val = guest.custom_data.get("attendance") if guest.custom_data else None
+        if attendance_val in ("white_wedding", "both"):
+            try:
+                from app.api.messaging import _send_wedding_confirmation
+                asyncio.create_task(_send_wedding_confirmation(guest.id, event.id, attendance_val))
+            except Exception:
+                pass
+        message = "Your attendance has been recorded. You will receive a confirmation shortly."
+    elif guest.rsvp_status == "accepted":
         if is_anchor_event(event):
             message = "Your attendance has been recorded. Your host will send your entry pass separately."
         else:

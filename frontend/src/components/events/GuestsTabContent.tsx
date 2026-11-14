@@ -904,6 +904,11 @@ export default function GuestsTabContent({
                                 <span className="font-medium">Plus one:</span> {guest.custom_data?.plus_one_name || "Companion"} (pass admits 2)
                               </p>
                             )}
+                            {eventId === 80 && guest.custom_data?.attendance && (
+                              <p className="text-xs mt-1" style={{ color: "#8a7a5c" }}>
+                                <span className="font-medium">Attending:</span> {guest.custom_data.attendance === "white_wedding" ? "White Wedding" : guest.custom_data.attendance === "traditional" ? "Traditional Wedding" : "Both days"}
+                              </p>
+                            )}
                             {guest.asoebi && (
                               <p className="text-xs mt-1">
                                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${guest.asoebi.status === "confirmed" ? "bg-emerald-100 text-emerald-700" : guest.asoebi.status === "cancelled" ? "bg-red-100 text-red-600" : "bg-amber-100 text-amber-700"}`}>
@@ -1130,6 +1135,11 @@ export default function GuestsTabContent({
                             {(eventId === 82 || eventId === 84) && guest.custom_data?.party_size === 2 && (
                               <p className="text-xs text-amber-600 mt-0.5">
                                 <span className="font-medium">Plus one:</span> {guest.custom_data?.plus_one_name || "Companion"} (admits 2)
+                              </p>
+                            )}
+                            {eventId === 80 && guest.custom_data?.attendance && (
+                              <p className="text-xs mt-0.5" style={{ color: "#8a7a5c" }}>
+                                <span className="font-medium">Attending:</span> {guest.custom_data.attendance === "white_wedding" ? "White Wedding" : guest.custom_data.attendance === "traditional" ? "Traditional Wedding" : "Both days"}
                               </p>
                             )}
                             {guest.asoebi && (
