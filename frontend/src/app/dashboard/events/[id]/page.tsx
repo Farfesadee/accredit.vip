@@ -919,12 +919,15 @@ function EventDetailContent() {
     ] : []),
     { id: "guests", label: "Guests", icon: Users, badge: totalGuests },
     { id: "invites", label: "Invites", icon: Send },
-    { id: "questions", label: "Questions", icon: HelpCircle },
-    { id: "reminders", label: "Reminders", icon: Bell },
-    { id: "coupons", label: "Coupons", icon: Ticket },
-    { id: "templates", label: "Templates", icon: Copy },
-    { id: "waitlist", label: "Waitlist", icon: Users },
-    { id: "settings", label: "Settings", icon: Settings }
+    // The couple's portal runs one wedding: three tabs, no platform tooling.
+    ...(PORTAL ? [] : [
+      { id: "questions", label: "Questions", icon: HelpCircle },
+      { id: "reminders", label: "Reminders", icon: Bell },
+      { id: "coupons", label: "Coupons", icon: Ticket },
+      { id: "templates", label: "Templates", icon: Copy },
+      { id: "waitlist", label: "Waitlist", icon: Users },
+      { id: "settings", label: "Settings", icon: Settings },
+    ]),
   ];
 
   const allTabs = tabs.map((t) => {
@@ -936,9 +939,10 @@ function EventDetailContent() {
         onClick={() => { setActiveTab(t.id); router.replace(`/dashboard/events/${id}?tab=${t.id}`, { scroll: false }); }}
         className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 whitespace-nowrap ${
           isActive
-            ? "bg-primary text-white shadow-md"
+            ? "text-white shadow-md"
             : "text-slate-700 hover:bg-slate-100"
         }`}
+        style={isActive ? { background: ACCENT } : undefined}
       >
         <IconComp className="w-4 h-4" />
         <span>{t.label}</span>
@@ -1090,16 +1094,18 @@ function EventDetailContent() {
                       <Users className="w-4 h-4" />
                       Manage Guests
                     </button>
-                    {event.slug && (
+                    {!PORTAL && event.slug && (
                       <a href={`/e/${event.slug}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 text-sm font-medium hover:bg-slate-50 transition-colors">
                         <ExternalLink className="w-4 h-4" />
                         View Public Page
                       </a>
                     )}
-                    <Link href={`/dashboard/failed-messages?event_id=${id}`} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-red-200 text-red-600 text-sm font-medium hover:bg-red-50 transition-colors">
-                      <AlertTriangle className="w-4 h-4" />
-                      Failed Messages
-                    </Link>
+                    {!PORTAL && (
+                      <Link href={`/dashboard/failed-messages?event_id=${id}`} className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl border border-red-200 text-red-600 text-sm font-medium hover:bg-red-50 transition-colors">
+                        <AlertTriangle className="w-4 h-4" />
+                        Failed Messages
+                      </Link>
+                    )}
                   </div>
 
                   {/* Event Details Card */}
@@ -1226,7 +1232,7 @@ function EventDetailContent() {
                                   {o.status}
                                 </span>
                               </div>
-                              <p className="font-mono text-[11px] text-slate-500 mt-0.5">{o.reference} · {o.quantity} pkg · ₦{(o.amount || 0).toLocaleString()}</p>
+                              <p className="font-mono text-[11px] text-slate-500 mt-0.5">{o.reference} · {o.quantity} pkg{PORTAL ? "" : ` · ₦${(o.amount || 0).toLocaleString()}`}</p>
                               <p className="text-[11px] text-slate-500 truncate">{o.phone}{o.email ? ` · ${o.email}` : ""}</p>
                               {o.status === "submitted" && (
                                 <div className="flex gap-2 mt-2">
@@ -1274,8 +1280,9 @@ function EventDetailContent() {
                     </div>
                   )}
 
-                  {/* Ticket Sales */}
-                  {purchases.length > 0 && (
+                  {/* Ticket Sales: a platform concept the wedding portal does
+                      not show. The couple run invitations, not ticket sales. */}
+                  {!PORTAL && purchases.length > 0 && (
                     <div>
                       <h3 className="text-sm font-bold text-secondary mb-3">Ticket Sales ({purchases.length})</h3>
                       <div className="space-y-2">

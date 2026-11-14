@@ -32,10 +32,16 @@ const NAV_ITEMS = [
     label: PORTAL ? "Event dashboard" : "Dashboard",
     icon: LayoutGrid,
   },
-  { href: "/dashboard/events", label: "Events", icon: CalendarDays },
-  ...(PORTAL ? [] : [{ href: "/dashboard/create", label: "Create Event", icon: Plus }]),
-  { href: "/dashboard/wallet", label: "Wallet", icon: Wallet },
-  { href: "/dashboard/failed-messages", label: "Failed Messages", icon: AlertTriangle },
+  // The couple's portal shows one event and nothing else: no events list, no
+  // wallet, no failed-messages queue. Every other build keeps the full menu.
+  ...(PORTAL
+    ? []
+    : [
+        { href: "/dashboard/events", label: "Events", icon: CalendarDays },
+        { href: "/dashboard/create", label: "Create Event", icon: Plus },
+        { href: "/dashboard/wallet", label: "Wallet", icon: Wallet },
+        { href: "/dashboard/failed-messages", label: "Failed Messages", icon: AlertTriangle },
+      ]),
 ];
 
 export function DashboardSidebar({

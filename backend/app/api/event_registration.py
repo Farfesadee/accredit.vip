@@ -59,17 +59,17 @@ def wedding_content() -> dict:
         "groom": "Patrick Ekperikpe Ekpo",
         "bride": "Sarah Ekene Elumeze",
         "hashtag": "#HeavyOnTheEkpos",
-        "countdown_to": "2026-12-19T12:00:00+01:00",
+        "countdown_to": "2026-12-19T10:00:00+01:00",
         "ceremony": {
             "label": "White Wedding Ceremony",
             "venue": "Church of the Assumption",
             "location": "No. 2 Kwame Nkrumah Cres, Asokoro Abuja",
             "date": "Saturday, December 19, 2026",
-            "time": "12:00 PM",
+            "time": "10:00 AM",
         },
         "reception": {
             "venue": "Los Angeles Event Center, Kado, Abuja",
-            "time": "2:00 PM",
+            "time": "1:00 PM",
         },
         # Two days, two looks. The white wedding is black tie and pastels; the
         # traditional, two days earlier, is dark green for the men and asoebi
@@ -147,7 +147,6 @@ def wedding_content() -> dict:
             "for_who": "For the ladies",
             "occasion": "Worn at the traditional wedding, Thursday, 17 December 2026.",
             "note": "Asoebi is for the women only. Gentlemen, your colour of the day for the traditional is dark green.",
-            "price": ASOEBI_PRICE,
             "items": ["3 yards of lace", "3 yards of lining", "Gele", "Souvenir from the couple"],
             "bank": ASOEBI_BANK,
             "whatsapp": ASOEBI_WHATSAPP,
@@ -158,11 +157,11 @@ def wedding_content() -> dict:
         "faq": [
             {
                 "q": "What time should I arrive?",
-                "a": "The white wedding ceremony begins at 12:00 PM at Church of the Assumption, Asokoro. Please come a little early so you are seated before the procession.",
+                "a": "The white wedding ceremony begins at 10:00 AM at Church of the Assumption, Asokoro. Please come a little early so you are seated before the procession.",
             },
             {
                 "q": "Where do I go after the church?",
-                "a": "The reception follows from 2:00 PM at Los Angeles Event Center, Kado, Abuja. The When and Where section carries directions from wherever you are.",
+                "a": "The reception follows from 1:00 PM at Los Angeles Event Center, Kado, Abuja. The When and Where section carries directions from wherever you are.",
             },
             {
                 "q": "What should I wear to the traditional?",
@@ -174,7 +173,7 @@ def wedding_content() -> dict:
             },
             {
                 "q": "What should I wear to the white wedding?",
-                "a": "Gentlemen, a suit or black tie. Ladies, pastel colours in soft, sophisticated tones, with fascinators. The shade names are on the Dress Code section if you want a steer.",
+                "a": "Gentlemen, dark green or white. Ladies, pastel colours in soft, sophisticated tones, with fascinators. The shade names are on the Dress Code section if you want a steer.",
             },
             {
                 "q": "Who is the asoebi for, and how do I get it?",

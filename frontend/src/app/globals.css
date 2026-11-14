@@ -64,6 +64,40 @@
   --sidebar-ring:             #1ABC9C;
 }
 
+/* ═══════════════════════════════════════════
+   COUPLE PORTAL PALETTE
+   The portal build (portal.sarahandpatrick.co.uk) tags <html data-portal>,
+   so the platform's teal and navy tokens resolve to the wedding's gold and
+   ink there. accredit.vip never carries the attribute, so its palette is
+   left exactly as it is.
+═══════════════════════════════════════════ */
+[data-portal] {
+  --brand-navy:        #1F1B16;
+  --brand-navy-light:  #2B2419;
+  --brand-navy-mid:    #241E16;
+  --brand-teal:        #C9A227;
+  --brand-teal-dark:   #A8871F;
+  --brand-teal-light:  #E4CB74;
+
+  --primary:            #C9A227;
+  --primary-foreground: #ffffff;
+  --secondary:          #1F1B16;
+  --secondary-foreground: #F6EFE2;
+  --ring:               #C9A227;
+
+  --chart-1: #C9A227;
+  --chart-2: #1F1B16;
+  --chart-3: #A8871F;
+  --chart-4: #E4CB74;
+  --chart-5: #8C6F1A;
+
+  --sidebar:                    #1F1B16;
+  --sidebar-primary:            #C9A227;
+  --sidebar-accent:             #2B2419;
+  --sidebar-border:             #2B2419;
+  --sidebar-ring:               #C9A227;
+}
+
 .dark {
   --background:        #0a1220;
   --foreground:        #f0f4f8;

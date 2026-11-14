@@ -103,6 +103,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      data-portal={PORTAL ? "" : undefined}
       className={`${plusJakartaSans.variable} ${inter.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col" style={{ fontFamily: "var(--font-plus-jakarta), system-ui, sans-serif" }}>

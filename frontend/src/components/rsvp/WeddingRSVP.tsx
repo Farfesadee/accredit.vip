@@ -886,10 +886,6 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
         <p className="mt-4 max-w-md text-sm leading-relaxed" style={{ color: "rgba(248,242,230,0.62)" }}>
           {content.asoebi?.note || "Asoebi is for the women only. Gentlemen, your colour of the day is dark green."}
         </p>
-        <p className="mt-5 font-serif text-2xl" style={{ color: "#f8f2e6" }}>
-          ₦{(content.asoebi?.price || 0).toLocaleString()}{" "}
-          <span className="text-xs" style={{ color: "rgba(248,242,230,0.6)" }}>per package</span>
-        </p>
         <Link
           href={`/rsvp/asoebi/${slug}`}
           className="mt-6 flex h-12 w-full items-center justify-center rounded-full px-8 text-sm font-bold text-white transition-transform hover:scale-[1.02] sm:w-fit"

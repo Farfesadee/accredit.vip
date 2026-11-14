@@ -314,7 +314,7 @@ export default function EventReportPage() {
           )}
         </div>
 
-        <div className="mb-8">
+        <div className="mb-8" style={PORTAL ? { display: "none" } : undefined}>
           <h2 className="text-lg font-bold text-slate-900 mb-4">Ticket Sales ({sales.length} order{sales.length === 1 ? "" : "s"})</h2>
           {sales.length === 0 ? (
             <p className="text-sm text-slate-400">No ticket sales yet.</p>

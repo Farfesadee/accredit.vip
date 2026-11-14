@@ -1367,7 +1367,7 @@ def _build_wedding_invite_message(
         '<tr>'
         f'<td style="padding:8px 0;width:100px;vertical_align:top;font-family:Arial,Helvetica,sans-serif;'
         f'font-size:10px;letter-spacing:2px;color:{WEDDING_GOLD};text-transform:uppercase">Dress Code</td>'
-        f'<td style="padding:8px 0;font-size:15px;color:{WEDDING_INK};font-weight:bold">Black Tie & Pastels</td>'
+        f'<td style="padding:8px 0;font-size:15px;color:{WEDDING_INK};font-weight:bold">Dark Green or White & Pastels</td>'
         '</tr>'
         '</table>'
         '<div style="text-align:center;margin:24px 0">'
@@ -1399,7 +1399,7 @@ def _build_wedding_invite_message(
         f"Date: {formatted_date}\n"
         f"Time: {formatted_time}\n"
         f"Venue: {event.venue}\n"
-        f"Dress Code: Black Tie & Pastels\n\n"
+        f"Dress Code: Dark Green or White & Pastels\n\n"
         f"RSVP: {rsvp_link}\n\n"
         "This RSVP is for the White Wedding on Saturday, 19 December 2026. "
         "The Traditional Wedding on Thursday, 17 December 2026 uses access cards only.\n\n"
@@ -1484,7 +1484,7 @@ def _build_wedding_qr_message(
         '<tr>'
         f'<td style="padding:8px 0;width:100px;vertical_align:top;font-family:Arial,Helvetica,sans-serif;'
         f'font-size:10px;letter-spacing:2px;color:{WEDDING_GOLD};text-transform:uppercase">Dress Code</td>'
-        f'<td style="padding:8px 0;font-size:15px;color:{WEDDING_INK};font-weight:bold">Black Tie & Pastels</td>'
+        f'<td style="padding:8px 0;font-size:15px;color:{WEDDING_INK};font-weight:bold">Dark Green or White & Pastels</td>'
         '</tr>'
         '</table>'
         f'{qr_html}'
@@ -1505,7 +1505,7 @@ def _build_wedding_qr_message(
         f"Date: {formatted_date}\n"
         f"Time: {formatted_time}\n"
         f"Venue: {event.venue}\n"
-        f"Dress Code: Black Tie & Pastels\n\n"
+        f"Dress Code: Dark Green or White & Pastels\n\n"
         "This pass is for the White Wedding on Saturday, 19 December 2026. "
         "The Traditional Wedding on Thursday, 17 December 2026 uses access cards only.\n\n"
         f"With love,\nPatrick & Sarah"
