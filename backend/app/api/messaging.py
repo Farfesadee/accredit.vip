@@ -1272,6 +1272,14 @@ WEDDING_INK = "#1F1B16"
 WEDDING_CREAM = "#FAF7F0"
 WEDDING_MUTED = "#8A8074"
 
+# The Traditional Wedding is the first celebration (17 December), so it is set
+# out first in every mail. One source of truth keeps the invite, the pass and the
+# confirmation saying exactly the same thing.
+WEDDING_TRAD_DATE = "Thursday, 17 December 2026"
+WEDDING_TRAD_TIME = "2:00 PM"
+WEDDING_TRAD_VENUE = "Maha Event Center, Garki Area 8, Abuja"
+WEDDING_TRAD_DRESS = "Gentlemen, dark green or white. Ladies, asoebi."
+
 
 # The couple's own domain cannot be the envelope sender: the relay refuses any
 # From header outside its hosted domains ("Your domain sarahandpatrick.co.uk is
@@ -1380,33 +1388,61 @@ def _build_wedding_invite_message(
         '<div style="padding:32px 28px;background:' + WEDDING_CREAM + '">'
         '<p style="margin:0 0 8px;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
         f'letter-spacing:4px;color:{WEDDING_GOLD};text-transform:uppercase">You are invited</p>'
-        '<h1 style="margin:0 0 20px;font-family:Georgia,serif;font-size:32px;line-height:1.1;'
-        f'color:{WEDDING_INK}">The White Wedding</h1>'
-        f'<p style="margin:0 0 24px;font-family:Georgia,serif;font-size:15px;line-height:1.7;color:{WEDDING_INK}">'
-        'We are delighted to invite you to share in our joy as we celebrate our White Wedding in Abuja.'
+        '<h1 style="margin:0 0 12px;font-family:Georgia,serif;font-size:32px;line-height:1.1;'
+        f'color:{WEDDING_INK}">Two Days of Celebration</h1>'
+        f'<p style="margin:0 0 26px;font-family:Georgia,serif;font-size:15px;line-height:1.7;color:{WEDDING_INK}">'
+        'We are delighted to invite you to share in our joy as we celebrate our wedding in Abuja. '
+        'The celebrations begin with the Traditional Wedding, followed by the White Wedding.'
         '</p>'
-        '<table style="width:100%;border-collapse:collapse;margin:0 0 24px">'
+        # The Traditional Wedding comes first: 17 December is before 19 December.
+        f'<div style="border:1px solid {WEDDING_GOLD};border-radius:12px;padding:20px 22px;margin:0 0 18px;background:#FFFFFF">'
+        '<p style="margin:0 0 4px;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
+        f'letter-spacing:3px;color:{WEDDING_GOLD};text-transform:uppercase">{WEDDING_TRAD_DATE}</p>'
+        '<h2 style="margin:0 0 14px;font-family:Georgia,serif;font-size:22px;line-height:1.2;'
+        f'color:{WEDDING_INK}">The Traditional Wedding</h2>'
+        '<table style="width:100%;border-collapse:collapse">'
         '<tr>'
-        f'<td style="padding:8px 0;width:100px;vertical-align:top;font-family:Arial,Helvetica,sans-serif;'
-        f'font-size:10px;letter-spacing:2px;color:{WEDDING_GOLD};text-transform:uppercase">Date</td>'
-        f'<td style="padding:8px 0;font-size:15px;color:{WEDDING_INK};font-weight:bold">{formatted_date}</td>'
-        '</tr>'
-        '<tr>'
-        f'<td style="padding:8px 0;width:100px;vertical_align:top;font-family:Arial,Helvetica,sans-serif;'
+        f'<td style="padding:6px 0;width:100px;vertical-align:top;font-family:Arial,Helvetica,sans-serif;'
         f'font-size:10px;letter-spacing:2px;color:{WEDDING_GOLD};text-transform:uppercase">Time</td>'
-        f'<td style="padding:8px 0;font-size:15px;color:{WEDDING_INK};font-weight:bold">{formatted_time}</td>'
+        f'<td style="padding:6px 0;font-size:15px;color:{WEDDING_INK};font-weight:bold">{WEDDING_TRAD_TIME}</td>'
         '</tr>'
         '<tr>'
-        f'<td style="padding:8px 0;width:100px;vertical_align:top;font-family:Arial,Helvetica,sans-serif;'
+        f'<td style="padding:6px 0;width:100px;vertical-align:top;font-family:Arial,Helvetica,sans-serif;'
         f'font-size:10px;letter-spacing:2px;color:{WEDDING_GOLD};text-transform:uppercase">Venue</td>'
-        f'<td style="padding:8px 0;font-size:15px;color:{WEDDING_INK};font-weight:bold">{event.venue}</td>'
+        f'<td style="padding:6px 0;font-size:15px;color:{WEDDING_INK};font-weight:bold">{WEDDING_TRAD_VENUE}</td>'
         '</tr>'
         '<tr>'
-        f'<td style="padding:8px 0;width:100px;vertical_align:top;font-family:Arial,Helvetica,sans-serif;'
+        f'<td style="padding:6px 0;width:100px;vertical-align:top;font-family:Arial,Helvetica,sans-serif;'
         f'font-size:10px;letter-spacing:2px;color:{WEDDING_GOLD};text-transform:uppercase">Dress Code</td>'
-        f'<td style="padding:8px 0;font-size:15px;color:{WEDDING_INK};font-weight:bold">Black tie, and pastels with fascinators</td>'
+        f'<td style="padding:6px 0;font-size:15px;color:{WEDDING_INK};font-weight:bold">{WEDDING_TRAD_DRESS}</td>'
         '</tr>'
         '</table>'
+        f'<p style="margin:12px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;'
+        f'color:{WEDDING_MUTED}">Entry to the Traditional Wedding is by access card.</p>'
+        '</div>'
+        f'<div style="border:1px solid {WEDDING_GOLD};border-radius:12px;padding:20px 22px;margin:0 0 18px;background:#FFFFFF">'
+        '<p style="margin:0 0 4px;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
+        f'letter-spacing:3px;color:{WEDDING_GOLD};text-transform:uppercase">{formatted_date}</p>'
+        '<h2 style="margin:0 0 14px;font-family:Georgia,serif;font-size:22px;line-height:1.2;'
+        f'color:{WEDDING_INK}">The White Wedding</h2>'
+        '<table style="width:100%;border-collapse:collapse">'
+        '<tr>'
+        f'<td style="padding:6px 0;width:100px;vertical-align:top;font-family:Arial,Helvetica,sans-serif;'
+        f'font-size:10px;letter-spacing:2px;color:{WEDDING_GOLD};text-transform:uppercase">Ceremony</td>'
+        f'<td style="padding:6px 0;font-size:15px;color:{WEDDING_INK};font-weight:bold">{formatted_time}, Church of the Assumption, Asokoro Abuja</td>'
+        '</tr>'
+        '<tr>'
+        f'<td style="padding:6px 0;width:100px;vertical-align:top;font-family:Arial,Helvetica,sans-serif;'
+        f'font-size:10px;letter-spacing:2px;color:{WEDDING_GOLD};text-transform:uppercase">Reception</td>'
+        f'<td style="padding:6px 0;font-size:15px;color:{WEDDING_INK};font-weight:bold">1:00 PM, {event.venue}</td>'
+        '</tr>'
+        '<tr>'
+        f'<td style="padding:6px 0;width:100px;vertical-align:top;font-family:Arial,Helvetica,sans-serif;'
+        f'font-size:10px;letter-spacing:2px;color:{WEDDING_GOLD};text-transform:uppercase">Dress Code</td>'
+        f'<td style="padding:6px 0;font-size:15px;color:{WEDDING_INK};font-weight:bold">Gentlemen, black tie. Ladies, pastels with fascinators.</td>'
+        '</tr>'
+        '</table>'
+        '</div>'
         '<div style="text-align:center;margin:24px 0">'
         f'<a href="{rsvp_link}" style="display:inline-block;background:{WEDDING_GOLD};color:{WEDDING_INK};'
         'padding:14px 40px;border-radius:50px;text-decoration:none;font-weight:bold;'
@@ -1414,8 +1450,7 @@ def _build_wedding_invite_message(
         '</div>'
         '<p style="margin:16px 0 0;text-align:center;font-size:13px;line-height:1.5;'
         f'color:{WEDDING_MUTED}">'
-        'This RSVP is for the <strong>White Wedding</strong> on Saturday, 19 December 2026. '
-        'The Traditional Wedding on Thursday, 17 December 2026 uses access cards only.'
+        'This RSVP is for the <strong>White Wedding</strong> on Saturday, 19 December 2026.'
         '</p>'
         f'{qr_html}'
         '</div>'
@@ -1424,7 +1459,7 @@ def _build_wedding_invite_message(
         '<p style="margin:0 0 6px;font-family:Arial,Helvetica,sans-serif;font-size:9px;'
         f'letter-spacing:4px;color:{WEDDING_GOLD};text-transform:uppercase">Patrick & Sarah</p>'
         '<p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:10px;'
-        'letter-spacing:2px;color:#9A8388">White Wedding · Abuja · 19 December 2026</p>'
+        'letter-spacing:2px;color:#9A8388">Abuja · 17 and 19 December 2026</p>'
         "</div>"
         f"{tracking_pixel_html}"
     )
@@ -1432,14 +1467,21 @@ def _build_wedding_invite_message(
 
     body = (
         f"Dear {guest.name},\n\n"
-        "We are delighted to invite you to share in our joy as we celebrate our White Wedding in Abuja.\n\n"
+        "We are delighted to invite you to share in our joy as we celebrate our wedding in Abuja. "
+        "The celebrations begin with the Traditional Wedding, followed by the White Wedding.\n\n"
+        f"Traditional Wedding\n"
+        f"Date: {WEDDING_TRAD_DATE}\n"
+        f"Time: {WEDDING_TRAD_TIME}\n"
+        f"Venue: {WEDDING_TRAD_VENUE}\n"
+        f"Dress Code: {WEDDING_TRAD_DRESS}\n"
+        f"Entry to the Traditional Wedding is by access card.\n\n"
+        f"White Wedding\n"
         f"Date: {formatted_date}\n"
-        f"Time: {formatted_time}\n"
-        f"Venue: {event.venue}\n"
+        f"Ceremony: {formatted_time}, Church of the Assumption, Asokoro Abuja\n"
+        f"Reception: 1:00 PM, {event.venue}\n"
         f"Dress Code: Gentlemen, black tie. Ladies, pastels with fascinators.\n\n"
         f"RSVP: {rsvp_link}\n\n"
-        "This RSVP is for the White Wedding on Saturday, 19 December 2026. "
-        "The Traditional Wedding on Thursday, 17 December 2026 uses access cards only.\n\n"
+        "This RSVP is for the White Wedding on Saturday, 19 December 2026.\n\n"
         f"With love,\nPatrick & Sarah"
     )
     return subject, body, html
@@ -1573,15 +1615,15 @@ def _build_wedding_confirmation(
     if attendance_type == "both":
         subject = f"Confirmed: You're attending both celebrations, {guest.name}!"
         event_lines = (
+            f"Traditional Wedding: {WEDDING_TRAD_DATE} at {WEDDING_TRAD_TIME}\n"
+            f"  {WEDDING_TRAD_VENUE}\n\n"
             f"White Wedding: Saturday, 19 December 2026 at 10:00 AM\n"
             f"  Church of the Assumption, Asokoro Abuja\n"
-            f"  Reception: 1:00 PM at Los Angeles Event Center, Kado Abuja\n\n"
-            f"Traditional Wedding: Thursday, 17 December 2026 at 2:00 PM\n"
-            f"  Maha Event Center, Garki Area 8, Abuja"
+            f"  Reception: 1:00 PM at Los Angeles Event Center, Kado Abuja"
         )
         dress_lines = (
-            "White Wedding: Gentlemen, black tie. Ladies, pastels with fascinators.\n"
-            "Traditional Wedding: Gentlemen, dark green or white. Ladies, asoebi."
+            f"Traditional Wedding: {WEDDING_TRAD_DRESS}\n"
+            "White Wedding: Gentlemen, black tie. Ladies, pastels with fascinators."
         )
     else:
         subject = f"Confirmed: You're attending our White Wedding, {guest.name}!"
