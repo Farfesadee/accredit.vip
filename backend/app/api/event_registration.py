@@ -74,7 +74,7 @@ def wedding_content() -> dict:
             "time": "1:00 PM",
         },
         # Two days, two looks. The white wedding is black tie and pastels; the
-        # traditional, two days earlier, is dark green or white for the men and asoebi
+        # traditional, two days earlier, is dark green and white for the men and asoebi
         # for the women (client direction, November 2026).
         "dress_code": {
             "label": "Dress Code",
@@ -89,9 +89,9 @@ def wedding_content() -> dict:
             "traditional": {
                 "label": "The Traditional Wedding",
                 "when": "Thursday, 17 December 2026",
-                "men": "Dark green or white",
+                "men": "Dark green and white",
                 "women": "Asoebi",
-                "note": "Gentlemen: dark green or white. Ladies: the friends of the couple asoebi.",
+                "note": "Gentlemen: dark green and white. Ladies: the friends of the couple asoebi.",
             },
             # Names only: the client asked us to drop the colour swatches and
             # keep the shade names as words.
@@ -144,7 +144,7 @@ def wedding_content() -> dict:
             "time": "2:00 PM",
             "venue": "Maha Event Center",
             "location": "Garki Area 8, Abuja",
-            "note": "The asoebi is worn at the traditional. Gentlemen wear dark green or white.",
+            "note": "The asoebi is worn at the traditional. Gentlemen wear dark green and white.",
         },
         # Friends of the couple asoebi: for the ladies, worn at the traditional
         # on 17 December. The client was explicit that men do not wear it.
@@ -153,7 +153,7 @@ def wedding_content() -> dict:
             "short": "Asoebi",
             "for_who": "For the ladies",
             "occasion": "Worn at the traditional wedding, Thursday, 17 December 2026.",
-            "note": "Asoebi is for the women only. Gentlemen, your colour of the day for the traditional is dark green or white.",
+            "note": "Asoebi is for the women only. Gentlemen, your colour of the day for the traditional is dark green and white.",
             "items": ["3 yards of lace", "3 yards of lining", "Gele", "Souvenir from the couple"],
             "bank": ASOEBI_BANK,
             "whatsapp": ASOEBI_WHATSAPP,
@@ -172,7 +172,7 @@ def wedding_content() -> dict:
             },
             {
                 "q": "What should I wear to the traditional?",
-                "a": "Gentlemen: dark green or white. Ladies: the friends of the couple asoebi.",
+                "a": "Gentlemen: dark green and white. Ladies: the friends of the couple asoebi.",
             },
             {
                 "q": "Where is the traditional wedding?",

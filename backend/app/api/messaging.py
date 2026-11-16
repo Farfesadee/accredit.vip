@@ -1278,7 +1278,7 @@ WEDDING_MUTED = "#8A8074"
 WEDDING_TRAD_DATE = "Thursday, 17 December 2026"
 WEDDING_TRAD_TIME = "2:00 PM"
 WEDDING_TRAD_VENUE = "Maha Event Center, Garki Area 8, Abuja"
-WEDDING_TRAD_DRESS = "Gentlemen, dark green or white. Ladies, asoebi."
+WEDDING_TRAD_DRESS = "Gentlemen, dark green and white. Ladies, asoebi."
 
 # The White Wedding is one day with two addresses. event.venue holds the church,
 # so the reception has to be named here rather than read from the record.

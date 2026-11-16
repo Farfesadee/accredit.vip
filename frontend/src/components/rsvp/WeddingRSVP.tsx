@@ -595,7 +595,7 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
               You are invited
             </p>
             <p className="mt-4 font-serif text-[30px] leading-tight sm:text-4xl">Sarah &amp; Patrick</p>
-            <p className="mt-2.5 text-sm opacity-70">invite you to their</p>
+            <p className="mt-2.5 text-sm opacity-70">invites you to</p>
             <p className="mt-2 font-serif text-2xl sm:text-3xl">The White Wedding</p>
 
             <div className="mx-auto my-7 h-px w-12" style={{ background: "#d8c9a6" }} />
@@ -901,7 +901,7 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
           Pay once for one package or the whole family, and keep a reference you can look up any time.
         </p>
         <p className="mt-4 max-w-md text-sm leading-relaxed" style={{ color: "rgba(248,242,230,0.62)" }}>
-          {content.asoebi?.note || "Asoebi is for the women only. Gentlemen, your colour of the day for the traditional is dark green or white."}
+          {content.asoebi?.note || "Asoebi is for the women only. Gentlemen, your colour of the day for the traditional is dark green and white."}
         </p>
         <Link
           href={`/rsvp/asoebi/${slug}`}
@@ -1041,10 +1041,10 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
                           <p className="text-[10px] mt-1 font-medium" style={{ color: GOLD }}>Dress code: Gentlemen black tie, Ladies pastels with fascinators</p>
                         )}
                         {opt.value === "traditional" && (
-                          <p className="text-[10px] mt-1 font-medium" style={{ color: GOLD }}>Dress code: Gentlemen dark green or white, Ladies asoebi</p>
+                          <p className="text-[10px] mt-1 font-medium" style={{ color: GOLD }}>Dress code: Gentlemen dark green and white, Ladies asoebi</p>
                         )}
                         {opt.value === "both" && (
-                          <p className="text-[10px] mt-1 font-medium" style={{ color: GOLD }}>White wedding: black tie (men) / pastels (women). Traditional: dark green or white (men) / asoebi (women).</p>
+                          <p className="text-[10px] mt-1 font-medium" style={{ color: GOLD }}>White wedding: black tie (men) / pastels (women). Traditional: dark green and white (men) / asoebi (women).</p>
                         )}
                       </div>
                     </div>
