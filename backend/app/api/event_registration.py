@@ -599,6 +599,12 @@ async def submit_registration(
     organization = req.organization.strip()
     sub_department = req.sub_department.strip()
     category = req.category.strip()
+    # Wedding (event 80): which day(s) the guest is attending. Only three answers
+    # exist, so anything unexpected falls back to the white wedding rather than
+    # failing the guest's registration.
+    attendance = (req.attendance or "").strip().lower()
+    if attendance not in ("white_wedding", "traditional", "both"):
+        attendance = "white_wedding"
     # Events 82 and 84: one companion rides on the guest's own pass.
     party_allowed = is_gala_event(event) or is_anniversary_event(event)
     plus_one = bool(req.plus_one) and party_allowed
@@ -738,7 +744,8 @@ async def submit_registration(
 
     # Send confirmation message for wedding attendees (white_wedding or both)
     if guest.rsvp_status == "accepted" and is_wedding_event(event):
-        attendance_val = guest.custom_data.get("attendance") if guest.custom_data else None
+        data = guest.custom_data if isinstance(guest.custom_data, dict) else {}
+        attendance_val = data.get("attendance")
         if attendance_val in ("white_wedding", "both"):
             try:
                 from app.api.messaging import _send_wedding_confirmation

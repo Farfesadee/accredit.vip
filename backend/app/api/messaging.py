@@ -1543,8 +1543,8 @@ def _build_wedding_confirmation(
             f"  Maha Event Center, Garki Area 8, Abuja"
         )
         dress_lines = (
-            "White Wedding: Gentlemen — Black tie. Ladies — Pastels with fascinators.\n"
-            "Traditional Wedding: Gentlemen — Dark green or white. Ladies — Asoebi."
+            "White Wedding: Gentlemen, black tie. Ladies, pastels with fascinators.\n"
+            "Traditional Wedding: Gentlemen, dark green or white. Ladies, asoebi."
         )
     else:
         subject = f"Confirmed: You're attending our White Wedding, {guest.name}!"
@@ -1553,20 +1553,9 @@ def _build_wedding_confirmation(
             f"  Ceremony: 10:00 AM at Church of the Assumption, Asokoro Abuja\n"
             f"  Reception: 1:00 PM at Los Angeles Event Center, Kado Abuja"
         )
-        dress_lines = "Gentlemen — Black tie. Ladies — Pastels with fascinators."
+        dress_lines = "Gentlemen, black tie. Ladies, pastels with fascinators."
 
-    absolute_flyer = None
-    flyer_asset = None
-    if event.id:
-        from app.core.database import async_session
-        from app.models.flier import FlierAsset
-        # Note: this is a sync call, but we only need the flyer URL
-        # We'll just use the event's cover or first flier
-        if event.cover_image:
-            absolute_flyer = _absolute_url(event.cover_image)
-        else:
-            # Try to get the invite flier
-            pass
+    absolute_flyer = _absolute_url(event.cover_image) if event.cover_image else None
 
     hero_html = (
         f'<img src="{absolute_flyer}" alt="Patrick & Sarah" width="600" '

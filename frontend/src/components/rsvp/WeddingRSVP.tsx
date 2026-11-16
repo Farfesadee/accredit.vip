@@ -934,7 +934,9 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
             <p className="text-sm opacity-70 mt-2">
               {declined
                 ? "Your reply has been recorded. You will be missed."
-                : "Your attendance has been recorded. Your entry QR code will arrive by email or WhatsApp shortly."}
+                : eventAttendance === "traditional"
+                  ? "Your attendance has been recorded. We will be in touch closer to the day."
+                  : "Your attendance has been recorded. A confirmation message is on its way to your email and WhatsApp. Your entry pass will follow closer to the day."}
             </p>
             {guestToken && (
               <button

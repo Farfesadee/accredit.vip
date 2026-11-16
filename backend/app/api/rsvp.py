@@ -333,9 +333,28 @@ async def submit_rsvp(
 
     # Fire QR delivery asynchronously for accepted responses. Anchor Evening of
     # Bliss (event 85) opts out: the client sends every pass from the dashboard.
+    # The wedding (event 80) opts out too: guests receive a confirmation now and
+    # their entry pass much later, sent by the couple from the dashboard.
     if response_lower == "yes":
-        from app.api.event_registration import auto_qr_on_rsvp
-        if auto_qr_on_rsvp(event):
+        try:
+            from app.api.event_registration import auto_qr_on_rsvp, is_wedding_event
+        except Exception:
+            auto_qr_on_rsvp = is_wedding_event = None
+
+        if is_wedding_event is not None and is_wedding_event(event):
+            # Confirmation only for White Wedding or Both attendees. A guest
+            # attending the traditional wedding alone gets no message.
+            data = guest.custom_data if isinstance(guest.custom_data, dict) else {}
+            chosen = data.get("attendance")
+            if chosen in ("white_wedding", "both"):
+                try:
+                    from app.api.messaging import _send_wedding_confirmation
+                    asyncio.create_task(
+                        _send_wedding_confirmation(guest.id, event.id, chosen)
+                    )
+                except Exception:
+                    pass
+        elif auto_qr_on_rsvp is not None and auto_qr_on_rsvp(event):
             asyncio.create_task(_send_qr_after_rsvp(guest.id, event.id))
 
     return {
