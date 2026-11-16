@@ -1280,6 +1280,25 @@ WEDDING_TRAD_TIME = "2:00 PM"
 WEDDING_TRAD_VENUE = "Maha Event Center, Garki Area 8, Abuja"
 WEDDING_TRAD_DRESS = "Gentlemen, dark green or white. Ladies, asoebi."
 
+# The White Wedding is one day with two addresses. event.venue holds the church,
+# so the reception has to be named here rather than read from the record.
+WEDDING_WHITE_CHURCH = "Church of the Assumption, Asokoro Abuja"
+WEDDING_WHITE_RECEPTION = "Los Angeles Event Center, Kado Abuja"
+WEDDING_WHITE_RECEPTION_TIME = "1:00 PM"
+WEDDING_WHITE_DRESS = "Gentlemen, black tie. Ladies, pastels with fascinators."
+
+
+def _wedding_date(event: Event) -> str:
+    """The client writes dates as "Saturday, 19 December 2026", never "December 19"."""
+    formatted = str(_format_date(event.event_date))
+    parts = formatted.split(" ", 1)
+    if len(parts) == 2 and parts[0].endswith("day"):
+        formatted = f"{parts[0]}, {parts[1]}"
+    match = re.match(r"^([A-Za-z]+), ([A-Za-z]+) (\d{1,2}), (\d{4})$", formatted)
+    if match:
+        formatted = f"{match.group(1)}, {int(match.group(3))} {match.group(2)} {match.group(4)}"
+    return formatted
+
 
 # The couple's own domain cannot be the envelope sender: the relay refuses any
 # From header outside its hosted domains ("Your domain sarahandpatrick.co.uk is
@@ -1333,11 +1352,8 @@ def _build_wedding_invite_message(
     """
     rsvp_link = invite_link_for(event, guest)
     from datetime import date as dt_date, time as dt_time
-    formatted_date = _format_date(event.event_date)
+    formatted_date = _wedding_date(event)
     formatted_time = _format_time(event.event_time, event.timezone or "WAT")
-    date_parts = str(formatted_date).split(" ", 1)
-    if len(date_parts) == 2 and date_parts[0].endswith("day"):
-        formatted_date = f"{date_parts[0]}, {date_parts[1]}"
     time_parts = str(formatted_time).split(" ", 1)
     if len(time_parts) == 2 and time_parts[0].isdigit():
         formatted_time = f"{time_parts[0]}:00 {time_parts[1]}"
@@ -1429,17 +1445,17 @@ def _build_wedding_invite_message(
         '<tr>'
         f'<td style="padding:6px 0;width:100px;vertical-align:top;font-family:Arial,Helvetica,sans-serif;'
         f'font-size:10px;letter-spacing:2px;color:{WEDDING_GOLD};text-transform:uppercase">Ceremony</td>'
-        f'<td style="padding:6px 0;font-size:15px;color:{WEDDING_INK};font-weight:bold">{formatted_time}, Church of the Assumption, Asokoro Abuja</td>'
+        f'<td style="padding:6px 0;font-size:15px;color:{WEDDING_INK};font-weight:bold">{formatted_time}, {WEDDING_WHITE_CHURCH}</td>'
         '</tr>'
         '<tr>'
         f'<td style="padding:6px 0;width:100px;vertical-align:top;font-family:Arial,Helvetica,sans-serif;'
         f'font-size:10px;letter-spacing:2px;color:{WEDDING_GOLD};text-transform:uppercase">Reception</td>'
-        f'<td style="padding:6px 0;font-size:15px;color:{WEDDING_INK};font-weight:bold">1:00 PM, {event.venue}</td>'
+        f'<td style="padding:6px 0;font-size:15px;color:{WEDDING_INK};font-weight:bold">{WEDDING_WHITE_RECEPTION_TIME}, {WEDDING_WHITE_RECEPTION}</td>'
         '</tr>'
         '<tr>'
         f'<td style="padding:6px 0;width:100px;vertical-align:top;font-family:Arial,Helvetica,sans-serif;'
         f'font-size:10px;letter-spacing:2px;color:{WEDDING_GOLD};text-transform:uppercase">Dress Code</td>'
-        f'<td style="padding:6px 0;font-size:15px;color:{WEDDING_INK};font-weight:bold">Gentlemen, black tie. Ladies, pastels with fascinators.</td>'
+        f'<td style="padding:6px 0;font-size:15px;color:{WEDDING_INK};font-weight:bold">{WEDDING_WHITE_DRESS}</td>'
         '</tr>'
         '</table>'
         '</div>'
@@ -1477,9 +1493,9 @@ def _build_wedding_invite_message(
         f"Entry to the Traditional Wedding is by access card.\n\n"
         f"White Wedding\n"
         f"Date: {formatted_date}\n"
-        f"Ceremony: {formatted_time}, Church of the Assumption, Asokoro Abuja\n"
-        f"Reception: 1:00 PM, {event.venue}\n"
-        f"Dress Code: Gentlemen, black tie. Ladies, pastels with fascinators.\n\n"
+        f"Ceremony: {formatted_time}, {WEDDING_WHITE_CHURCH}\n"
+        f"Reception: {WEDDING_WHITE_RECEPTION_TIME}, {WEDDING_WHITE_RECEPTION}\n"
+        f"Dress Code: {WEDDING_WHITE_DRESS}\n\n"
         f"RSVP: {rsvp_link}\n\n"
         "This RSVP is for the White Wedding on Saturday, 19 December 2026.\n\n"
         f"With love,\nPatrick & Sarah"
@@ -1499,11 +1515,8 @@ def _build_wedding_qr_message(
     just the QR code and event details.
     """
     from datetime import date as dt_date, time as dt_time
-    formatted_date = _format_date(event.event_date)
+    formatted_date = _wedding_date(event)
     formatted_time = _format_time(event.event_time, event.timezone or "WAT")
-    date_parts = str(formatted_date).split(" ", 1)
-    if len(date_parts) == 2 and date_parts[0].endswith("day"):
-        formatted_date = f"{date_parts[0]}, {date_parts[1]}"
     time_parts = str(formatted_time).split(" ", 1)
     if len(time_parts) == 2 and time_parts[0].isdigit():
         formatted_time = f"{time_parts[0]}:00 {time_parts[1]}"
@@ -1603,11 +1616,8 @@ def _build_wedding_confirmation(
     Traditional-only attendees get no confirmation (invites sent later from dashboard).
     """
     from datetime import date as dt_date
-    formatted_date = _format_date(event.event_date)
+    formatted_date = _wedding_date(event)
     formatted_time = _format_time(event.event_time, event.timezone or "WAT")
-    date_parts = str(formatted_date).split(" ", 1)
-    if len(date_parts) == 2 and date_parts[0].endswith("day"):
-        formatted_date = f"{date_parts[0]}, {date_parts[1]}"
     time_parts = str(formatted_time).split(" ", 1)
     if len(time_parts) == 2 and time_parts[0].isdigit():
         formatted_time = f"{time_parts[0]}:00 {time_parts[1]}"
@@ -1618,21 +1628,21 @@ def _build_wedding_confirmation(
             f"Traditional Wedding: {WEDDING_TRAD_DATE} at {WEDDING_TRAD_TIME}\n"
             f"  {WEDDING_TRAD_VENUE}\n\n"
             f"White Wedding: Saturday, 19 December 2026 at 10:00 AM\n"
-            f"  Church of the Assumption, Asokoro Abuja\n"
-            f"  Reception: 1:00 PM at Los Angeles Event Center, Kado Abuja"
+            f"  {WEDDING_WHITE_CHURCH}\n"
+            f"  Reception: {WEDDING_WHITE_RECEPTION_TIME} at {WEDDING_WHITE_RECEPTION}"
         )
         dress_lines = (
             f"Traditional Wedding: {WEDDING_TRAD_DRESS}\n"
-            "White Wedding: Gentlemen, black tie. Ladies, pastels with fascinators."
+            f"White Wedding: {WEDDING_WHITE_DRESS}"
         )
     else:
         subject = f"Confirmed: You're attending our White Wedding, {guest.name}!"
         event_lines = (
-            f"Saturday, 19 December 2026\n"
-            f"  Ceremony: 10:00 AM at Church of the Assumption, Asokoro Abuja\n"
-            f"  Reception: 1:00 PM at Los Angeles Event Center, Kado Abuja"
+            "Saturday, 19 December 2026\n"
+            f"  Ceremony: 10:00 AM at {WEDDING_WHITE_CHURCH}\n"
+            f"  Reception: {WEDDING_WHITE_RECEPTION_TIME} at {WEDDING_WHITE_RECEPTION}"
         )
-        dress_lines = "Gentlemen, black tie. Ladies, pastels with fascinators."
+        dress_lines = WEDDING_WHITE_DRESS
 
     absolute_flyer = _absolute_url(event.cover_image) if event.cover_image else None
 
