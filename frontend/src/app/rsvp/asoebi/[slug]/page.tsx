@@ -128,7 +128,7 @@ export default function WeddingAsoEbiPage() {
               send you a reference you can look up any time.
             </p>
             <p className="mt-3 text-sm leading-relaxed opacity-60">
-              {asoebi.note || "Asoebi is for the women only. Gentlemen, your colour of the day for the traditional is dark green or white."}
+              {asoebi.note || "Asoebi is for the women only. Gentlemen, your colour of the day for the traditional is dark green and white."}
             </p>
 
             {/* PACKAGE CARD */}
