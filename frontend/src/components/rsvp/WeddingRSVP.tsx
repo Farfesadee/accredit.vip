@@ -299,7 +299,20 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
   }, [entered]);
 
   const submitRsvp = async () => {
-    if (!name.trim() || !phone.trim() || !email.trim()) return;
+    const digits = phone.replace(/\D/g, "");
+    if (!name.trim()) {
+      setError("Please enter your full name.");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+    // The dial code on its own is not a phone number.
+    if (digits.length < 7) {
+      setError("Please enter your phone number, including your country code.");
+      return;
+    }
     setSubmitting(true);
     setError("");
     try {

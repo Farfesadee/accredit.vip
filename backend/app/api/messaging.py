@@ -1654,8 +1654,9 @@ async def _send_wedding_confirmation(guest_id: int, event_id: int, attendance_ty
             except Exception:
                 pass
 
-        # Send WhatsApp
-        if guest.phone:
+        # Send WhatsApp. A number that is only a country code is skipped: there
+        # is nobody to message, and Twilio answers 21211 for it.
+        if guest.phone and sum(ch.isdigit() for ch in guest.phone) >= 7:
             try:
                 await send_whatsapp(guest.phone, body)
             except Exception:

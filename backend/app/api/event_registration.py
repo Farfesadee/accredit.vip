@@ -624,6 +624,15 @@ async def submit_registration(
     elif not (name and email and phone):
         raise HTTPException(status_code=400, detail="Name, email and phone number are required")
 
+    # A phone field that holds only the country code is not a number: it cannot
+    # be called or messaged, so it is refused with a readable message instead of
+    # storing a record nobody can reach. Wedding only, other events unchanged.
+    if is_wedding_event(event) and sum(ch.isdigit() for ch in phone) < 7:
+        raise HTTPException(
+            status_code=400,
+            detail="Please enter your phone number, including your country code.",
+        )
+
     if party_allowed and plus_one and not plus_one_name:
         raise HTTPException(status_code=400, detail="Please provide the name of your plus one")
 
