@@ -1273,6 +1273,24 @@ WEDDING_CREAM = "#FAF7F0"
 WEDDING_MUTED = "#8A8074"
 
 
+# The couple's own domain cannot be the envelope sender: the relay refuses any
+# From header outside its hosted domains ("Your domain sarahandpatrick.co.uk is
+# not allowed in header From"). The display name carries their name instead, on
+# the address that already delivers.
+WEDDING_SENDER = "Patrick & Sarah <noreply@wristbandsng.com>"
+
+
+def _mail_sender(event: Event) -> str:
+    """From header for a guest mail: the couple for the wedding, else the event."""
+    try:
+        from app.api.event_registration import is_wedding_event
+    except Exception:
+        is_wedding_event = None
+    if is_wedding_event is not None and is_wedding_event(event):
+        return WEDDING_SENDER
+    return f"{event.title} <noreply@wristbandsng.com>"
+
+
 def _wedding_shell(inner: str, tracking_pixel: str = "") -> str:
     """Cream and gold frame that belongs to the couple, not the platform.
 
@@ -1650,7 +1668,7 @@ async def _send_wedding_confirmation(guest_id: int, event_id: int, attendance_ty
         # Send email
         if guest.email:
             try:
-                await send_email(guest.email, subject, html)
+                await send_email(guest.email, subject, html, from_addr=_mail_sender(event))
             except Exception:
                 pass
 
@@ -2034,7 +2052,7 @@ async def _send_to_guest(
 
     try:
         if channel == "email" and guest.email:
-            from_addr = f"{event.title} <noreply@wristbandsng.com>"
+            from_addr = _mail_sender(event)
             ok = await asyncio.wait_for(send_email(guest.email, subject, html, from_addr=from_addr), timeout=15)
         elif channel == "whatsapp" and guest.phone:
             from app.api.event_registration import is_wedding_event as _is_wedding, is_gala_event as _is_gala, is_anchor_event as _is_anchor
@@ -2362,7 +2380,7 @@ async def _send_qr_to_guest(
 
     try:
         if channel == "email" and guest.email:
-            from_addr = f"{event.title} <noreply@wristbandsng.com>"
+            from_addr = _mail_sender(event)
             if pdf_bytes and pdf_filename:
                 from app.services.email_service import send_email_with_pdf
 
