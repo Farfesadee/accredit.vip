@@ -1273,6 +1273,25 @@ WEDDING_CREAM = "#FAF7F0"
 WEDDING_MUTED = "#8A8074"
 
 
+def _wedding_shell(inner: str, tracking_pixel: str = "") -> str:
+    """Cream and gold frame that belongs to the couple, not the platform.
+
+    Every wedding mail already ends with its own ink and gold sign-off inside
+    ``inner``, so this wrapper adds no second footer. The client asked that
+    nothing guest-facing or couple-facing carries the platform name or the
+    platform colours, so there is no platform line here and the palette is
+    strictly the wedding's own.
+    """
+    return (
+        f'<div style="margin:0;padding:0;background:{WEDDING_INK}">'
+        f'<div style="max-width:600px;margin:0 auto;background:{WEDDING_CREAM};'
+        "font-family:Georgia,'Times New Roman',serif;color:" + WEDDING_INK + '">'
+        f"{inner}"
+        f"{tracking_pixel}"
+        "</div></div>"
+    )
+
+
 def _build_wedding_invite_message(
     guest: Guest,
     event: Event,
@@ -1367,7 +1386,7 @@ def _build_wedding_invite_message(
         '<tr>'
         f'<td style="padding:8px 0;width:100px;vertical_align:top;font-family:Arial,Helvetica,sans-serif;'
         f'font-size:10px;letter-spacing:2px;color:{WEDDING_GOLD};text-transform:uppercase">Dress Code</td>'
-        f'<td style="padding:8px 0;font-size:15px;color:{WEDDING_INK};font-weight:bold">Dark Green or White & Pastels</td>'
+        f'<td style="padding:8px 0;font-size:15px;color:{WEDDING_INK};font-weight:bold">Black tie, and pastels with fascinators</td>'
         '</tr>'
         '</table>'
         '<div style="text-align:center;margin:24px 0">'
@@ -1391,7 +1410,7 @@ def _build_wedding_invite_message(
         "</div>"
         f"{tracking_pixel_html}"
     )
-    html = _annette_shell(inner, tracking_pixel_html)
+    html = _wedding_shell(inner)
 
     body = (
         f"Dear {guest.name},\n\n"
@@ -1399,7 +1418,7 @@ def _build_wedding_invite_message(
         f"Date: {formatted_date}\n"
         f"Time: {formatted_time}\n"
         f"Venue: {event.venue}\n"
-        f"Dress Code: Dark Green or White & Pastels\n\n"
+        f"Dress Code: Gentlemen, black tie. Ladies, pastels with fascinators.\n\n"
         f"RSVP: {rsvp_link}\n\n"
         "This RSVP is for the White Wedding on Saturday, 19 December 2026. "
         "The Traditional Wedding on Thursday, 17 December 2026 uses access cards only.\n\n"
@@ -1484,7 +1503,7 @@ def _build_wedding_qr_message(
         '<tr>'
         f'<td style="padding:8px 0;width:100px;vertical_align:top;font-family:Arial,Helvetica,sans-serif;'
         f'font-size:10px;letter-spacing:2px;color:{WEDDING_GOLD};text-transform:uppercase">Dress Code</td>'
-        f'<td style="padding:8px 0;font-size:15px;color:{WEDDING_INK};font-weight:bold">Dark Green or White & Pastels</td>'
+        f'<td style="padding:8px 0;font-size:15px;color:{WEDDING_INK};font-weight:bold">Black tie, and pastels with fascinators</td>'
         '</tr>'
         '</table>'
         f'{qr_html}'
@@ -1497,7 +1516,7 @@ def _build_wedding_qr_message(
         'letter-spacing:2px;color:#9A8388">White Wedding · Abuja · 19 December 2026</p>'
         "</div>"
     )
-    html = _annette_shell(inner, "")
+    html = _wedding_shell(inner)
 
     body = (
         f"Dear {guest.name},\n\n"
@@ -1505,7 +1524,7 @@ def _build_wedding_qr_message(
         f"Date: {formatted_date}\n"
         f"Time: {formatted_time}\n"
         f"Venue: {event.venue}\n"
-        f"Dress Code: Dark Green or White & Pastels\n\n"
+        f"Dress Code: Gentlemen, black tie. Ladies, pastels with fascinators.\n\n"
         "This pass is for the White Wedding on Saturday, 19 December 2026. "
         "The Traditional Wedding on Thursday, 17 December 2026 uses access cards only.\n\n"
         f"With love,\nPatrick & Sarah"
@@ -1599,7 +1618,7 @@ def _build_wedding_confirmation(
         'letter-spacing:2px;color:#9A8388">White Wedding · Abuja · 19 December 2026</p>'
         "</div>"
     )
-    html = _annette_shell(inner, "")
+    html = _wedding_shell(inner)
 
     body = (
         f"Dear {guest.name},\n\n"
