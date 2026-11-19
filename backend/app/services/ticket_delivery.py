@@ -650,21 +650,21 @@ def build_warri_ticket_pdf(
         # Buyer block
         buyer_top = top - 240 - qr_size
         pdf.setFillColorRGB(*DEEP)
-        pdf.rect(margin, buyer_top - 74, width - margin * 2, 74, stroke=0, fill=1)
+        pdf.rect(margin, buyer_top - 88, width - margin * 2, 88, stroke=0, fill=1)
 
         pdf.setFillColorRGB(*GOLD)
         pdf.setFont("Helvetica-Bold", 8)
-        pdf.drawString(margin + 16, buyer_top - 20, "ISSUED TO")
+        pdf.drawString(margin + 16, buyer_top - 22, "ISSUED TO")
         pdf.setFillColorRGB(*CREAM)
         pdf.setFont("Helvetica-Bold", 14)
-        pdf.drawString(margin + 16, buyer_top - 40, buyer_name[:52])
+        pdf.drawString(margin + 16, buyer_top - 44, buyer_name[:52])
 
         pdf.setFillColorRGB(*GOLD)
         pdf.setFont("Helvetica-Bold", 8)
-        pdf.drawString(margin + 16, buyer_top - 58, "PACKAGE")
+        pdf.drawString(margin + 16, buyer_top - 64, "PACKAGE")
         pdf.setFillColorRGB(*CREAM)
         pdf.setFont("Helvetica", 10)
-        pdf.drawString(margin + 16, buyer_top - 71, f"{package_name} · {ticket_reference}")
+        pdf.drawString(margin + 16, buyer_top - 79, f"{package_name} · {ticket_reference}")
 
         pdf.setFillColorRGB(*GREY)
         pdf.setFont("Helvetica", 8)
