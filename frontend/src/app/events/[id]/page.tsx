@@ -272,6 +272,22 @@ function PublicEventContent() {
   const unitPrice = selectedPkg
     ? Number(selectedPkg.price) || 0
     : Number(event.ticket_price) || 0;
+
+  // A package that declares `all_in` is sold at exactly its listed price:
+  // no platform fee, no VAT, nothing added at checkout.
+  const isAllIn = Boolean((selectedPkg as any)?.all_in);
+  const packageFee = Number(selectedPkg?.fee) || 0;
+  const unitTotal = isAllIn
+    ? unitPrice
+    : packageFee > 0
+      ? Math.round(unitPrice + packageFee)
+      : Math.round(unitPrice * (1 + VAT_PERCENT / 100));
+  const orderTotal = isAllIn
+    ? Math.round(unitPrice * quantity)
+    : packageFee > 0
+      ? Math.round((unitPrice + packageFee) * quantity)
+      : Math.round(unitPrice * quantity * (1 + VAT_PERCENT / 100));
+
   const hasPaidPackages = passPackages.some((p: any) => Number(p.price) > 0);
   const isPaidEvent = Number(event.ticket_price) > 0 || hasPaidPackages;
   const isFreeEvent = !isPaidEvent;
@@ -590,35 +606,37 @@ function PublicEventContent() {
                     {cs}{unitPrice.toLocaleString()}
                     <span className="text-sm font-normal text-white/60 ml-1">per ticket</span>
                   </p>
-                  <div className="mt-2 space-y-0.5 text-xs text-white/50">
-                    {(Number(selectedPkg?.fee) || 0) > 0 ? (
-                      <>
-                        <div className="flex justify-between">
-                          <span>Charges</span>
-                          <span>+{cs}{Math.round(Number(selectedPkg.fee)).toLocaleString()}</span>
-                        </div>
-                        <div className="flex justify-between font-bold text-white/80 border-t border-white/20 pt-1">
-                          <span>Buyer pays</span>
-                          <span>{cs}{Math.round(unitPrice + Number(selectedPkg.fee)).toLocaleString()}</span>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                    <div className="flex justify-between">
-                      <span>Accredit fee (5%)</span>
-                      <span className="line-through">-{cs}{Math.round(unitPrice * PLATFORM_FEE_PERCENT / 100).toLocaleString()}</span>
+                  {!isAllIn && (
+                    <div className="mt-2 space-y-0.5 text-xs text-white/50">
+                      {packageFee > 0 ? (
+                        <>
+                          <div className="flex justify-between">
+                            <span>Charges</span>
+                            <span>+{cs}{Math.round(packageFee).toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between font-bold text-white/80 border-t border-white/20 pt-1">
+                            <span>Buyer pays</span>
+                            <span>{cs}{unitTotal.toLocaleString()}</span>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex justify-between">
+                            <span>Accredit fee (5%)</span>
+                            <span className="line-through">-{cs}{Math.round(unitPrice * PLATFORM_FEE_PERCENT / 100).toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>VAT (2.5%)</span>
+                            <span>+{cs}{Math.round(unitPrice * VAT_PERCENT / 100).toLocaleString()}</span>
+                          </div>
+                          <div className="flex justify-between font-bold text-white/80 border-t border-white/20 pt-1">
+                            <span>Buyer pays</span>
+                            <span>{cs}{unitTotal.toLocaleString()}</span>
+                          </div>
+                        </>
+                      )}
                     </div>
-                    <div className="flex justify-between">
-                      <span>VAT (2.5%)</span>
-                      <span>+{cs}{Math.round(unitPrice * VAT_PERCENT / 100).toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between font-bold text-white/80 border-t border-white/20 pt-1">
-                      <span>Buyer pays</span>
-                      <span>{cs}{Math.round(unitPrice * (1 + VAT_PERCENT / 100)).toLocaleString()}</span>
-                    </div>
-                      </>
-                    )}
-                  </div>
+                  )}
                 </>
               )}
               {showRemaining && (
@@ -819,23 +837,18 @@ function PublicEventContent() {
                         <span>{cs}{unitPrice.toLocaleString()} × {quantity}</span>
                         <span>{cs}{(unitPrice * quantity).toLocaleString()}</span>
                       </div>
-                      {(Number(selectedPkg?.fee) || 0) > 0 ? (
+                      {(packageFee > 0 || !isAllIn) && (
                         <div className="flex justify-between text-[#64748b]">
-                          <span>Charges</span>
-                          <span>{cs}{Math.round(Number(selectedPkg.fee) * quantity).toLocaleString()}</span>
-                        </div>
-                      ) : (
-                        <div className="flex justify-between text-[#64748b]">
-                          <span>VAT (2.5%)</span>
-                          <span>{cs}{Math.round(unitPrice * quantity * VAT_PERCENT / 100).toLocaleString()}</span>
+                          <span>{packageFee > 0 ? "Charges" : "VAT (2.5%)"}</span>
+                          <span>{cs}{(packageFee > 0
+                            ? Math.round(packageFee * quantity)
+                            : Math.round(unitPrice * quantity * VAT_PERCENT / 100)
+                          ).toLocaleString()}</span>
                         </div>
                       )}
                       <div className="flex justify-between font-black text-[#0D1B2A] border-t border-[#e8edf2] pt-1.5">
                         <span>Total</span>
-                        <span>{cs}{((Number(selectedPkg?.fee) || 0) > 0
-                          ? Math.round((unitPrice + Number(selectedPkg.fee)) * quantity)
-                          : Math.round(unitPrice * quantity * (1 + VAT_PERCENT / 100))
-                        ).toLocaleString()}</span>
+                        <span>{cs}{orderTotal.toLocaleString()}</span>
                       </div>
                     </div>
                   )}
@@ -867,10 +880,7 @@ function PublicEventContent() {
                         ? "Processing..."
                         : isFreeEvent
                         ? "Save My Spot"
-                        : `Pay with Card ${cs}${((Number(selectedPkg?.fee) || 0) > 0
-                          ? Math.round((unitPrice + Number(selectedPkg.fee)) * quantity)
-                          : Math.round(unitPrice * quantity * (1 + VAT_PERCENT / 100))
-                        ).toLocaleString()}`}
+                        : `Pay with Card ${cs}${orderTotal.toLocaleString()}`}
                     </button>
                   </div>
                 </form>
@@ -903,10 +913,7 @@ function PublicEventContent() {
                   </div>
                   <div className="flex justify-between gap-3 px-4 py-2.5">
                     <span className="text-[#64748b] shrink-0">Total</span>
-                    <span className="font-black text-[#0D1B2A] text-right">{cs}{((Number(selectedPkg?.fee) || 0) > 0
-                      ? Math.round((unitPrice + Number(selectedPkg.fee)) * quantity)
-                      : Math.round(unitPrice * quantity * (1 + VAT_PERCENT / 100))
-                    ).toLocaleString()}</span>
+                    <span className="font-black text-[#0D1B2A] text-right">{cs}{orderTotal.toLocaleString()}</span>
                   </div>
                 </div>
                 {policy && (

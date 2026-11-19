@@ -168,7 +168,13 @@ async def purchase_ticket(
             package_fee = 0.0
 
     base_amount = package_price * req.quantity
-    if package_fee:
+    if selected_package is not None and selected_package.get("all_in"):
+        # Sold at exactly the listed price: no platform fee, no VAT, nothing
+        # added at checkout.
+        platform_fee = 0
+        vat = 0
+        total = base_amount
+    elif package_fee:
         platform_fee = round(package_fee * req.quantity)
         vat = 0
         total = base_amount + platform_fee

@@ -66,8 +66,24 @@ export function BlackMarketSlider() {
     return first.toUpperCase();
   };
 
-  // Exactly 3 cards: the event, the cheapest tier, the top tier. Each card
-  // links to the event page itself.
+  // One card for the event, then the cheapest and the top tier. When an event
+  // sells a single pass those are the same package, so it is shown once.
+  const tierCards: MarqueeCard[] = [];
+  const seenTiers = new Set<string>();
+  for (const pkg of [cheapest, top]) {
+    if (!pkg) continue;
+    const name = String(pkg.name || "Ticket");
+    if (seenTiers.has(name)) continue;
+    seenTiers.add(name);
+    tierCards.push({
+      key: `tier-${tierCards.length}`,
+      title: name,
+      sub: pkg.description || "On sale now",
+      price: `${cs}${Number(pkg.price || 0).toLocaleString()}`,
+      image: null,
+    });
+  }
+
   const cards: MarqueeCard[] = [
     {
       key: "event",
@@ -78,20 +94,7 @@ export function BlackMarketSlider() {
       price: "Buy Tickets",
       image: flyer,
     },
-    {
-      key: "entry",
-      title: String(cheapest?.name || "Tickets"),
-      sub: cheapest?.description || "Entry from this price",
-      price: `${cs}${Number(cheapest?.price || 0).toLocaleString()}`,
-      image: null,
-    },
-    {
-      key: "top",
-      title: String(top?.name || "VIP"),
-      sub: top?.description || "Top tier",
-      price: `${cs}${Number(top?.price || 0).toLocaleString()}`,
-      image: null,
-    },
+    ...tierCards,
   ];
 
   // Tripled so the -33.333% loop point is seamless.
@@ -132,7 +135,10 @@ export function BlackMarketSlider() {
       >
         <div className="bm-marquee-track flex items-stretch gap-4 px-4" style={{ width: "max-content" }}>
           {loop.map((c, i) => {
-            const source = c.key === "entry" ? cheapest : c.key === "top" ? top : null;
+            const source =
+              c.key === "event"
+                ? null
+                : pkgs.find((p: any) => String(p.name) === c.title) || null;
             return (
               <Link
                 key={`${c.key}-${i}`}

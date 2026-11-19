@@ -6,6 +6,7 @@ export type PassPackage = {
   fee?: string;
   seats?: number;
   capacity?: number;
+  all_in?: boolean;
 };
 
 export type LineupPerson = {
