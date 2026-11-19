@@ -657,6 +657,7 @@ function PublicEventContent() {
                     const avail = availabilityFor(pkg.name);
                     const soldOut = Boolean(avail?.sold_out);
                     const seats = Number(pkg.seats) || Number(avail?.seats) || 0;
+                      const pkgColor = pkg.color || "#1ABC9C";
                     return (
                       <label
                         key={i}
@@ -664,8 +665,8 @@ function PublicEventContent() {
                           soldOut
                             ? "border-[#e8edf2] bg-[#f1f5f9] opacity-60 cursor-not-allowed"
                             : selected
-                            ? "border-[#1ABC9C] bg-[rgba(26,188,156,0.06)] cursor-pointer"
-                            : "bg-white border-[#e8edf2] hover:border-[#1ABC9C]/40 cursor-pointer"
+                            ? `border-${pkgColor} bg-[${pkgColor}15] cursor-pointer`
+                            : `bg-white border-[#e8edf2] hover:border-[${pkgColor}]/40 cursor-pointer`
                         }`}
                       >
                         <div className="flex items-center gap-3 min-w-0">
@@ -675,7 +676,7 @@ function PublicEventContent() {
                             checked={selected}
                             disabled={soldOut}
                             onChange={() => setSelectedPackageIndex(i)}
-                            className="accent-[#1ABC9C] w-4 h-4 flex-shrink-0 disabled:cursor-not-allowed"
+                            className={`accent-[${pkgColor}] w-4 h-4 flex-shrink-0 disabled:cursor-not-allowed`}
                           />
                           <div className="min-w-0">
                             <p className="text-sm font-semibold text-[#0D1B2A] flex items-center gap-2 flex-wrap">
@@ -702,7 +703,7 @@ function PublicEventContent() {
                         </div>
                         <span
                           className="text-sm font-black flex-shrink-0"
-                          style={{ color: soldOut ? "#64748b" : "#1ABC9C" }}
+                          style={{ color: soldOut ? "#64748b" : pkgColor }}
                         >
                           {price > 0 ? `${cs}${price.toLocaleString()}` : "Free"}
                         </span>

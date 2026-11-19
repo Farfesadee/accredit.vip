@@ -207,6 +207,7 @@ async def fulfill_ticket_purchase(db: AsyncSession, purchase: TicketPurchase) ->
                     venue=event.venue or "",
                     quantity=purchase.quantity or 1,
                     seats=(package or {}).get("seats"),
+                    package_color=(package or {}).get("color"),
                 )
                 pdf_filename = f"WARRI-AGAIN-{purchase.reference}.pdf"
 

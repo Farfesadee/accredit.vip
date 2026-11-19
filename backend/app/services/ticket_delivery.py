@@ -538,8 +538,9 @@ def build_warri_ticket_pdf(
     venue: str,
     quantity: int = 1,
     seats: int | None = None,
+    package_color: str | None = None,
 ) -> bytes:
-    """Branded Warri Again pass: one page per ticket, in the event's own red.
+    """Branded Warri Again pass: one page per ticket, in the tier's own colour.
 
     A buyer who takes four seats gets four pages in a single PDF, each numbered,
     so every guest in the party can be admitted on their own page.
@@ -550,12 +551,19 @@ def build_warri_ticket_pdf(
     from reportlab.lib.utils import ImageReader
     from reportlab.pdfgen import canvas
 
-    RED = (0.808, 0.114, 0.141)      # #CE1D24
+    # Default palette (used when package_color is not provided)
+    DEFAULT_RED = (0.808, 0.114, 0.141)      # #CE1D24
     DEEP = (0.216, 0.071, 0.086)     # #371216
     GOLD = (1.0, 0.788, 0.286)       # #FFC949
     CREAM = (1.0, 0.965, 0.886)      # #FFF6E2
     INK = (0.122, 0.106, 0.141)      # #1F1B24
     GREY = (0.36, 0.33, 0.35)
+
+    def hex_to_rgb(hex_color: str) -> tuple[float, float, float]:
+        hex_color = hex_color.lstrip("#")
+        return tuple(int(hex_color[i:i+2], 16) / 255.0 for i in (0, 2, 4))
+
+    TIER_COLOR = hex_to_rgb(package_color) if package_color else DEFAULT_RED
 
     width, height = A4
     margin = 42
@@ -572,11 +580,11 @@ def build_warri_ticket_pdf(
     pdf.setTitle(f"{event_title} ticket {ticket_reference}")
 
     for index in range(total):
-        # Cream page, red band, gold hairline under the band.
+        # Cream page, tier-colour band, gold hairline under the band.
         pdf.setFillColorRGB(*CREAM)
         pdf.rect(0, 0, width, height, stroke=0, fill=1)
 
-        pdf.setFillColorRGB(*RED)
+        pdf.setFillColorRGB(*TIER_COLOR)
         pdf.rect(0, height - band, width, band, stroke=0, fill=1)
 
         pdf.setFillColorRGB(*GOLD)
@@ -611,11 +619,11 @@ def build_warri_ticket_pdf(
         pdf.drawString(margin, top - 22, event_date_line)
         pdf.drawString(margin, top - 40, venue)
 
-        pdf.setStrokeColorRGB(*RED)
+        pdf.setStrokeColorRGB(*TIER_COLOR)
         pdf.setLineWidth(1)
         pdf.line(margin, top - 58, width - margin, top - 58)
 
-        pdf.setFillColorRGB(*RED)
+        pdf.setFillColorRGB(*TIER_COLOR)
         pdf.setFont("Helvetica-Bold", 26)
         pdf.drawString(margin, top - 96, package_name)
 

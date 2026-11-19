@@ -139,6 +139,7 @@ export function BlackMarketSlider() {
               c.key === "event"
                 ? null
                 : pkgs.find((p: any) => String(p.name) === c.title) || null;
+              const tierAccent = source?.color || accent;
             return (
               <Link
                 key={`${c.key}-${i}`}
@@ -161,7 +162,7 @@ export function BlackMarketSlider() {
                 ) : (
                   <span
                     className="h-24 w-24 rounded-xl flex flex-col items-center justify-center flex-shrink-0"
-                    style={{ background: accent }}
+                    style={{ background: tierAccent }}
                   >
                     <span className="text-2xl font-black text-white">{cs}</span>
                     <span className="text-[9px] font-bold text-white/85 px-1 text-center leading-tight">
@@ -176,7 +177,7 @@ export function BlackMarketSlider() {
                   <span className="block text-[11px] text-white/60 mt-0.5 line-clamp-2">{c.sub}</span>
                   <span
                     className="inline-block mt-1.5 text-xs font-black px-2.5 py-1 rounded-lg"
-                    style={{ color: accent, background: "rgba(255,255,255,0.10)" }}
+                    style={{ color: tierAccent, background: "rgba(255,255,255,0.10)" }}
                   >
                     {c.price}
                   </span>

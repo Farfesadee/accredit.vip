@@ -7,6 +7,7 @@ export type PassPackage = {
   seats?: number;
   capacity?: number;
   all_in?: boolean;
+  color?: string;
 };
 
 export type LineupPerson = {
