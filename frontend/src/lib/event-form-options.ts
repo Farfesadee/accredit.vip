@@ -2,6 +2,10 @@ export type PassPackage = {
   name: string;
   price: string;
   quantity?: string;
+  description?: string;
+  fee?: string;
+  seats?: number;
+  capacity?: number;
 };
 
 export type LineupPerson = {

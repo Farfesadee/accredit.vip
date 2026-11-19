@@ -71,6 +71,7 @@ class EventCreateRequest(BaseModel):
     qr_message: str | None = None
     invite_subject: str | None = None
     invite_body: str | None = None
+    ticket_policy: str | None = None
 
 
 class InviteMessageRequest(BaseModel):
@@ -115,6 +116,8 @@ class EventPublicResponse(BaseModel):
     review_status: str
     review_note: str | None
     flagged_keywords: list[str] | None
+    ticket_policy: str | None = None
+    theme_color: str | None = None
     spotlight: bool = False
     created_at: datetime | None
     updated_at: datetime | None

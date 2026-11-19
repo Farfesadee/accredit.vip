@@ -56,6 +56,9 @@ class Event(Base):
     review_note = Column(Text, nullable=True)
     flagged_keywords = Column(JSON, nullable=True)
     theme_color = Column(String, nullable=True)
+    # Long-form ticket policy, rendered on /events/{id}/policy and summarised on
+    # the public event page. Empty for events that have no policy of their own.
+    ticket_policy = Column(Text, nullable=True)
     post_attempts = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

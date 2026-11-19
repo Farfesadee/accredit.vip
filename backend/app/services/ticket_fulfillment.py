@@ -176,6 +176,39 @@ async def fulfill_ticket_purchase(db: AsyncSession, purchase: TicketPurchase) ->
                     event.title,
                 )
                 pdf_filename = f"BLACK-MARKET-QR-{purchase.reference}.pdf"
+            elif str(event.slug or "") == "warri-again-grand-spectacle-2026":
+                # Warri Again: every paid order gets a branded PDF pass, one page
+                # per ticket, so a party of four lands with four pages.
+                from app.services.ticket_delivery import build_warri_ticket_pdf
+
+                package = None
+                for candidate in event.pass_packages or []:
+                    if candidate.get("name") == purchase.package_name:
+                        package = candidate
+                        break
+
+                when = ""
+                try:
+                    when = (
+                        f"{event.event_date.strftime('%A, %d %B %Y')} · "
+                        f"{event.event_time.strftime('%I:%M %p').lstrip('0')} "
+                        f"({event.timezone or 'WAT'})"
+                    )
+                except Exception:
+                    when = ""
+
+                pdf_bytes = build_warri_ticket_pdf(
+                    qr_code_base64=qr_code,
+                    buyer_name=purchase.buyer_name,
+                    package_name=purchase.package_name or "General Access",
+                    ticket_reference=purchase.reference,
+                    event_title=event.title,
+                    event_date_line=when,
+                    venue=event.venue or "",
+                    quantity=purchase.quantity or 1,
+                    seats=(package or {}).get("seats"),
+                )
+                pdf_filename = f"WARRI-AGAIN-{purchase.reference}.pdf"
 
             await send_ticket_email(
                 buyer_email=purchase.buyer_email,

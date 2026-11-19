@@ -37,6 +37,15 @@ type PurchaseStatus = {
   amount: number;
 };
 
+type PackageAvailability = {
+  name: string;
+  capacity: number | null;
+  sold: number;
+  remaining: number | null;
+  sold_out: boolean;
+  seats: number | null;
+};
+
 function coverImageUrl(path: string | null): string | null {
   if (!path) return null;
   if (path.startsWith("http")) return path;
@@ -129,6 +138,7 @@ function PublicEventContent() {
   const [error, setError] = useState("");
   const [selectedPackageIndex, setSelectedPackageIndex] = useState(0);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [availability, setAvailability] = useState<Record<string, PackageAvailability>>({});
 
   useEffect(() => {
     if (id) {
@@ -138,6 +148,28 @@ function PublicEventContent() {
         .finally(() => setLoading(false));
     }
   }, [id]);
+
+  // Per-package stock (tables are released in blocks). Events whose packages
+  // carry no capacity simply return nothing and behave as before.
+  useEffect(() => {
+    if (!id) return;
+    apiClient<{ packages: PackageAvailability[] }>(`/tickets/events/${id}/availability`)
+      .then((res) => {
+        const map: Record<string, PackageAvailability> = {};
+        for (const pkg of res.packages || []) map[pkg.name] = pkg;
+        setAvailability(map);
+      })
+      .catch(() => {});
+  }, [id]);
+
+  // Never leave the stepper above what the selected block still holds.
+  useEffect(() => {
+    const pkgs = (event?.pass_packages || []).filter((p: any) => p.name || p.price);
+    const pkg = pkgs[selectedPackageIndex] ?? pkgs[0];
+    const remaining = pkg ? availability[pkg.name]?.remaining ?? null : null;
+    const cap = remaining !== null ? Math.max(1, Math.min(10, remaining)) : 10;
+    setQuantity((q) => Math.min(Math.max(1, q), cap));
+  }, [event, selectedPackageIndex, availability]);
 
   useEffect(() => {
     const ref = searchParams.get("purchase") || searchParams.get("trxref");
@@ -254,6 +286,22 @@ function PublicEventContent() {
   const lineup = event.lineup?.filter((p: any) => p.role || p.name) || [];
   const cat = event.category || event.event_type || "";
   const showRemaining = event.tickets_available !== null && event.tickets_available !== undefined;
+
+  const availabilityFor = (name?: string | null) =>
+    (name ? availability[name] : undefined) || null;
+  const selectedAvailability = availabilityFor(selectedPkg?.name);
+  const selectedSoldOut = Boolean(selectedAvailability?.sold_out);
+  const selectedRemaining = selectedAvailability?.remaining ?? null;
+  const maxQuantity =
+    selectedRemaining !== null ? Math.max(1, Math.min(10, selectedRemaining)) : 10;
+  const policy = (event.ticket_policy || "").trim();
+  const policyHighlights = policy
+    ? policy
+        .split(/\n{2,}/)
+        .map((block: string) => block.replace(/\n+/g, " ").trim())
+        .filter(Boolean)
+        .slice(0, 4)
+    : [];
 
   const catGradients: Record<string, string> = {
     concert: "linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #1ABC9C 100%)",
@@ -494,6 +542,29 @@ function PublicEventContent() {
             </div>
           )}
 
+          {/* Ticket policy */}
+          {policy && (
+            <div id="ticket-policy" className="rounded-xl border border-[#e8edf2] bg-[#f8f9fc] p-5">
+              <h2 className="text-lg font-black text-[#0D1B2A] mb-3">Ticket policy</h2>
+              <ul className="list-disc pl-5 space-y-1.5 text-sm text-[#475569] leading-6">
+                {policyHighlights.map((line: string, i: number) => (
+                  <li key={i} className="line-clamp-3">
+                    {line}
+                  </li>
+                ))}
+              </ul>
+              <Link
+                href={`/events/${id}/policy`}
+                className="inline-flex items-center gap-1.5 mt-4 text-sm font-bold text-[#1ABC9C] hover:text-[#16A085] transition-colors"
+              >
+                Read the full ticket policy
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </Link>
+            </div>
+          )}
+
           {/* Share */}
           <div className="pt-2 border-t border-[#e8edf2]">
             <ShareButton title={event.title} url={currentUrl} />
@@ -565,11 +636,18 @@ function PublicEventContent() {
                   {passPackages.map((pkg: any, i: number) => {
                     const price = Number(pkg.price) || 0;
                     const selected = selectedPackageIndex === i;
+                    const avail = availabilityFor(pkg.name);
+                    const soldOut = Boolean(avail?.sold_out);
+                    const seats = Number(pkg.seats) || Number(avail?.seats) || 0;
                     return (
                       <label
                         key={i}
-                        className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 cursor-pointer transition-colors min-w-0 overflow-hidden ${
-                          selected ? "border-[#1ABC9C] bg-[rgba(26,188,156,0.06)]" : "bg-white border-[#e8edf2] hover:border-[#1ABC9C]/40"
+                        className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 min-w-0 overflow-hidden transition-colors ${
+                          soldOut
+                            ? "border-[#e8edf2] bg-[#f1f5f9] opacity-60 cursor-not-allowed"
+                            : selected
+                            ? "border-[#1ABC9C] bg-[rgba(26,188,156,0.06)] cursor-pointer"
+                            : "bg-white border-[#e8edf2] hover:border-[#1ABC9C]/40 cursor-pointer"
                         }`}
                       >
                         <div className="flex items-center gap-3 min-w-0">
@@ -577,17 +655,37 @@ function PublicEventContent() {
                             type="radio"
                             name="pass-package"
                             checked={selected}
+                            disabled={soldOut}
                             onChange={() => setSelectedPackageIndex(i)}
-                            className="accent-[#1ABC9C] w-4 h-4 flex-shrink-0"
+                            className="accent-[#1ABC9C] w-4 h-4 flex-shrink-0 disabled:cursor-not-allowed"
                           />
                           <div className="min-w-0">
-                            <p className="text-sm font-semibold text-[#0D1B2A]">{pkg.name || "Pass"}</p>
-                            {pkg.description && (
-                              <p className="text-xs text-[#94a3b8] truncate">{pkg.description}</p>
+                            <p className="text-sm font-semibold text-[#0D1B2A] flex items-center gap-2 flex-wrap">
+                              {pkg.name || "Pass"}
+                              {soldOut && (
+                                <span className="text-[9px] font-black uppercase tracking-[0.12em] px-1.5 py-0.5 rounded bg-[#64748b] text-white">
+                                  Sold out
+                                </span>
+                              )}
+                              {!soldOut && avail && avail.remaining !== null && avail.remaining !== undefined && (
+                                <span className="text-[9px] font-black uppercase tracking-[0.12em] px-1.5 py-0.5 rounded bg-[#fef3c7] text-[#92400e]">
+                                  {avail.remaining} left
+                                </span>
+                              )}
+                            </p>
+                            {(pkg.description || seats > 0) && (
+                              <p className="text-xs text-[#94a3b8] truncate">
+                                {seats > 0 ? `Table of ${seats}` : ""}
+                                {seats > 0 && pkg.description ? " · " : ""}
+                                {pkg.description || ""}
+                              </p>
                             )}
                           </div>
                         </div>
-                        <span className="text-sm font-black flex-shrink-0" style={{ color: "#1ABC9C" }}>
+                        <span
+                          className="text-sm font-black flex-shrink-0"
+                          style={{ color: soldOut ? "#64748b" : "#1ABC9C" }}
+                        >
                           {price > 0 ? `${cs}${price.toLocaleString()}` : "Free"}
                         </span>
                       </label>
@@ -699,14 +797,19 @@ function PublicEventContent() {
                         </span>
                         <button
                           type="button"
-                          onClick={() => setQuantity((q) => Math.min(10, q + 1))}
-                          disabled={quantity >= 10}
+                          onClick={() => setQuantity((q) => Math.min(maxQuantity, q + 1))}
+                          disabled={quantity >= maxQuantity}
                           className="w-11 h-11 rounded-xl border border-[#d9e2ec] text-xl font-black text-[#0D1B2A] hover:border-[#1ABC9C] hover:text-[#1ABC9C] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                           aria-label="Increase quantity"
                         >
                           +
                         </button>
                       </div>
+                      {selectedRemaining !== null && selectedRemaining > 0 && selectedRemaining <= 3 && (
+                        <p className="text-xs font-semibold text-[#b45309] mt-2">
+                          Only {selectedRemaining} left in this block
+                        </p>
+                      )}
                     </div>
                   )}
 
@@ -750,15 +853,17 @@ function PublicEventContent() {
                     <div className="space-y-2">
                     <button
                       type="submit"
-                      disabled={purchasing}
+                      disabled={purchasing || selectedSoldOut}
                       className="w-full rounded-xl font-black text-sm py-3.5 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                       style={{
-                        background: purchasing ? "#94a3b8" : isFreeEvent ? "linear-gradient(135deg, #059669, #065f46)" : "linear-gradient(135deg, #1ABC9C, #16A085)",
+                        background: purchasing || selectedSoldOut ? "#94a3b8" : isFreeEvent ? "linear-gradient(135deg, #059669, #065f46)" : "linear-gradient(135deg, #1ABC9C, #16A085)",
                         color: "white",
-                        boxShadow: purchasing ? "none" : isFreeEvent ? "0 6px 20px rgba(5,150,105,0.35)" : "0 6px 20px rgba(26,188,156,0.35)",
+                        boxShadow: purchasing || selectedSoldOut ? "none" : isFreeEvent ? "0 6px 20px rgba(5,150,105,0.35)" : "0 6px 20px rgba(26,188,156,0.35)",
                       }}
                     >
-                      {purchasing
+                      {selectedSoldOut
+                        ? `${selectedPkg?.name || "This ticket"} is sold out`
+                        : purchasing
                         ? "Processing..."
                         : isFreeEvent
                         ? "Save My Spot"
@@ -804,6 +909,15 @@ function PublicEventContent() {
                     ).toLocaleString()}</span>
                   </div>
                 </div>
+                {policy && (
+                  <p className="mt-3 text-[11px] leading-5 text-[#94a3b8]">
+                    By continuing you accept the{" "}
+                    <Link href={`/events/${id}/policy`} className="font-bold text-[#1ABC9C] hover:text-[#16A085]">
+                      ticket policy
+                    </Link>
+                    .
+                  </p>
+                )}
                 <div className="flex gap-2 mt-4">
                   <button
                     type="button"

@@ -525,6 +525,158 @@ def build_ticket_pdf(
     return buf.getvalue()
 
 
+WARRI_SLUG = "warri-again-grand-spectacle-2026"
+
+
+def build_warri_ticket_pdf(
+    qr_code_base64: str,
+    buyer_name: str,
+    package_name: str,
+    ticket_reference: str,
+    event_title: str,
+    event_date_line: str,
+    venue: str,
+    quantity: int = 1,
+    seats: int | None = None,
+) -> bytes:
+    """Branded Warri Again pass: one page per ticket, in the event's own red.
+
+    A buyer who takes four seats gets four pages in a single PDF, each numbered,
+    so every guest in the party can be admitted on their own page.
+    """
+    import io as _io
+
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.utils import ImageReader
+    from reportlab.pdfgen import canvas
+
+    RED = (0.808, 0.114, 0.141)      # #CE1D24
+    DEEP = (0.216, 0.071, 0.086)     # #371216
+    GOLD = (1.0, 0.788, 0.286)       # #FFC949
+    CREAM = (1.0, 0.965, 0.886)      # #FFF6E2
+    INK = (0.122, 0.106, 0.141)      # #1F1B24
+    GREY = (0.36, 0.33, 0.35)
+
+    width, height = A4
+    margin = 42
+    band = 168
+    total = max(1, int(quantity or 1))
+
+    try:
+        qr_reader = ImageReader(_io.BytesIO(base64.b64decode(qr_code_base64)))
+    except Exception:
+        qr_reader = None
+
+    buf = _io.BytesIO()
+    pdf = canvas.Canvas(buf, pagesize=A4)
+    pdf.setTitle(f"{event_title} ticket {ticket_reference}")
+
+    for index in range(total):
+        # Cream page, red band, gold hairline under the band.
+        pdf.setFillColorRGB(*CREAM)
+        pdf.rect(0, 0, width, height, stroke=0, fill=1)
+
+        pdf.setFillColorRGB(*RED)
+        pdf.rect(0, height - band, width, band, stroke=0, fill=1)
+
+        pdf.setFillColorRGB(*GOLD)
+        pdf.rect(0, height - band - 6, width, 6, stroke=0, fill=1)
+
+        pdf.setFillColorRGB(*CREAM)
+        pdf.setFont("Helvetica-Bold", 9)
+        pdf.drawString(margin, height - 40, "THE 26TH EDITION")
+
+        pdf.setFont("Helvetica-Bold", 40)
+        pdf.drawString(margin, height - 86, "WARRI AGAIN?")
+
+        pdf.setFillColorRGB(*GOLD)
+        pdf.setFont("Helvetica-Bold", 15)
+        pdf.drawString(margin, height - 112, "THE GRAND SPECTACLE")
+
+        pdf.setFillColorRGB(*CREAM)
+        pdf.setFont("Helvetica", 9)
+        pdf.drawString(margin, height - 134, "Eko Convention Centre, Eko Hotel, Victoria Island, Lagos")
+
+        pdf.setFont("Helvetica-Bold", 9)
+        pdf.drawRightString(width - margin, height - 40, f"TICKET {index + 1} OF {total}")
+
+        # Body
+        top = height - band - 60
+        pdf.setFillColorRGB(*INK)
+        pdf.setFont("Helvetica-Bold", 17)
+        pdf.drawString(margin, top, event_title)
+
+        pdf.setFont("Helvetica", 11)
+        pdf.setFillColorRGB(*GREY)
+        pdf.drawString(margin, top - 22, event_date_line)
+        pdf.drawString(margin, top - 40, venue)
+
+        pdf.setStrokeColorRGB(*RED)
+        pdf.setLineWidth(1)
+        pdf.line(margin, top - 58, width - margin, top - 58)
+
+        pdf.setFillColorRGB(*RED)
+        pdf.setFont("Helvetica-Bold", 26)
+        pdf.drawString(margin, top - 96, package_name)
+
+        if seats:
+            pdf.setFillColorRGB(*GREY)
+            pdf.setFont("Helvetica", 10)
+            pdf.drawString(margin, top - 116, f"Table of {int(seats)}")
+
+        # QR
+        qr_size = 178
+        if qr_reader is not None:
+            pdf.drawImage(
+                qr_reader,
+                (width - qr_size) / 2,
+                top - 150 - qr_size,
+                width=qr_size,
+                height=qr_size,
+                preserveAspectRatio=True,
+                mask="auto",
+            )
+
+        pdf.setFillColorRGB(*INK)
+        pdf.setFont("Helvetica-Bold", 12)
+        pdf.drawCentredString(width / 2, top - 170 - qr_size, ticket_reference)
+
+        pdf.setFillColorRGB(*GREY)
+        pdf.setFont("Helvetica", 9.5)
+        pdf.drawCentredString(
+            width / 2, top - 188 - qr_size, "Present this pass at the gate for accreditation"
+        )
+
+        # Buyer block
+        buyer_top = top - 240 - qr_size
+        pdf.setFillColorRGB(*DEEP)
+        pdf.rect(margin, buyer_top - 74, width - margin * 2, 74, stroke=0, fill=1)
+
+        pdf.setFillColorRGB(*GOLD)
+        pdf.setFont("Helvetica-Bold", 8)
+        pdf.drawString(margin + 16, buyer_top - 20, "ISSUED TO")
+        pdf.setFillColorRGB(*CREAM)
+        pdf.setFont("Helvetica-Bold", 14)
+        pdf.drawString(margin + 16, buyer_top - 40, buyer_name[:52])
+
+        pdf.setFillColorRGB(*GOLD)
+        pdf.setFont("Helvetica-Bold", 8)
+        pdf.drawString(margin + 16, buyer_top - 58, "PACKAGE")
+        pdf.setFillColorRGB(*CREAM)
+        pdf.setFont("Helvetica", 10)
+        pdf.drawString(margin + 16, buyer_top - 71, f"{package_name} · {ticket_reference}")
+
+        pdf.setFillColorRGB(*GREY)
+        pdf.setFont("Helvetica", 8)
+        pdf.drawString(margin, 54, "Warri Again? The Grand Spectacle, 26th edition · Brownhill Events Inc.")
+        pdf.drawRightString(width - margin, 54, "Tickets by Accredit Interactive · accredit.vip")
+
+        pdf.showPage()
+
+    pdf.save()
+    return buf.getvalue()
+
+
 async def send_ticket_email(
     buyer_email: str,
     buyer_name: str,

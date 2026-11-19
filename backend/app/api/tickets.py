@@ -48,6 +48,65 @@ async def get_optional_user(request: Request, db: AsyncSession = Depends(get_db)
         return None
 
 
+async def _sold_quantities(db: AsyncSession, event_id: int) -> dict[str, int]:
+    """Seats already sold per package, counted from completed purchases.
+
+    Only packages that declare a ``capacity`` care about this, so events whose
+    packages carry no capacity behave exactly as they did before.
+    """
+    result = await db.execute(
+        select(TicketPurchase.package_name, TicketPurchase.quantity).where(
+            TicketPurchase.event_id == event_id,
+            TicketPurchase.status == "completed",
+        )
+    )
+    sold: dict[str, int] = {}
+    for name, qty in result.all():
+        key = name or ""
+        sold[key] = sold.get(key, 0) + int(qty or 0)
+    return sold
+
+
+def _package_remaining(package: dict, sold: int) -> int | None:
+    """Remaining stock for one package, or None when it is unlimited."""
+    capacity = package.get("capacity")
+    if capacity in (None, ""):
+        return None
+    try:
+        return max(0, int(capacity) - sold)
+    except (TypeError, ValueError):
+        return None
+
+
+@router.get("/events/{event_id}/availability")
+async def package_availability(event_id: int, db: AsyncSession = Depends(get_db)):
+    """Per-package stock for the public ticket panel (sold out, seats left)."""
+    result = await db.execute(select(Event).where(Event.id == event_id))
+    event = result.scalar_one_or_none()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    sold = await _sold_quantities(db, event_id)
+    packages = []
+    for pkg in event.pass_packages or []:
+        name = pkg.get("name")
+        if not name:
+            continue
+        sold_qty = sold.get(name, 0)
+        remaining = _package_remaining(pkg, sold_qty)
+        packages.append(
+            {
+                "name": name,
+                "capacity": pkg.get("capacity"),
+                "sold": sold_qty,
+                "remaining": remaining,
+                "sold_out": remaining == 0,
+                "seats": pkg.get("seats"),
+            }
+        )
+    return {"event_id": event_id, "packages": packages}
+
+
 @router.post("/purchase")
 async def purchase_ticket(
     req: PurchaseRequest,
@@ -82,6 +141,22 @@ async def purchase_ticket(
     is_free = not package_price or package_price == 0
     if not is_free and event.tickets_available is not None and event.tickets_available < req.quantity:
         raise HTTPException(status_code=400, detail="Not enough tickets available")
+
+    # Per-package stock (tables and limited tiers). Packages without a
+    # ``capacity`` skip this entirely, so other events are untouched.
+    if selected_package is not None:
+        sold = await _sold_quantities(db, event.id)
+        remaining = _package_remaining(
+            selected_package, sold.get(selected_package.get("name"), 0)
+        )
+        if remaining is not None and req.quantity > remaining:
+            label = selected_package.get("name") or "This ticket"
+            if remaining <= 0:
+                raise HTTPException(status_code=409, detail=f"{label} is sold out")
+            raise HTTPException(
+                status_code=409,
+                detail=f"Only {remaining} left for {label}. Reduce your quantity and try again.",
+            )
 
     # Per-package fixed charges (e.g. Black Market: General +250, Premium +2500).
     # Packages WITHOUT an explicit fee keep the legacy platform% + VAT math.

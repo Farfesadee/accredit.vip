@@ -46,8 +46,10 @@ export type EventData = {
   after_party_time: string | null;
   slug: string | null;
   distance_km?: number;
+  theme_color?: string | null;
   invite_subject?: string | null;
   invite_body?: string | null;
+  ticket_policy?: string | null;
 };
 
 export type EventFilters = {
