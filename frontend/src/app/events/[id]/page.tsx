@@ -10,6 +10,7 @@ import { Navbar } from "@/components/shared/navbar";
 import { Footer } from "@/components/shared/footer";
 import { ReminderBanner } from "@/components/shared/reminder-banner";
 import { formatTimeForDisplay, getCurrencySymbol } from "@/lib/event-form-options";
+import { PhoneInput } from "@/components/shared/phone-input";
 
 const UPLOAD_BASE = API_BASE.replace(/\/api\/v1\/?$/, "");
 
@@ -130,7 +131,6 @@ function PublicEventContent() {
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
   const [buyerPhone, setBuyerPhone] = useState("");
-  const [phoneCode, setPhoneCode] = useState("+234");
   const [quantity, setQuantity] = useState(1);
   const [purchasing, setPurchasing] = useState(false);
   const [registered, setRegistered] = useState(false);
@@ -191,10 +191,7 @@ function PublicEventContent() {
   }, [searchParams, router]);
 
   const buildFullPhone = () => {
-    const digits = buyerPhone.replace(/[\s\-()]/g, "");
-    if (!digits) return null;
-    if (digits.startsWith("+")) return digits;
-    return `${phoneCode}${digits.replace(/^0+/, "")}`;
+    return buyerPhone || null;
   };
 
   const handlePurchase = async (method: string = "paystack") => {
@@ -267,7 +264,9 @@ function PublicEventContent() {
 
   const imgUrl = coverImageUrl(event.cover_image);
   const cs = getCurrencySymbol(event?.currency || "NGN");
-  const passPackages = (event.pass_packages || []).filter((p: any) => p.name || p.price);
+  const passPackages = (event.pass_packages || [])
+    .filter((p: any) => p.name || p.price)
+    .sort((a: any, b: any) => (Number(a.price) || 0) - (Number(b.price) || 0));
   const selectedPkg = passPackages[selectedPackageIndex] ?? passPackages[0] ?? null;
   const unitPrice = selectedPkg
     ? Number(selectedPkg.price) || 0
@@ -778,21 +777,12 @@ function PublicEventContent() {
                       Phone number <span className="normal-case font-medium">(optional)</span>
                     </label>
                     <div className="flex gap-2">
-                      <select
-                        value={phoneCode}
-                        onChange={(e) => setPhoneCode(e.target.value)}
-                        className="h-11 rounded-xl border border-[#d9e2ec] px-2 text-sm outline-none focus:border-[#1ABC9C] bg-white transition-colors flex-shrink-0"
-                        aria-label="Country code"
-                      >
-                        {["+234", "+1", "+44", "+233", "+254", "+27", "+971", "+91"].map((c) => (
-                          <option key={c} value={c}>{c}</option>
-                        ))}
-                      </select>
-                      <input
-                        placeholder="Phone number"
+                      <PhoneInput
                         value={buyerPhone}
-                        onChange={(e) => setBuyerPhone(e.target.value)}
-                        className="h-11 w-full rounded-xl border border-[#d9e2ec] px-3 text-sm outline-none focus:border-[#1ABC9C] transition-colors"
+                        onChange={setBuyerPhone}
+                        placeholder="Phone number"
+                        className="h-11 w-full"
+                        size="md"
                       />
                     </div>
                   </div>
