@@ -252,9 +252,9 @@ def anniversary_content() -> dict:
         },
         "dress_code": {
             "label": "Dress Code",
-            "theme": "Elegant",
-            "note": "Come dressed to celebrate thirty years with us.",
-            "colors": [],
+            "theme": "Colours of the day: Purple, Lavender, Peach, Cream/Off White",
+            "note": "Colours of the day: Purple, Lavender, Peach, Cream/Off White",
+            "colors": ["#800080", "#E6E6FA", "#FFDAB9", "#FFFDD0"],
         },
         # One companion rides on the guest's own pass (same rule as event 82).
         "plus_one": {
