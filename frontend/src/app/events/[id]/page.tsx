@@ -570,16 +570,31 @@ function PublicEventContent() {
               <h2 className="text-lg font-black text-[#0D1B2A] mb-4">Lineup</h2>
               <div className="space-y-3">
                 {[
-                  { role: "Music", label: "🎵 Music" },
-                  { role: "Comedy", label: "😂 Comedy" },
-                  { role: "DJ", label: "🎧 DJs" },
+                  { role: "Music", label: "Music", icon: (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.82-1.5 3.3-3.3 3.3S2.7 20.82 2.7 19M9 19a2 2 0 01-2-2V6a2 2 0 012-2" />
+                    </svg>
+                  )},
+                  { role: "Comedy", label: "Comedy", icon: (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486l6.586-6.586a2 2 0 112.828 2.828l-6.414 6.586a4 4 0 01-5.656 5.656l6.415-6.585a6 6 0 11-8.486-8.486z" />
+                    </svg>
+                  )},
+                  { role: "DJ", label: "DJs", icon: (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24" aria-hidden="true">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                    </svg>
+                  )},
                 ].map((section) => {
                   const people = lineup.filter((p: any) => p.role === section.role);
                   if (people.length === 0) return null;
                   return (
                     <details key={section.role} className="group">
                       <summary className="flex items-center justify-between gap-3 cursor-pointer rounded-xl border border-[#e8edf2] bg-[#f8f9fc] px-4 py-3 list-none focus:outline-none focus:ring-2 focus:ring-[#1ABC9C]/30">
-                        <span className="text-sm font-black text-[#0D1B2A] flex items-center gap-2">{section.label}</span>
+                        <span className="text-sm font-black text-[#0D1B2A] flex items-center gap-2">
+                          {section.icon}
+                          {section.label}
+                        </span>
                         <svg className="w-5 h-5 text-[#94a3b8] transition-transform duration-200 group-open:rotate-180 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                         </svg>

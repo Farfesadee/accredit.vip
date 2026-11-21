@@ -486,7 +486,171 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
         </label>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_310px] sm:grid-cols-1">
+      {/* Mobile-first: Table selection panel above the map */}
+      <div className="lg:hidden mb-4">
+        <aside className="rounded-2xl border border-[#d8dfdb] bg-white p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <span
+              className="inline-block h-3.5 w-3.5 rounded-full border border-[#667]"
+              style={{ background: cat.color }}
+            />
+            <h3 className="text-lg font-black text-[#182e2c]">{cat.name}</h3>
+          </div>
+
+          <p className="text-sm font-semibold leading-6 text-[#485953]">{hint}</p>
+
+          {/* How-to guide */}
+          {!isVip && !isExtreme && !chosen && (
+            <div className="mt-3 rounded-xl bg-[#f0fdf4] border border-[#86efac] p-3">
+              <p className="text-[11px] font-black uppercase tracking-[0.1em] text-[#166534] mb-1">
+                How to select
+              </p>
+              <ul className="space-y-1 text-[12px] text-[#182e2c]">
+                <li className="flex items-start gap-1.5">1. <span>Pick a <strong>coloured table</strong> on the map, or choose from the dropdown below.</span></li>
+                <li className="flex items-start gap-1.5">2. <span>Choose <strong>Whole table</strong> to buy the full table, or <strong>Individual seats</strong> to pick specific seats.</span></li>
+                <li className="flex items-start gap-1.5">3. <span>In <strong>Individual seats</strong> mode, tap seats on the ring (seats 4 & 8 are unavailable).</span></li>
+                <li className="flex items-start gap-1.5">4. <span>Press <strong>Reserve table / Reserve seats</strong> to add to the ticket panel below.</span></li>
+              </ul>
+            </div>
+          )}
+
+          {packageForCat && (
+            <p className="mt-2 text-sm font-bold text-[#182e2c]">
+              {priceLabel(packagePrice)}
+              <span className="font-semibold text-[#5f7169]">
+                {packageSeats > 1 ? ` per table of ${packageSeats}` : " per guest"}
+              </span>
+            </p>
+          )}
+          {packageForCat && packageSeats > 1 && (
+            <p className="text-[12px] font-semibold text-[#5f7169]">
+              {priceLabel(seatPrice)} per seat when bought individually
+            </p>
+          )}
+
+          {listOpen && (
+            <select
+              ref={listRef}
+              aria-label="Choose a table"
+              value={chosenId || ""}
+              onChange={(e) => (e.target.value ? pick(e.target.value) : reset())}
+              className="mt-3 h-12 w-full rounded-xl border border-[#aab8b3] bg-white px-3 text-base sm:text-lg font-semibold text-[#182e2c] outline-none focus:border-[#173935] touch-manipulation"
+            >
+              <option value="">Choose a table</option>
+              {categoryMarkers
+                .filter((m) => isAvailable(m))
+                .map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.side} · Table {m.n}
+                  </option>
+                ))}
+            </select>
+          )}
+
+          {isExtreme && (
+            <p className="mt-3 rounded-xl border border-[#e7b7b4] bg-[#fdf1f0] px-3 py-2 text-[13px] font-bold text-[#8a2b26]">
+              This tier is shown for reference. Public sales have not been confirmed.
+            </p>
+          )}
+
+          {/* Seat ring (mobile) */}
+          {chosen && bySeat && (
+            <div className="mt-4">
+              {seats.length === 0 && (
+                <p className="mb-2 text-[12px] font-semibold text-[#182e2c] bg-[#fefce8] border border-[#fde047] rounded-lg p-2">
+                  Tap seats on the ring to select them. Seats 4 & 8 are not for sale.
+                </p>
+              )}
+              <svg viewBox="0 0 250 220" role="img" aria-label="Ten numbered seats" className="w-full max-w-[280px] mx-auto">
+                <text x={125} y={113} fontSize={17} fontWeight={700} textAnchor="middle" fill="#344640">
+                  Table {chosen.n}
+                </text>
+                {Array.from({ length: tableSeats }, (_, i) => i + 1).map((n) => {
+                  const angle = ((n - 1) * Math.PI) / 5 - Math.PI / 2;
+                  const x = 125 + 82 * Math.cos(angle);
+                  const y = 110 + 82 * Math.sin(angle);
+                  const off = unavailableSeats.has(n);
+                  const fill = off ? "#d1d6d3" : chosen.color;
+                  const picked = seats.includes(n);
+                  return (
+                    <g
+                      key={`seat-${n}`}
+                      className={off ? undefined : "cursor-pointer"}
+                      tabIndex={off ? -1 : 0}
+                      role={off ? undefined : "button"}
+                      aria-label={`Seat ${n}${off ? " · Unavailable" : ""}`}
+                      aria-pressed={off ? undefined : picked}
+                      onClick={() => toggleSeat(n)}
+                      onKeyDown={(e) => {
+                        if (!off && (e.key === "Enter" || e.key === " ")) {
+                          e.preventDefault();
+                          toggleSeat(n);
+                        }
+                      }}
+                    >
+                      <title>
+                        Seat {n}
+                        {off ? " · Unavailable" : ""}
+                      </title>
+                      {picked && (
+                        <circle cx={x} cy={y} r={21} fill="none" stroke="#172b25" strokeWidth={3} />
+                      )}
+                      <circle cx={x} cy={y} r={16} fill={fill} stroke={off ? "#c9cfcb" : "#58645f"} strokeWidth={2} />
+                      <text
+                        x={x}
+                        y={y + 5}
+                        fontSize={15}
+                        fontWeight={700}
+                        textAnchor="middle"
+                        fill={off ? "#59655f" : inkFor(fill)}
+                        style={{ pointerEvents: "none" }}
+                      >
+                        {off ? "×" : n}
+                      </text>
+                    </g>
+                  );
+                })}
+              </svg>
+            </div>
+          )}
+
+          <p aria-live="polite" className="mt-3 min-h-[22px] text-sm font-bold text-[#182e2c]">
+            {chosen
+              ? `${chosen.side} · Table ${chosen.n} · ${
+                  bySeat
+                    ? seats.length
+                      ? `Seats ${[...seats].sort((a, b) => a - b).join(", ")}`
+                      : "Choose seats"
+                    : `${packageSeats} guest passes`
+                }`
+              : isVip
+              ? "One general-admission pass per guest."
+              : ""}
+          </p>
+
+          {chosen && !isVip && bySeat && seats.length > 0 && (
+            <p className="text-sm font-black text-[#173935]">
+              Total {priceLabel(seatPrice * seats.length)}
+            </p>
+          )}
+
+          <button
+            type="button"
+            onClick={handleReserve}
+            disabled={reserveDisabled}
+            className="mt-3 w-full rounded-xl bg-[#173935] px-4 py-3.5 text-base font-black text-white transition-colors hover:bg-[#11241e] disabled:cursor-not-allowed disabled:bg-[#e6eae8] disabled:text-[#65726d] touch-manipulation"
+          >
+            {reserveLabel}
+          </button>
+
+          <p aria-live="polite" className="mt-2 text-[13px] font-semibold leading-5 text-[#485953]">
+            {notice}
+          </p>
+        </aside>
+      </div>
+
+      {/* Desktop: side-by-side layout */}
+      <div className="hidden lg:grid lg:grid-cols-[minmax(0,1fr)_310px] gap-4">
         {/* MAP */}
         <div className="rounded-2xl border border-[#d8dfdb] bg-white p-3 sm:p-4">
           <div className="mb-3 flex items-center justify-between gap-3 flex-wrap">
