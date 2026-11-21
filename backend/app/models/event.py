@@ -59,6 +59,28 @@ class Event(Base):
     # Long-form ticket policy, rendered on /events/{id}/policy and summarised on
     # the public event page. Empty for events that have no policy of their own.
     ticket_policy = Column(Text, nullable=True)
+    # Floor plan image for table selection
+    floor_plan_image = Column(String, nullable=True)
     post_attempts = Column(Integer, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class TableInventory(Base):
+    __tablename__ = "table_inventory"
+
+    id = Column(Integer, primary_key=True, index=True)
+    event_id = Column(Integer, ForeignKey("events.id"), index=True, nullable=False)
+    tier_name = Column(String, index=True, nullable=False)  # "Silver Table", "Gold Table", etc.
+    table_number = Column(String, index=True, nullable=False)  # "S-01", "G-03", "PP-01", etc.
+    tier_category = Column(String, index=True, nullable=False)  # "silver", "gold", "premium_gold", "platinum_star", "platinum_legacy", "platinum_prime", "platinum_prestige", "vip"
+    x_position = Column(Float, nullable=False)  # Percentage 0-100 on floor plan
+    y_position = Column(Float, nullable=False)  # Percentage 0-100 on floor plan
+    shape = Column(String, default="circle")  # "circle", "rect", "polygon"
+    shape_data = Column(JSON, nullable=True)  # For polygon: [{"x":10,"y":20},...], for circle: {"r": 15}, for rect: {"w": 30, "h": 20}
+    color = Column(String, nullable=False)  # Hex color from PDF
+    status = Column(String, default="available", index=True)  # "available", "sold", "reserved"
+    purchase_id = Column(Integer, ForeignKey("ticket_purchases.id"), nullable=True, index=True)
+    reserved_until = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

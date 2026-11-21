@@ -9,6 +9,7 @@ import { ErrorBoundary } from "@/components/shared/error-boundary";
 import { Navbar } from "@/components/shared/navbar";
 import { Footer } from "@/components/shared/footer";
 import { ReminderBanner } from "@/components/shared/reminder-banner";
+import WarriFloorPlan, { type FloorPlanSelection } from "@/components/events/WarriFloorPlan";
 import { formatTimeForDisplay, getCurrencySymbol } from "@/lib/event-form-options";
 import { PhoneInput } from "@/components/shared/phone-input";
 
@@ -139,6 +140,9 @@ function PublicEventContent() {
   const [selectedPackageIndex, setSelectedPackageIndex] = useState(0);
   const [showConfirm, setShowConfirm] = useState(false);
   const [availability, setAvailability] = useState<Record<string, PackageAvailability>>({});
+  // Table and seat chosen on the seating plan. When it is set, the ticket panel
+  // sells exactly that table or those seats instead of a generic pass count.
+  const [floorSelection, setFloorSelection] = useState<FloorPlanSelection | null>(null);
 
   useEffect(() => {
     if (id) {
@@ -164,12 +168,16 @@ function PublicEventContent() {
 
   // Never leave the stepper above what the selected block still holds.
   useEffect(() => {
-    const pkgs = (event?.pass_packages || []).filter((p: any) => p.name || p.price);
+    // A chosen table or seat set already fixes the quantity, so leave it alone.
+    if (floorSelection) return;
+    const pkgs = (event?.pass_packages || [])
+      .filter((p: any) => p.name || p.price)
+      .sort((a: any, b: any) => (Number(a.price) || 0) - (Number(b.price) || 0));
     const pkg = pkgs[selectedPackageIndex] ?? pkgs[0];
     const remaining = pkg ? availability[pkg.name]?.remaining ?? null : null;
     const cap = remaining !== null ? Math.max(1, Math.min(10, remaining)) : 10;
     setQuantity((q) => Math.min(Math.max(1, q), cap));
-  }, [event, selectedPackageIndex, availability]);
+  }, [event, selectedPackageIndex, availability, floorSelection]);
 
   useEffect(() => {
     const ref = searchParams.get("purchase") || searchParams.get("trxref");
@@ -209,9 +217,15 @@ function PublicEventContent() {
           buyer_name: buyerName,
           buyer_email: buyerEmail,
           buyer_phone: buildFullPhone(),
-          quantity,
+          quantity: floorSelection ? floorSelection.quantity : quantity,
           payment_method: method,
-          package_name: pkg?.name || null,
+          package_name: floorSelection ? floorSelection.packageName : pkg?.name || null,
+          ...(floorSelection && floorSelection.tables.length
+            ? { table_numbers: floorSelection.tables }
+            : {}),
+          ...(floorSelection && floorSelection.mode === "seat" && floorSelection.seats.length
+            ? { seat_numbers: floorSelection.seats }
+            : {}),
           utm_source: utm.utm_source || undefined,
           utm_medium: utm.utm_medium || undefined,
           utm_campaign: utm.utm_campaign || undefined,
@@ -268,9 +282,30 @@ function PublicEventContent() {
     .filter((p: any) => p.name || p.price)
     .sort((a: any, b: any) => (Number(a.price) || 0) - (Number(b.price) || 0));
   const selectedPkg = passPackages[selectedPackageIndex] ?? passPackages[0] ?? null;
-  const unitPrice = selectedPkg
+  const unitPrice = floorSelection
+    ? floorSelection.unitPrice
+    : selectedPkg
     ? Number(selectedPkg.price) || 0
     : Number(event.ticket_price) || 0;
+
+  // The seating plan lives on this event only.
+  const isFloorPlanEvent = event?.slug === "warri-again-grand-spectacle-2026";
+
+  const handleFloorReserve = (selection: FloorPlanSelection) => {
+    const index = passPackages.findIndex((p: any) => p.name === selection.packageName);
+    if (selection.mode === "vip") {
+      // VIP is general admission, not a numbered table, so it keeps the normal
+      // quantity stepper instead of locking the panel to one pass.
+      setFloorSelection(null);
+      setQuantity(1);
+    } else {
+      setFloorSelection(selection);
+      setQuantity(selection.quantity);
+    }
+    if (index >= 0) setSelectedPackageIndex(index);
+    setError("");
+    document.getElementById("tickets-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   // A package that declares `all_in` is sold at exactly its listed price:
   // no platform fee, no VAT, nothing added at checkout.
@@ -306,6 +341,9 @@ function PublicEventContent() {
     (name ? availability[name] : undefined) || null;
   const selectedAvailability = availabilityFor(selectedPkg?.name);
   const selectedSoldOut = Boolean(selectedAvailability?.sold_out);
+  // A table package is one table per unit, so it is never sold by a plain
+  // quantity: the buyer has to pick the numbered table on the plan.
+  const selectedIsTable = Number(selectedPkg?.seats) > 1;
   const selectedRemaining = selectedAvailability?.remaining ?? null;
   const maxQuantity =
     selectedRemaining !== null ? Math.max(1, Math.min(10, selectedRemaining)) : 10;
@@ -389,6 +427,18 @@ function PublicEventContent() {
       {purchaseStatus && purchaseStatus.status !== "completed" && (
         <div className="bg-amber-50 border-b border-amber-200 px-4 py-3 text-center text-sm text-amber-800 font-medium">
           Payment pending for reference <strong>{purchaseStatus.reference}</strong>. Complete payment to confirm your ticket.
+        </div>
+      )}
+
+      {/* Seating plan (Warri Again only) */}
+      {isFloorPlanEvent && (
+        <div className="max-w-[1400px] mx-auto w-full px-4 sm:px-6 lg:px-8 pt-8 sm:pt-10">
+          <WarriFloorPlan
+            eventId={Number(id)}
+            packages={passPackages as any}
+            currencySymbol={cs}
+            onReserve={handleFloorReserve}
+          />
         </div>
       )}
 
@@ -603,7 +653,15 @@ function PublicEventContent() {
                 <>
                   <p className="text-2xl font-black text-white">
                     {cs}{unitPrice.toLocaleString()}
-                    <span className="text-sm font-normal text-white/60 ml-1">per ticket</span>
+                    <span className="text-sm font-normal text-white/60 ml-1">
+                      {floorSelection
+                        ? floorSelection.mode === "seat"
+                          ? "per seat"
+                          : floorSelection.mode === "vip"
+                          ? "per guest"
+                          : "per table"
+                        : "per ticket"}
+                    </span>
                   </p>
                   {!isAllIn && (
                     <div className="mt-2 space-y-0.5 text-xs text-white/50">
@@ -644,6 +702,38 @@ function PublicEventContent() {
                 </p>
               )}
             </div>
+
+            {/* Seating plan entry point (Warri Again only) */}
+            {isFloorPlanEvent && !floorSelection && (
+              <div className="border-b border-[#e8edf2] bg-[#eafaf6] px-6 py-4">
+                <a
+                  href="#seating-plan"
+                  className="flex items-center justify-between gap-3 rounded-xl border border-[#1ABC9C]/40 bg-white px-4 py-3 transition-colors hover:border-[#1ABC9C]"
+                >
+                  <span className="min-w-0">
+                    <span className="block text-[10px] font-black uppercase tracking-[0.14em] text-[#0f766e]">
+                      Seating plan
+                    </span>
+                    <span className="mt-0.5 block text-sm font-black text-[#0D1B2A]">
+                      Choose your table and seat
+                    </span>
+                    <span className="mt-0.5 block text-xs font-medium leading-5 text-[#475569]">
+                      Pick a numbered table, or individual seats on it, before you pay.
+                    </span>
+                  </span>
+                  <svg
+                    className="h-5 w-5 flex-shrink-0 text-[#0f766e]"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2.5}
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                  </svg>
+                </a>
+              </div>
+            )}
 
             {/* Pass packages */}
             {passPackages.length > 0 && (
@@ -786,7 +876,64 @@ function PublicEventContent() {
                       />
                     </div>
                   </div>
-                  {isPaidEvent && (
+                  {floorSelection && (
+                    <div className="rounded-xl border-2 border-[#1ABC9C] bg-[#eafaf6] px-4 py-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#0f766e]">
+                            Your selection
+                          </p>
+                          <p className="mt-1 text-sm font-black leading-5 text-[#0D1B2A] break-words">
+                            {floorSelection.label}
+                          </p>
+                          <p className="mt-1 text-xs font-semibold text-[#475569]">
+                            {cs}{floorSelection.unitPrice.toLocaleString()} each
+                            {floorSelection.quantity > 1 ? ` · ${floorSelection.quantity} places` : ""}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFloorSelection(null);
+                            setQuantity(1);
+                            document.getElementById("seating-plan")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                          }}
+                          className="flex-shrink-0 rounded-lg border border-[#0f766e]/30 px-2.5 py-1.5 text-[11px] font-black uppercase tracking-wider text-[#0f766e] hover:bg-white transition-colors"
+                        >
+                          Change
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {isFloorPlanEvent && selectedIsTable && !floorSelection && (
+                    <a
+                      href="#seating-plan"
+                      className="flex items-center justify-between gap-3 rounded-xl border border-[#f0c36d] bg-[#fffbeb] px-4 py-3 transition-colors hover:border-[#d97706]"
+                    >
+                      <span className="min-w-0">
+                        <span className="block text-[10px] font-black uppercase tracking-[0.14em] text-[#92400e]">
+                          Table required
+                        </span>
+                        <span className="mt-0.5 block text-sm font-black text-[#0D1B2A]">
+                          Choose your {selectedPkg?.name || "table"} on the plan
+                        </span>
+                        <span className="mt-0.5 block text-xs font-medium leading-5 text-[#475569]">
+                          Tables and seats are picked by number, so you know exactly where you sit.
+                        </span>
+                      </span>
+                      <svg
+                        className="h-5 w-5 flex-shrink-0 text-[#92400e]"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2.5}
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                      </svg>
+                    </a>
+                  )}
+                  {isPaidEvent && !floorSelection && !selectedIsTable && (
                     <div>
                       <label className="text-xs font-bold uppercase tracking-wider text-[#94a3b8] block mb-1.5">
                         Quantity
@@ -857,7 +1004,7 @@ function PublicEventContent() {
                     <div className="space-y-2">
                     <button
                       type="submit"
-                      disabled={purchasing || selectedSoldOut}
+                      disabled={purchasing || selectedSoldOut || (selectedIsTable && !floorSelection)}
                       className="w-full rounded-xl font-black text-sm py-3.5 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                       style={{
                         background: purchasing || selectedSoldOut ? "#94a3b8" : isFreeEvent ? "linear-gradient(135deg, #059669, #065f46)" : "linear-gradient(135deg, #1ABC9C, #16A085)",
@@ -867,6 +1014,8 @@ function PublicEventContent() {
                     >
                       {selectedSoldOut
                         ? `${selectedPkg?.name || "This ticket"} is sold out`
+                        : selectedIsTable && !floorSelection
+                        ? "Choose your table on the plan"
                         : purchasing
                         ? "Processing..."
                         : isFreeEvent
@@ -899,8 +1048,12 @@ function PublicEventContent() {
                     <span className="font-bold text-[#0D1B2A] text-right break-words min-w-0">{buildFullPhone() || "—"}</span>
                   </div>
                   <div className="flex justify-between gap-3 px-4 py-2.5">
-                    <span className="text-[#64748b] shrink-0">Tickets</span>
-                    <span className="font-bold text-[#0D1B2A] text-right">{quantity} × {selectedPkg?.name || "Standard"}</span>
+                    <span className="text-[#64748b] shrink-0">{floorSelection ? "Selection" : "Tickets"}</span>
+                    <span className="font-bold text-[#0D1B2A] text-right break-words min-w-0">
+                      {floorSelection
+                        ? floorSelection.label
+                        : `${quantity} × ${selectedPkg?.name || "Standard"}`}
+                    </span>
                   </div>
                   <div className="flex justify-between gap-3 px-4 py-2.5">
                     <span className="text-[#64748b] shrink-0">Total</span>
