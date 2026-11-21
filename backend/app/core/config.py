@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     PAYSTACK_TEST_SECRET_KEY: str = ""
     PAYSTACK_TEST_PUBLIC_KEY: str = ""
     PAYSTACK_TEST_OWNER_EMAIL: str = "sodushileomodolapoodunayo@gmail.com"
+    # Warri Again? (event 105) dedicated keys
+    PAYSTACK_EVENT_105_SECRET_KEY: str = ""
+    PAYSTACK_EVENT_105_PUBLIC_KEY: str = ""
+    PAYSTACK_EVENT_105_TEST_SECRET_KEY: str = ""
+    PAYSTACK_EVENT_105_TEST_PUBLIC_KEY: str = ""
     FLUTTERWAVE_SECRET_KEY: str = ""
 
     OPENAI_API_KEY: str = ""
@@ -146,8 +151,20 @@ class Settings(BaseSettings):
         if self.DEBUG:
             logger.warning("⚠️⚠️⚠️ DEBUG MODE IS ENABLED - DO NOT USE IN PRODUCTION ⚠️⚠️⚠️")
 
-    def paystack_secret_key(self, user_email: str | None = None) -> str:
-        """Live key for everyone; test key only when the requester is the owner."""
+    def paystack_secret_key(self, user_email: str | None = None, event_id: int | None = None) -> str:
+        """Live key for everyone; test key only when the requester is the owner.
+        Event-specific keys (e.g. event 105) take priority when event_id is provided.
+        """
+        # Event 105 (Warri Again) dedicated keys
+        if event_id == 105:
+            if (
+                user_email
+                and self.PAYSTACK_EVENT_105_TEST_SECRET_KEY
+                and user_email.strip().lower() == self.PAYSTACK_TEST_OWNER_EMAIL.strip().lower()
+            ):
+                return self.PAYSTACK_EVENT_105_TEST_SECRET_KEY
+            return self.PAYSTACK_EVENT_105_SECRET_KEY or self.PAYSTACK_SECRET_KEY
+        # Default behavior
         if (
             user_email
             and self.PAYSTACK_TEST_SECRET_KEY
@@ -155,6 +172,12 @@ class Settings(BaseSettings):
         ):
             return self.PAYSTACK_TEST_SECRET_KEY
         return self.PAYSTACK_SECRET_KEY
+
+    def paystack_public_key(self, event_id: int | None = None) -> str:
+        """Public key for the given event, or default."""
+        if event_id == 105:
+            return self.PAYSTACK_EVENT_105_PUBLIC_KEY or self.PAYSTACK_PUBLIC_KEY
+        return self.PAYSTACK_PUBLIC_KEY
 
     def paystack_signature_valid(self, body: bytes, signature: str) -> bool:
         """Accept webhook signatures from either live or test Paystack keys."""

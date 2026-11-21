@@ -618,6 +618,7 @@ async def purchase_ticket(
             "quantity": req.quantity,
             "authorization_url": None,
             "method": "wallet",
+            "paystack_public_key": settings.paystack_public_key(req.event_id),
         }
 
     purchase = TicketPurchase(
@@ -750,11 +751,12 @@ async def purchase_ticket(
             "vat": 0,
             "quantity": req.quantity,
             "authorization_url": None,
+            "paystack_public_key": settings.paystack_public_key(req.event_id),
         }
 
     paystack_url = None
     buyer_user = await get_optional_user(request, db)
-    paystack_secret = settings.paystack_secret_key(buyer_user.email if buyer_user else None)
+    paystack_secret = settings.paystack_secret_key(buyer_user.email if buyer_user else None, req.event_id)
     if paystack_secret:
         try:
             async with httpx.AsyncClient() as client:
@@ -787,6 +789,7 @@ async def purchase_ticket(
         "quantity": req.quantity,
         "authorization_url": paystack_url,
         "method": "paystack",
+        "paystack_public_key": settings.paystack_public_key(req.event_id),
     }
 
 
@@ -855,14 +858,20 @@ async def verify_purchase(
 
     # Confirm with Paystack that the charge really succeeded before fulfilling.
     # Try live key first, then test key (owner test payments).
+    # Include event 105 keys if the purchase is for that event.
+    event = purchase.event
     paystack_success = False
     tried_keys = []
-    for key in dict.fromkeys(
-        [
-            settings.PAYSTACK_SECRET_KEY,
-            settings.PAYSTACK_TEST_SECRET_KEY,
-        ]
-    ):
+    verify_keys = [
+        settings.PAYSTACK_SECRET_KEY,
+        settings.PAYSTACK_TEST_SECRET_KEY,
+    ]
+    if event and event.id == 105:
+        if settings.PAYSTACK_EVENT_105_SECRET_KEY:
+            verify_keys.insert(0, settings.PAYSTACK_EVENT_105_SECRET_KEY)
+        if settings.PAYSTACK_EVENT_105_TEST_SECRET_KEY:
+            verify_keys.insert(1, settings.PAYSTACK_EVENT_105_TEST_SECRET_KEY)
+    for key in dict.fromkeys(verify_keys):
         if not key or key in tried_keys:
             continue
         tried_keys.append(key)

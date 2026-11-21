@@ -568,23 +568,35 @@ function PublicEventContent() {
           {lineup.length > 0 && (
             <div>
               <h2 className="text-lg font-black text-[#0D1B2A] mb-4">Lineup</h2>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {lineup.map((person: any, i: number) => (
-                  <div key={i} className="flex items-center gap-3 rounded-xl border border-[#e8edf2] bg-[#f8f9fc] p-4">
-                    <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-white text-sm font-black"
-                      style={{ background: "linear-gradient(135deg, #1ABC9C, #16A085)" }}
-                    >
-                      {(person.name || "?")[0].toUpperCase()}
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold uppercase tracking-wider text-[#94a3b8]">
-                        {person.role || "Guest"}
-                      </p>
-                      <p className="text-sm font-bold text-[#0D1B2A]">{person.name || "To be announced"}</p>
-                    </div>
-                  </div>
-                ))}
+              <div className="space-y-3">
+                {[
+                  { role: "Music", label: "🎵 Music" },
+                  { role: "Comedy", label: "😂 Comedy" },
+                  { role: "DJ", label: "🎧 DJs" },
+                ].map((section) => {
+                  const people = lineup.filter((p: any) => p.role === section.role);
+                  if (people.length === 0) return null;
+                  return (
+                    <details key={section.role} className="group">
+                      <summary className="flex items-center justify-between gap-3 cursor-pointer rounded-xl border border-[#e8edf2] bg-[#f8f9fc] px-4 py-3 list-none focus:outline-none focus:ring-2 focus:ring-[#1ABC9C]/30">
+                        <span className="text-sm font-black text-[#0D1B2A] flex items-center gap-2">{section.label}</span>
+                        <svg className="w-5 h-5 text-[#94a3b8] transition-transform duration-200 group-open:rotate-180 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </summary>
+                      <div className="mt-2 space-y-2 pl-2 border-l border-[#e8edf2]">
+                        {people.map((person: any, i: number) => (
+                          <div key={`${section.role}-${i}`} className="flex items-center gap-3 rounded-lg bg-white p-3 border border-[#e8edf2]/50">
+                            <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-white text-xs font-black" style={{ background: "linear-gradient(135deg, #1ABC9C, #16A085)" }}>
+                              {(person.name || "?")[0].toUpperCase()}
+                            </div>
+                            <p className="text-sm font-bold text-[#0D1B2A]">{person.name || "To be announced"}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  );
+                })}
               </div>
             </div>
           )}

@@ -486,17 +486,17 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
         </label>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_310px]">
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_310px] sm:grid-cols-1">
         {/* MAP */}
         <div className="rounded-2xl border border-[#d8dfdb] bg-white p-3 sm:p-4">
-          <div className="mb-3 flex items-center justify-between gap-3">
+          <div className="mb-3 flex items-center justify-between gap-3 flex-wrap">
             <h3 className="text-xl sm:text-2xl font-black text-[#182e2c]">Venue map</h3>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 aria-label="Zoom out"
                 onClick={() => setZoom((z) => Math.max(1, z - 0.5))}
-                className="h-10 w-10 rounded-lg border border-[#aab8b3] bg-white text-lg font-black text-[#182e2c] active:scale-95"
+                className="h-12 w-12 sm:h-10 sm:w-10 rounded-lg border border-[#aab8b3] bg-white text-xl sm:text-lg font-black text-[#182e2c] active:scale-95 touch-manipulation"
               >
                 −
               </button>
@@ -504,27 +504,27 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
                 type="button"
                 aria-label="Zoom in"
                 onClick={() => setZoom((z) => Math.min(3, z + 0.5))}
-                className="h-10 w-10 rounded-lg border border-[#aab8b3] bg-white text-lg font-black text-[#182e2c] active:scale-95"
+                className="h-12 w-12 sm:h-10 sm:w-10 rounded-lg border border-[#aab8b3] bg-white text-xl sm:text-lg font-black text-[#182e2c] active:scale-95 touch-manipulation"
               >
                 +
               </button>
             </div>
           </div>
 
-          <p className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[12px] font-semibold text-[#485953] sm:text-[13px]">
+          <p className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-[11px] sm:text-[12px] font-semibold text-[#485953]">
             <span className="inline-flex items-center gap-1.5">
               <span
-                className="inline-block h-3.5 w-3.5 rounded-full border border-[#667]"
+                className="inline-block h-3 w-3 sm:h-3.5 sm:w-3.5 rounded-full border border-[#667]"
                 style={{ background: cat.color }}
               />
               Available in category
             </span>
-            <span>○ Other category</span>
-            <span>× Unavailable</span>
-            <span>◎ Selected</span>
+            <span className="flex items-center gap-1">○ Other category</span>
+            <span className="flex items-center gap-1">× Unavailable</span>
+            <span className="flex items-center gap-1">◎ Selected</span>
           </p>
 
-          <div className="overflow-auto rounded-xl border border-[#eef1ee]">
+          <div className="overflow-auto rounded-xl border border-[#eef1ee] touch-pan-x touch-pan-y" style={{ WebkitOverflowScrolling: "touch" }}>
             <svg
               viewBox="-170 -82 1500 870"
               role="img"
@@ -614,8 +614,11 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
               })}
             </svg>
           </div>
-          <p className="mt-2 text-[11px] font-semibold text-[#6b7d75] sm:hidden">
-            Drag the map sideways, or use + to zoom in.
+          <p className="mt-2 text-[11px] sm:text-[12px] font-semibold text-[#6b7d75] sm:hidden">
+            Drag the map sideways to pan, or use + / − to zoom.
+          </p>
+          <p className="hidden sm:block mt-2 text-[11px] font-semibold text-[#6b7d75]">
+            Scroll or drag to pan the map. Use + / − to zoom (1×–3×).
           </p>
         </div>
 
@@ -630,6 +633,21 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
           </div>
 
           <p className="text-sm font-semibold leading-6 text-[#485953]">{hint}</p>
+
+          {/* How-to guide */}
+          {!isVip && !isExtreme && !chosen && (
+            <div className="mt-3 rounded-xl bg-[#f0fdf4] border border-[#86efac] p-3">
+              <p className="text-[11px] font-black uppercase tracking-[0.1em] text-[#166534] mb-1">
+                How to select
+              </p>
+              <ul className="space-y-1 text-[12px] text-[#182e2c]">
+                <li className="flex items-start gap-1.5">1. <span>Click a <strong>coloured table</strong> on the map, or pick one from the dropdown.</span></li>
+                <li className="flex items-start gap-1.5">2. <span>Choose <strong>Whole table</strong> to buy the full table, or <strong>Individual seats</strong> to pick specific seats.</span></li>
+                <li className="flex items-start gap-1.5">3. <span>In <strong>Individual seats</strong> mode, click seats on the ring (seats 4 & 8 are unavailable).</span></li>
+                <li className="flex items-start gap-1.5">4. <span>Press <strong>Reserve table / Reserve seats</strong> to add to the ticket panel below.</span></li>
+              </ul>
+            </div>
+          )}
 
           {packageForCat && (
             <p className="mt-2 text-sm font-bold text-[#182e2c]">
@@ -651,7 +669,7 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
               aria-label="Choose a table"
               value={chosenId || ""}
               onChange={(e) => (e.target.value ? pick(e.target.value) : reset())}
-              className="mt-3 h-12 w-full rounded-xl border border-[#aab8b3] bg-white px-3 text-base font-semibold text-[#182e2c] outline-none focus:border-[#173935]"
+              className="mt-3 h-12 w-full rounded-xl border border-[#aab8b3] bg-white px-3 text-base sm:text-lg font-semibold text-[#182e2c] outline-none focus:border-[#173935] touch-manipulation"
             >
               <option value="">Choose a table</option>
               {categoryMarkers
@@ -673,7 +691,12 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
           {/* Seat ring */}
           {chosen && bySeat && (
             <div className="mt-4">
-              <svg viewBox="0 0 250 220" role="img" aria-label="Ten numbered seats" className="w-full">
+              {seats.length === 0 && (
+                <p className="mb-2 text-[12px] font-semibold text-[#182e2c] bg-[#fefce8] border border-[#fde047] rounded-lg p-2">
+                  Click seats on the ring to select them. Seats 4 & 8 are not for sale.
+                </p>
+              )}
+              <svg viewBox="0 0 250 220" role="img" aria-label="Ten numbered seats" className="w-full max-w-[280px] mx-auto">
                 <text x={125} y={113} fontSize={17} fontWeight={700} textAnchor="middle" fill="#344640">
                   Table {chosen.n}
                 </text>
