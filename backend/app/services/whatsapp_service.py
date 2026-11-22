@@ -1,5 +1,6 @@
 import json, httpx, asyncio, re
 from app.core.config import settings
+from app.services.whatsapp_cloud_service import send_whatsapp_cloud
 
 
 def _normalize_phone(raw: str) -> str:
@@ -30,11 +31,19 @@ def _normalize_phone(raw: str) -> str:
 async def send_whatsapp(to: str, message: str, media_url: str | None = None, content_vars: dict | None = None, media_urls: list[str] | None = None) -> tuple[bool, str | None]:
     to = _normalize_phone(to)
     """
-    Send WhatsApp via Twilio.
+    Send WhatsApp via Meta Cloud API first, then Twilio as fallback.
     If settings.TWILIO_WHATSAPP_CONTENT_SID is set, sends as content template.
     media_urls (list) sends multiple media attachments in one message (Twilio supports up to 10).
     Returns (success, provider_message_id_or_error).
     """
+    # Try Meta Cloud API first
+    if settings.WHATSAPP_CLOUD_TOKEN and settings.WHATSAPP_CLOUD_PHONE_ID:
+        ok, provider_id = await send_whatsapp_cloud(to, message, media_url)
+        if ok:
+            return True, provider_id
+        print(f"[WhatsApp Cloud failed, falling back to Twilio] To: {to}")
+
+    # Meta Cloud not configured or failed; fall back to Twilio
     if not settings.TWILIO_ACCOUNT_SID:
         print(f"[WhatsApp Mock] To: {to}, Message: {message[:50]}...")
         return True, None

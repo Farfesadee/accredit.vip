@@ -7,6 +7,7 @@ import io
 import base64
 from datetime import datetime
 from app.core.config import settings
+from app.services.whatsapp_cloud_service import send_whatsapp_cloud
 
 
 BLACK_MARKET_GENERAL_EMAIL = {
@@ -763,11 +764,8 @@ async def send_ticket_whatsapp(
     event_title: str,
     event_date: str,
 ):
-    """Send ticket via WhatsApp using Twilio"""
+    """Send ticket via WhatsApp using Meta Cloud API first, then Twilio fallback."""
     import httpx
-
-    if not settings.TWILIO_ACCOUNT_SID or not settings.TWILIO_AUTH_TOKEN:
-        return False
 
     message = f"""
 🎉 *Ticket Confirmed!*
@@ -782,6 +780,17 @@ Please check your email for the full ticket details and QR code.
 
 See you at the event! 🎊
     """.strip()
+
+    # Try Meta Cloud API first
+    if settings.WHATSAPP_CLOUD_TOKEN and settings.WHATSAPP_CLOUD_PHONE_ID:
+        ok, provider_id = await send_whatsapp_cloud(buyer_phone, message)
+        if ok:
+            return True
+        print(f"[WhatsApp Cloud failed, falling back to Twilio] To: {buyer_phone}")
+
+    # Fall back to Twilio
+    if not settings.TWILIO_ACCOUNT_SID or not settings.TWILIO_AUTH_TOKEN:
+        return False
 
     try:
         async with httpx.AsyncClient() as client:
