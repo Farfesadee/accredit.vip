@@ -80,6 +80,15 @@ const CATS = [
   { name: "VIP", color: "#c42d23", prefix: "VIP" },
 ];
 
+/**
+ * Category colours, so the ticket panel can print the same swatch the guest
+ * sees on the plan next to each tier name.
+ */
+export const FLOOR_CATEGORY_COLORS: Record<string, string> = CATS.reduce(
+  (acc, c) => ({ ...acc, [c.name]: c.color }),
+  {} as Record<string, string>,
+);
+
 type GroupDef = {
   cat: number;
   side: string;

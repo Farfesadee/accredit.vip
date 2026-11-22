@@ -9,7 +9,10 @@ import { ErrorBoundary } from "@/components/shared/error-boundary";
 import { Navbar } from "@/components/shared/navbar";
 import { Footer } from "@/components/shared/footer";
 import { ReminderBanner } from "@/components/shared/reminder-banner";
-import WarriFloorPlan, { type FloorPlanSelection } from "@/components/events/WarriFloorPlan";
+import WarriFloorPlan, {
+  FLOOR_CATEGORY_COLORS,
+  type FloorPlanSelection,
+} from "@/components/events/WarriFloorPlan";
 import { formatTimeForDisplay, getCurrencySymbol } from "@/lib/event-form-options";
 import { PhoneInput } from "@/components/shared/phone-input";
 
@@ -823,7 +826,10 @@ function PublicEventContent() {
                     const avail = availabilityFor(pkg.name);
                     const soldOut = Boolean(avail?.sold_out);
                     const seats = Number(pkg.seats) || Number(avail?.seats) || 0;
-                      const pkgColor = pkg.color || "#1ABC9C";
+                    const pkgColor =
+                      (isFloorPlanEvent && FLOOR_CATEGORY_COLORS[pkg.name]) ||
+                      pkg.color ||
+                      "#1ABC9C";
                     // On the seating-plan event this list is a price reference
                     // only: the table is chosen on the plan, so the rows are not
                     // interactive and carry no radio button.
