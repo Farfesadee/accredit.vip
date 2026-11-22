@@ -1080,7 +1080,10 @@ function PublicEventContent() {
                       </svg>
                     </a>
                   )}
-                  {isPaidEvent && !floorSelection && !selectedIsTable && !isFloorPlanEvent && (
+                  {isPaidEvent &&
+                    !floorSelection &&
+                    !selectedIsTable &&
+                    (!isFloorPlanEvent || floorVip) && (
                     <div>
                       <label className="text-xs font-bold uppercase tracking-wider text-[#94a3b8] block mb-1.5">
                         Quantity
