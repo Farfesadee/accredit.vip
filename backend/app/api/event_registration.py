@@ -78,7 +78,6 @@ def wedding_content() -> dict:
         # for the women (client direction, November 2026).
         "dress_code": {
             "label": "Dress Code",
-            "message": "Come dressed for each with us.",
             "wedding": {
                 "label": "The White Wedding",
                 "when": "Saturday, 19 December 2026",
@@ -127,14 +126,6 @@ def wedding_content() -> dict:
             "/uploads/wedding-476c3bda1342.jpg",
         ],
         "monogram_url": "/uploads/wedding-crest-cream.png",
-        "hotels_note": "For our guests coming from outside Nigeria or far from Abuja who need a place to stay before the wedding.",
-        "hotels": [
-            {"name": "Summerset Continental Hotels", "address": "73 Usuma St, Maitama, Abuja 900271, FCT"},
-            {"name": "John Woods", "address": "6 Sokode Crescent, Wuse Zone 5, Abuja, FCT"},
-            {"name": "Bolton White", "address": "7 Gwandu Street, Area 11, Garki, opposite Sahad Stores, Abuja, FCT"},
-            {"name": "Belanova Apartment", "address": "Plot 3349 Lualaba Close, Off Madeira Street, Maitama District, Abuja"},
-            {"name": "The Palms Hotel", "address": "Plot 269, Muhammadu Buhari Way, Central Business District, Abuja"},
-        ],
         # The traditional holds two days before the white wedding. The venue
         # came from the client's own save-the-date: Maha Event Center, Garki
         # Area 8, Abuja, 2 PM (client direction, 9 November 2026).
@@ -144,20 +135,7 @@ def wedding_content() -> dict:
             "time": "2:00 PM",
             "venue": "Maha Event Center",
             "location": "Garki Area 8, Abuja",
-            "note": "The asoebi is worn at the traditional. Gentlemen wear dark green and white.",
-        },
-        # Friends of the couple asoebi: for the ladies, worn at the traditional
-        # on 17 December. The client was explicit that men do not wear it.
-        "asoebi": {
-            "name": "Friends of the Couple Asoebi",
-            "short": "Asoebi",
-            "for_who": "For the ladies",
-            "occasion": "Worn at the traditional wedding, Thursday, 17 December 2026.",
-            "note": "Asoebi is for the women only. Gentlemen, your colour of the day for the traditional is dark green and white.",
-            "items": ["3 yards of lace", "3 yards of lining", "Gele", "Souvenir from the couple"],
-            "bank": ASOEBI_BANK,
-            "whatsapp": ASOEBI_WHATSAPP,
-            "whatsapp_link": "https://wa.me/2349046751511?text=" + quote("Hello, I just paid for the Asoebi package. Please confirm my payment."),
+            "note": "Gentlemen: dark green and white. Ladies: asoebi.",
         },
         # Anything about the day, answered from the details above. No invented
         # facts: times, venues, dress and the asoebi are all on the invitation.

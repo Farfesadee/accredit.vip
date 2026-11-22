@@ -243,7 +243,6 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
   // Each photograph carries one chapter, the way the client's reference site
   // does it: no gallery grid, just full-bleed pictures under the words.
   const dayPhoto = photos[0] || heroImage;
-  const asoebiPhoto = photos[2] || photos[0] || heroImage;
   const heroLine =
     content.hero_line ||
     "To join in the celebration of love at their White Wedding, Abuja, Saturday 19 December 2026.";
@@ -381,8 +380,6 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
   const navItems = [
     { label: "Invitation", href: "#invitation" },
     { label: "Dress Code", href: "#dress-code" },
-    { label: "Hotels", href: "#hotels" },
-    { label: "Asoebi", href: "#asoebi" },
     ...(hasFaq ? [{ label: "FAQ", href: "#faq" }] : []),
     { label: "RSVP", href: "#rsvp" },
   ];
@@ -510,7 +507,7 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
       <WeddingNav
         items={navItems}
         desktopItems={desktopNavItems}
-        cta={{ label: "Get Aso Ebi", href: `/rsvp/asoebi/${slug}` }}
+        cta={{ label: "RSVP Now", href: "#rsvp" }}
         onNavigate={scrollTo}
       />
 
@@ -757,17 +754,12 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
         </a>
       </WeddingChapter>
 
-      {/* DRESS CODE: two days, two looks. Names of the pastel shades only, no
-          swatches, per the client. */}
+      {/* DRESS CODE: per the client. */}
       {content.dress_code && (
         <section id="dress-code" className="px-5 pt-14 pb-12 max-w-2xl mx-auto" style={{ scrollMarginTop: "4.5rem" }}>
           <Reveal>
             <div className="text-center mb-7">
               <Eyebrow>{content.dress_code.label}</Eyebrow>
-              <h2 className="font-serif text-3xl leading-tight sm:text-4xl">Two days, two looks.</h2>
-              <p className="text-sm opacity-70 mt-3 max-w-md mx-auto leading-relaxed">
-                {content.dress_code.message}
-              </p>
             </div>
           </Reveal>
 
@@ -832,86 +824,6 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
         </section>
       )}
 
-      {/* HOTELS: an editorial list, numbered with hairlines, the whole row a
-          link to directions. Replaces the old two-column card grid. */}
-      <section id="hotels" className="px-5 pt-14 pb-12 max-w-2xl mx-auto" style={{ scrollMarginTop: "4.5rem" }}>
-        <Reveal>
-          <div className="text-center mb-7">
-            <Eyebrow>Getting you there</Eyebrow>
-            <h2 className="font-serif text-3xl leading-tight sm:text-4xl">Recommendations</h2>
-            <p className="text-sm opacity-60 mt-3 max-w-md mx-auto leading-relaxed">{content.hotels_note}</p>
-          </div>
-        </Reveal>
-
-        <div className="border-t" style={{ borderColor: "#e2d5b8" }}>
-          {(content.hotels || []).map((h: any, i: number) => (
-            <Reveal key={h.name} delay={Math.min(i * 50, 250)}>
-              <a
-                href={dirUrl(`${h.name}, ${h.address}`)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="group flex items-start gap-4 border-b py-4 transition-colors hover:bg-white/50"
-                style={{ borderColor: "#e2d5b8" }}
-                title="Open directions from your current location"
-              >
-                <span
-                  className="w-6 shrink-0 pt-1 text-[11px] font-bold tabular-nums"
-                  style={{ color: GOLD }}
-                >
-                  {String(i + 1).padStart(2, "0")}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block font-serif text-lg leading-snug">{h.name}</span>
-                  <span className="mt-1 block text-xs leading-relaxed opacity-60">{h.address}</span>
-                </span>
-                <span
-                  className="mt-1 shrink-0 text-[11px] font-bold uppercase underline underline-offset-4"
-                  style={{ color: GOLD, letterSpacing: "0.14em" }}
-                >
-                  Map
-                </span>
-              </a>
-            </Reveal>
-          ))}
-        </div>
-
-        <p className="mt-4 text-center text-xs opacity-50">Recommendations only, please book directly with the hotel you choose.</p>
-      </section>
-
-      {/* CHAPTER: ASO EBI, carried by the third photograph. For the ladies
-          only, worn at the traditional on 17 December. */}
-      <WeddingChapter
-        id="asoebi"
-        image={asoebiPhoto}
-        imagePosition="center 42%"
-        eyebrow={content.asoebi?.for_who || "For the ladies"}
-        title={
-          <>
-            Friends of the couple
-            <br />
-            asoebi.
-          </>
-        }
-      >
-        <p className="max-w-md text-sm leading-relaxed sm:text-base" style={{ color: "rgba(248,242,230,0.85)" }}>
-          {(content.asoebi?.occasion || "Worn at the traditional wedding, Thursday, 17 December 2026").replace(
-            /\.?$/,
-            "."
-          )}{" "}
-          Pay once for one package or the whole family, and keep a reference you can look up any time.
-        </p>
-        <p className="mt-4 max-w-md text-sm leading-relaxed" style={{ color: "rgba(248,242,230,0.62)" }}>
-          {content.asoebi?.note || "Asoebi is for the women only. Gentlemen, your colour of the day for the traditional is dark green and white."}
-        </p>
-        <Link
-          href={`/rsvp/asoebi/${slug}`}
-          className="mt-6 flex h-12 w-full items-center justify-center rounded-full px-8 text-sm font-bold text-white transition-transform hover:scale-[1.02] sm:w-fit"
-          style={{ background: `linear-gradient(160deg, ${GOLD_LIGHT}, ${GOLD})` }}
-        >
-          Get the Asoebi
-        </Link>
-      </WeddingChapter>
-
       {/* FAQ */}
       {(content.faq || []).length > 0 && (
         <section id="faq" className="px-5 pt-14 pb-12 max-w-2xl mx-auto" style={{ scrollMarginTop: "4.5rem" }}>
@@ -920,7 +832,7 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
               <Eyebrow>Before you come</Eyebrow>
               <h2 className="font-serif text-3xl leading-tight sm:text-4xl">Questions, answered.</h2>
               <p className="text-sm opacity-60 mt-3 max-w-sm mx-auto leading-relaxed">
-                The day, the dress and the asoebi, all in one place.
+                The day and the dress, all in one place.
               </p>
             </div>
           </Reveal>
