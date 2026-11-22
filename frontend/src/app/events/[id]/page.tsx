@@ -430,32 +430,102 @@ function PublicEventContent() {
         </div>
       )}
 
-      {/* Seating plan (Warri Again only) */}
+      {/* Compact facts line for the seating-plan event: date, time, venue and
+          dress code in one strip instead of four separate cards. */}
       {isFloorPlanEvent && (
-        <div className="max-w-[1400px] mx-auto w-full px-4 sm:px-6 lg:px-8 pt-8 sm:pt-10">
-          <WarriFloorPlan
-            eventId={Number(id)}
-            packages={passPackages as any}
-            currencySymbol={cs}
-            onReserve={handleFloorReserve}
-          />
+        <div className="border-b border-[#e8edf2] bg-[#f8f9fc]">
+          <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-x-5 gap-y-1.5 px-4 py-3 text-[13px] font-semibold text-[#475569] sm:px-6 lg:px-8">
+            <span className="inline-flex items-center gap-1.5">
+              <svg className="h-4 w-4 text-[#1ABC9C]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              {formatEventDate(event.event_date)}
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <svg className="h-4 w-4 text-[#1ABC9C]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {formatTimeForDisplay(event.event_time)}
+              <span className="font-normal text-[#94a3b8]">{event.timezone}</span>
+            </span>
+            <span className="inline-flex min-w-0 items-center gap-1.5">
+              <svg className="h-4 w-4 flex-shrink-0 text-[#1ABC9C]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <span className="truncate">{event.venue}</span>
+            </span>
+            {event.dress_code && (
+              <span className="inline-flex items-center gap-1.5">
+                <svg className="h-4 w-4 text-[#1ABC9C]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                </svg>
+                {event.dress_code}
+              </span>
+            )}
+            {(event.latitude && event.longitude) || event.map_link ? (
+              <a
+                href={
+                  event.latitude && event.longitude
+                    ? `https://www.google.com/maps/dir/?api=1&destination=${event.latitude},${event.longitude}`
+                    : event.map_link
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 font-bold text-[#16A085] hover:text-[#1ABC9C]"
+              >
+                Directions
+                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </a>
+            ) : null}
+          </div>
         </div>
       )}
 
       {/* Main Content */}
-      <div className="flex-1 max-w-5xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 sm:py-12 grid gap-8 grid-cols-[minmax(0,1fr)] lg:gap-12 lg:grid-cols-[1fr_360px] lg:items-start">
+      <div
+        className={`flex-1 mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 sm:py-10 grid gap-8 grid-cols-[minmax(0,1fr)] lg:gap-10 lg:items-start ${
+          isFloorPlanEvent
+            ? "max-w-[1400px] lg:grid-cols-[minmax(0,1fr)_360px]"
+            : "max-w-5xl lg:grid-cols-[1fr_360px]"
+        }`}
+      >
+        {/* Seating plan leads the page on a seating-plan event: pick first, pay
+            second, read third. */}
+        {isFloorPlanEvent && (
+          <div className="order-1 min-w-0 lg:order-none lg:col-start-1 lg:row-start-1">
+            <WarriFloorPlan
+              eventId={Number(id)}
+              packages={passPackages as any}
+              currencySymbol={cs}
+              onReserve={handleFloorReserve}
+            />
+          </div>
+        )}
+
 
         {/* LEFT: Event Details */}
-        <div className="space-y-8">
-          {/* Back link */}
-          <Link href="/attend" className="inline-flex items-center gap-2 rounded-xl px-5 py-3 bg-white border-2 border-[#1ABC9C] text-sm font-bold text-[#0D1B2A] hover:bg-[#1ABC9C] hover:text-white transition-all shadow-md hover:shadow-lg hover:scale-105 duration-200">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            Back to Discover
-          </Link>
+        <div
+          className={
+            isFloorPlanEvent
+              ? "order-3 space-y-8 min-w-0 lg:order-none lg:col-start-1 lg:row-start-2"
+              : "space-y-8"
+          }
+        >
+          {/* Back link (the seating-plan page leads with the plan instead) */}
+          {!isFloorPlanEvent && (
+            <Link href="/attend" className="inline-flex items-center gap-2 rounded-xl px-5 py-3 bg-white border-2 border-[#1ABC9C] text-sm font-bold text-[#0D1B2A] hover:bg-[#1ABC9C] hover:text-white transition-all shadow-md hover:shadow-lg hover:scale-105 duration-200">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              Back to Discover
+            </Link>
+          )}
 
-          {/* Quick info chips */}
+          {/* Quick info chips (the seating-plan page carries one facts strip under the hero) */}
+          {!isFloorPlanEvent && (
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="flex items-start gap-3 rounded-xl border border-[#e8edf2] bg-[#f8f9fc] p-4">
               <span className="text-[#1ABC9C] mt-0.5">
@@ -535,9 +605,10 @@ function PublicEventContent() {
               </div>
             )}
           </div>
+          )}
 
-          {/* Mobile: GET TICKET CTA */}
-          {!isEnded && (
+          {/* Mobile: GET TICKET CTA (not on the seating-plan page) */}
+          {!isEnded && !isFloorPlanEvent && (
           <div className="lg:hidden">
             <a
               href="#tickets-section"
@@ -564,51 +635,50 @@ function PublicEventContent() {
             <AboutSection description={event.description} />
           )}
 
-          {/* Lineup */}
+          {/* Lineup: photographs, not icons. Each block lists its own acts. */}
           {lineup.length > 0 && (
             <div>
               <h2 className="text-lg font-black text-[#0D1B2A] mb-4">Lineup</h2>
               <div className="space-y-3">
                 {[
-                  { role: "Music", label: "Music", icon: (
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 19V6l12-3v13M9 19c0 1.82-1.5 3.3-3.3 3.3S2.7 20.82 2.7 19M9 19a2 2 0 01-2-2V6a2 2 0 012-2" />
-                    </svg>
-                  )},
-                  { role: "Comedy", label: "Comedy", icon: (
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486l6.586-6.586a2 2 0 112.828 2.828l-6.414 6.586a4 4 0 01-5.656 5.656l6.415-6.585a6 6 0 11-8.486-8.486z" />
-                    </svg>
-                  )},
-                  { role: "DJ", label: "DJs", icon: (
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24" aria-hidden="true">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
-                    </svg>
-                  )},
+                  { role: "Music", label: "Music", image: "/warri/lineup-music.jpg", blurb: "Live bands and headline sets" },
+                  { role: "Comedy", label: "Comedy", image: "/warri/lineup-comedy.jpg", blurb: "Stand-up from the main stage" },
+                  { role: "DJ", label: "DJs", image: "/warri/lineup-dj.jpg", blurb: "Decks running all night" },
                 ].map((section) => {
                   const people = lineup.filter((p: any) => p.role === section.role);
                   if (people.length === 0) return null;
                   return (
-                    <details key={section.role} className="group">
-                      <summary className="flex items-center justify-between gap-3 cursor-pointer rounded-xl border border-[#e8edf2] bg-[#f8f9fc] px-4 py-3 list-none focus:outline-none focus:ring-2 focus:ring-[#1ABC9C]/30">
-                        <span className="text-sm font-black text-[#0D1B2A] flex items-center gap-2">
-                          {section.icon}
-                          {section.label}
+                    <details key={section.role} className="group overflow-hidden rounded-2xl border border-[#e8edf2] bg-white">
+                      <summary className="flex cursor-pointer list-none items-center gap-3 p-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1ABC9C]/40">
+                        <img
+                          src={section.image}
+                          alt={`${section.label} at the event`}
+                          width={64}
+                          height={64}
+                          loading="lazy"
+                          className="h-16 w-16 flex-shrink-0 rounded-xl object-cover"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-black text-[#0D1B2A]">{section.label}</span>
+                          <span className="mt-0.5 block truncate text-xs font-semibold text-[#64748b]">
+                            {people.length} act{people.length === 1 ? "" : "s"} · {section.blurb}
+                          </span>
                         </span>
-                        <svg className="w-5 h-5 text-[#94a3b8] transition-transform duration-200 group-open:rotate-180 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                        <svg className="h-5 w-5 flex-shrink-0 text-[#94a3b8] transition-transform duration-200 group-open:rotate-180" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                         </svg>
                       </summary>
-                      <div className="mt-2 space-y-2 pl-2 border-l border-[#e8edf2]">
+                      <ul className="border-t border-[#eef2f6] px-3 py-2">
                         {people.map((person: any, i: number) => (
-                          <div key={`${section.role}-${i}`} className="flex items-center gap-3 rounded-lg bg-white p-3 border border-[#e8edf2]/50">
-                            <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-white text-xs font-black" style={{ background: "linear-gradient(135deg, #1ABC9C, #16A085)" }}>
-                              {(person.name || "?")[0].toUpperCase()}
-                            </div>
-                            <p className="text-sm font-bold text-[#0D1B2A]">{person.name || "To be announced"}</p>
-                          </div>
+                          <li
+                            key={`${section.role}-${i}`}
+                            className="flex items-start gap-2 py-1.5 text-sm font-bold text-[#0D1B2A]"
+                          >
+                            <span className="mt-[7px] h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[#1ABC9C]" aria-hidden="true" />
+                            <span className="min-w-0">{person.name || "To be announced"}</span>
+                          </li>
                         ))}
-                      </div>
+                      </ul>
                     </details>
                   );
                 })}
@@ -663,8 +733,15 @@ function PublicEventContent() {
           </div>
         </div>
 
-        {/* RIGHT: Ticket Panel (sticky on desktop) */}
-        <div id="tickets-section" className="lg:sticky lg:top-24 space-y-4">
+        {/* RIGHT: Ticket Panel (sticky on desktop, second on mobile) */}
+        <div
+          id="tickets-section"
+          className={
+            isFloorPlanEvent
+              ? "order-2 scroll-mt-24 space-y-4 min-w-0 lg:order-none lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:sticky lg:top-24"
+              : "lg:sticky lg:top-24 space-y-4"
+          }
+        >
           <div className="rounded-2xl border border-[#e8edf2] overflow-hidden shadow-[0_8px_32px_rgba(15,23,42,0.08)]">
             {/* Panel header */}
             <div
@@ -687,6 +764,8 @@ function PublicEventContent() {
                           : floorSelection.mode === "vip"
                           ? "per guest"
                           : "per table"
+                        : selectedIsTable
+                        ? "per table"
                         : "per ticket"}
                     </span>
                   </p>
@@ -730,42 +809,13 @@ function PublicEventContent() {
               )}
             </div>
 
-            {/* Seating plan entry point (Warri Again only) */}
-            {isFloorPlanEvent && !floorSelection && (
-              <div className="border-b border-[#e8edf2] bg-[#eafaf6] px-6 py-4">
-                <a
-                  href="#seating-plan"
-                  className="flex items-center justify-between gap-3 rounded-xl border border-[#1ABC9C]/40 bg-white px-4 py-3 transition-colors hover:border-[#1ABC9C]"
-                >
-                  <span className="min-w-0">
-                    <span className="block text-[10px] font-black uppercase tracking-[0.14em] text-[#0f766e]">
-                      Seating plan
-                    </span>
-                    <span className="mt-0.5 block text-sm font-black text-[#0D1B2A]">
-                      Choose your table and seat
-                    </span>
-                    <span className="mt-0.5 block text-xs font-medium leading-5 text-[#475569]">
-                      Pick a numbered table, or individual seats on it, before you pay.
-                    </span>
-                  </span>
-                  <svg
-                    className="h-5 w-5 flex-shrink-0 text-[#0f766e]"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={2.5}
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-                  </svg>
-                </a>
-              </div>
-            )}
-
-            {/* Pass packages */}
+            {/* Pass packages. On the seating-plan event this doubles as the
+                tier price list; the plan above is the selector. */}
             {passPackages.length > 0 && (
               <div className="px-6 py-4 border-b border-[#e8edf2] bg-[#f8f9fc] min-w-0 overflow-hidden">
-                <p className="text-xs font-bold uppercase tracking-wider text-[#94a3b8] mb-3">Choose your pass</p>
+                <p className="text-xs font-bold uppercase tracking-wider text-[#94a3b8] mb-3">
+                  {isFloorPlanEvent ? "Tables and prices" : "Choose your pass"}
+                </p>
                 <div className="space-y-2">
                   {passPackages.map((pkg: any, i: number) => {
                     const price = Number(pkg.price) || 0;
@@ -774,26 +824,38 @@ function PublicEventContent() {
                     const soldOut = Boolean(avail?.sold_out);
                     const seats = Number(pkg.seats) || Number(avail?.seats) || 0;
                       const pkgColor = pkg.color || "#1ABC9C";
+                    // On the seating-plan event this list is a price reference
+                    // only: the table is chosen on the plan, so the rows are not
+                    // interactive and carry no radio button.
+                    const Row: any = isFloorPlanEvent ? "div" : "label";
                     return (
-                      <label
+                      <Row
                         key={i}
                         className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 min-w-0 overflow-hidden transition-colors ${
                           soldOut
                             ? "border-[#e8edf2] bg-[#f1f5f9] opacity-60 cursor-not-allowed"
-                            : selected
+                            : selected && !isFloorPlanEvent
                             ? `border-${pkgColor} bg-[${pkgColor}15] cursor-pointer`
-                            : `bg-white border-[#e8edf2] hover:border-[${pkgColor}]/40 cursor-pointer`
+                            : `bg-white border-[#e8edf2] ${isFloorPlanEvent ? "" : `hover:border-[${pkgColor}]/40 cursor-pointer`}`
                         }`}
                       >
                         <div className="flex items-center gap-3 min-w-0">
-                          <input
-                            type="radio"
-                            name="pass-package"
-                            checked={selected}
-                            disabled={soldOut}
-                            onChange={() => setSelectedPackageIndex(i)}
-                            className={`accent-[${pkgColor}] w-4 h-4 flex-shrink-0 disabled:cursor-not-allowed`}
-                          />
+                          {isFloorPlanEvent ? (
+                            <span
+                              className="h-4 w-4 flex-shrink-0 rounded-full border border-[#cbd5e1]"
+                              style={{ background: soldOut ? "#cbd5e1" : pkgColor }}
+                              aria-hidden="true"
+                            />
+                          ) : (
+                            <input
+                              type="radio"
+                              name="pass-package"
+                              checked={selected}
+                              disabled={soldOut}
+                              onChange={() => setSelectedPackageIndex(i)}
+                              className={`accent-[${pkgColor}] w-4 h-4 flex-shrink-0 disabled:cursor-not-allowed`}
+                            />
+                          )}
                           <div className="min-w-0">
                             <p className="text-sm font-semibold text-[#0D1B2A] flex items-center gap-2 flex-wrap">
                               {pkg.name || "Pass"}
@@ -823,7 +885,7 @@ function PublicEventContent() {
                         >
                           {price > 0 ? `${cs}${price.toLocaleString()}` : "Free"}
                         </span>
-                      </label>
+                      </Row>
                     );
                   })}
                 </div>
@@ -973,7 +1035,7 @@ function PublicEventContent() {
                           className="w-11 h-11 rounded-xl border border-[#d9e2ec] text-xl font-black text-[#0D1B2A] hover:border-[#1ABC9C] hover:text-[#1ABC9C] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                           aria-label="Decrease quantity"
                         >
-                          −
+                          -
                         </button>
                         <span className="min-w-16 text-center text-sm font-black text-[#0D1B2A]">
                           {quantity} ticket{quantity > 1 ? "s" : ""}
@@ -999,7 +1061,7 @@ function PublicEventContent() {
                   {isPaidEvent && unitPrice > 0 && (
                     <div className="rounded-xl bg-[#f8f9fc] border border-[#e8edf2] px-4 py-3 text-xs space-y-1.5">
                       <div className="flex justify-between text-[#64748b]">
-                        <span>{cs}{unitPrice.toLocaleString()} × {quantity}</span>
+                        <span>{cs}{unitPrice.toLocaleString()} x {quantity}</span>
                         <span>{cs}{(unitPrice * quantity).toLocaleString()}</span>
                       </div>
                       {(packageFee > 0 || !isAllIn) && (
@@ -1072,14 +1134,14 @@ function PublicEventContent() {
                   </div>
                   <div className="flex justify-between gap-3 px-4 py-2.5">
                     <span className="text-[#64748b] shrink-0">Phone</span>
-                    <span className="font-bold text-[#0D1B2A] text-right break-words min-w-0">{buildFullPhone() || "—"}</span>
+                    <span className="font-bold text-[#0D1B2A] text-right break-words min-w-0">{buildFullPhone() || "Not provided"}</span>
                   </div>
                   <div className="flex justify-between gap-3 px-4 py-2.5">
                     <span className="text-[#64748b] shrink-0">{floorSelection ? "Selection" : "Tickets"}</span>
                     <span className="font-bold text-[#0D1B2A] text-right break-words min-w-0">
                       {floorSelection
                         ? floorSelection.label
-                        : `${quantity} × ${selectedPkg?.name || "Standard"}`}
+                        : `${quantity} x ${selectedPkg?.name || "Standard"}`}
                     </span>
                   </div>
                   <div className="flex justify-between gap-3 px-4 py-2.5">

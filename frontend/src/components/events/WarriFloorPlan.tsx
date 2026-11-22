@@ -12,9 +12,17 @@
  * Geometry lives here rather than in the database because the organiser's file
  * is the published artwork. The database supplies availability and the seats
  * already sold, matched by table code.
+ *
+ * Layout notes:
+ * - One markup tree, no duplicated mobile/desktop copies. The map and the
+ *   selection panel sit in a grid that stacks on phones (map first) and sits
+ *   side by side from lg up. The map is always rendered: it is a horizontally
+ *   scrollable canvas on small screens so every table stays legible.
+ * - Nothing is preselected. The guest picks the category, the table and the
+ *   way they want to buy it.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { apiClient } from "@/lib/api-client";
 
 export type FloorPlanSelection = {
@@ -278,17 +286,17 @@ const VIP_BANKS: [number, number, number, number][] = [
   [1040, 150, 215, 45],
 ];
 
+type TableState = "available" | "partial" | "sold" | "blocked";
+
 export default function WarriFloorPlan({ eventId, packages, currencySymbol, onReserve }: Props) {
   const markers = useMemo(buildMarkers, []);
-  const [category, setCategory] = useState(6);
-  const [mode, setMode] = useState<"table" | "seat">("table");
+  const [category, setCategory] = useState<number | null>(null);
+  const [mode, setMode] = useState<"table" | "seat" | null>(null);
   const [chosenId, setChosenId] = useState<string | null>(null);
   const [seats, setSeats] = useState<number[]>([]);
   const [zoom, setZoom] = useState(1);
   const [tables, setTables] = useState<Record<string, ApiTable>>({});
   const [notice, setNotice] = useState("");
-  const [isNarrow, setIsNarrow] = useState(false);
-  const listRef = useRef<HTMLSelectElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -305,20 +313,11 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
     };
   }, [eventId]);
 
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const query = window.matchMedia("(max-width: 767px)");
-    const apply = () => setIsNarrow(query.matches);
-    apply();
-    query.addEventListener("change", apply);
-    return () => query.removeEventListener("change", apply);
-  }, []);
-
-  const cat = CATS[category];
+  const cat = category === null ? null : CATS[category];
   const isVip = category === 8;
   const isExtreme = category === 7;
-  const bySeat = !isVip && mode === "seat";
-  const packageForCat = packages.find((p) => p.name === cat.name) || null;
+  const bySeat = mode === "seat";
+  const packageForCat = cat ? packages.find((p) => p.name === cat.name) || null : null;
   const packageSeats = Math.max(1, Number(packageForCat?.seats) || 1);
   const packagePrice = Number(packageForCat?.price) || 0;
   const seatPrice = packageSeats > 1 ? Math.round(packagePrice / packageSeats) : packagePrice;
@@ -327,14 +326,12 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
   const chosenTable = chosen ? tables[chosen.code] : undefined;
   const tableSeats = Math.max(1, Number(chosenTable?.seat_count) || packageSeats);
   const soldSeats = new Set<number>(chosenTable?.sold_seats || []);
-  const unavailableSeats = new Set<number>([
-    ...BLOCKED_SEATS,
-    ...Array.from(soldSeats),
-  ]);
+  const unavailableSeats = new Set<number>([...BLOCKED_SEATS, ...Array.from(soldSeats)]);
 
-  const reset = (nextCategory?: number) => {
+  const reset = (nextCategory?: number | null) => {
     setChosenId(null);
     setSeats([]);
+    setMode(null);
     setNotice("");
     if (nextCategory !== undefined) setCategory(nextCategory);
   };
@@ -342,48 +339,56 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
   const pick = (id: string) => {
     setChosenId(id);
     setSeats([]);
+    setMode(null);
     setNotice("");
   };
 
   const toggleSeat = (seat: number) => {
     if (unavailableSeats.has(seat)) return;
-    setSeats((prev) => (prev.includes(seat) ? prev.filter((s) => s !== seat) : [...prev, seat].sort((a, b) => a - b)));
+    setSeats((prev) =>
+      prev.includes(seat) ? prev.filter((s) => s !== seat) : [...prev, seat].sort((a, b) => a - b),
+    );
     setNotice("");
   };
 
-  const isAvailable = (m: Marker) => {
-    if (blockedMarker(m.cat, m.n)) return false;
+  const tableState = (m: Marker): TableState => {
+    if (blockedMarker(m.cat, m.n)) return "blocked";
     const row = tables[m.code];
-    if (!row) return true;
-    if (row.status === "available") return true;
-    // A table that has some seats taken can still sell the empty ones, but it
-    // can no longer be bought as a whole table.
-    return row.status === "partially_sold" && bySeat;
+    if (!row) return "available";
+    if (row.status === "available") return "available";
+    if (row.status === "partially_sold") return "partial";
+    return "sold";
+  };
+
+  // A table with some seats taken can still sell the empty ones, but it can no
+  // longer be bought whole. That is why availability does not depend on mode.
+  const isAvailable = (m: Marker) => {
+    const state = tableState(m);
+    return state === "available" || state === "partial";
   };
 
   const priceLabel = (price: number) =>
     price > 0 ? `${currencySymbol}${price.toLocaleString()}` : "Free";
 
-  const hint = isVip
-    ? "One general-admission pass per guest."
-    : isExtreme
-    ? "Shown on the supplied floor plan. Public sales have not been confirmed."
-    : "Tap a coloured table or choose one from the list.";
+  const chosenState = chosen ? tableState(chosen) : null;
 
   const reserveLabel = isVip
-    ? "Reserve ticket"
+    ? "Add VIP pass"
     : bySeat
-    ? `Reserve ${seats.length || ""} seat${seats.length === 1 ? "" : "s"}`
-    : "Reserve table";
+    ? seats.length
+      ? `Reserve ${seats.length} seat${seats.length === 1 ? "" : "s"}`
+      : "Select your seats"
+    : "Reserve this table";
 
-  const reserveDisabled =
-    !isVip && (!chosen || (bySeat && seats.length === 0));
+  const reserveDisabled = isVip
+    ? false
+    : !chosen || (bySeat ? seats.length === 0 : chosenState !== "available");
 
   const handleReserve = () => {
     if (reserveDisabled) return;
     if (isVip) {
       onReserve({
-        packageName: cat.name,
+        packageName: CATS[8].name,
         mode: "vip",
         tables: [],
         seats: [],
@@ -392,31 +397,30 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
         totalPrice: packagePrice,
         label: "VIP admission, one guest",
       });
-      setNotice("VIP selected in the ticket panel below. Choose how many passes you need.");
+      setNotice("VIP added to the ticket panel. Choose how many passes you need.");
       return;
     }
     if (!chosen) return;
-    const available = isAvailable(chosen);
-    if (!available) {
-      setNotice(`Table ${chosen.n} is not for sale.`);
-      return;
-    }
     const label = `${chosen.side} · Table ${chosen.n}`;
     if (bySeat) {
       onReserve({
-        packageName: cat.name,
+        packageName: cat?.name || "",
         mode: "seat",
         tables: [chosen.code],
         seats: [...seats].sort((a, b) => a - b),
         quantity: seats.length,
         unitPrice: seatPrice,
         totalPrice: seatPrice * seats.length,
-        label: `${label} · Seat${seats.length === 1 ? "" : "s"} ${[...seats].sort((a, b) => a - b).join(", ")}`,
+        label: `${label} · Seat${seats.length === 1 ? "" : "s"} ${[...seats]
+          .sort((a, b) => a - b)
+          .join(", ")}`,
       });
-      setNotice(`${seats.length} seat${seats.length === 1 ? "" : "s"} on ${label} added to the ticket panel below.`);
+      setNotice(
+        `${seats.length} seat${seats.length === 1 ? "" : "s"} on ${label} added to the ticket panel below.`,
+      );
     } else {
       onReserve({
-        packageName: cat.name,
+        packageName: cat?.name || "",
         mode: "table",
         tables: [chosen.code],
         seats: [],
@@ -425,276 +429,158 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
         totalPrice: packagePrice,
         label: `${label} · Whole table, ${packageSeats} seats`,
       });
-      setNotice(`Table ${chosen.n} added to the ticket panel below.`);
+      setNotice(`${label} added to the ticket panel below.`);
     }
   };
 
-  const categoryMarkers = markers.filter((m) => m.cat === category);
-
-  const listOpen = !isVip && !isExtreme;
+  const categoryMarkers = category === null ? [] : markers.filter((m) => m.cat === category);
+  const openCount = categoryMarkers.filter(isAvailable).length;
+  const accent = cat?.color || "#173935";
 
   return (
     <section
       id="seating-plan"
-      className="overflow-hidden rounded-3xl border border-[#d8dfdb] bg-[#f3f4ef]"
+      className="scroll-mt-24 overflow-hidden rounded-3xl border border-[#d8dfdb] bg-white"
     >
-      {/* Masthead, as on the organiser's own plan */}
-      <div className="bg-[#173935] px-4 py-5 sm:px-6 sm:py-6 md:px-8">
-        <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#b3d7cb] sm:text-xs">
-          EKO CONVENTION CENTRE · LAGOS
+      {/* Slim header. The event name, venue and date already sit in the hero
+          above, so this bar only explains what to do here. */}
+      <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-1.5 border-b border-[#e6ebe8] bg-[#173935] px-4 py-4 sm:px-6 sm:py-5">
+        <div className="min-w-0">
+          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#9fd3c4]">
+            Seating plan
+          </p>
+          <h2 className="mt-1 text-xl font-black leading-tight tracking-[-0.02em] text-white sm:text-2xl">
+            Choose your table
+          </h2>
+        </div>
+        <p className="max-w-sm text-[12px] font-semibold leading-5 text-white/75 sm:text-[13px]">
+          Pick a numbered table, then buy the whole table or just the seats you want.
         </p>
-        <h2 className="mt-1 text-3xl font-black leading-tight tracking-[-0.045em] text-white sm:text-4xl md:text-5xl">
-          Warri Again?
-        </h2>
-        <p className="mt-1 text-sm font-semibold text-white/85 sm:text-base">
-          Seating plan · 26 December 2026
-        </p>
-      </div>
+      </header>
 
-      <div className="p-4 sm:p-5 md:p-6">
-
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-        <label className="grid gap-1.5 text-[13px] font-bold text-[#182e2c] sm:mr-3">
-          Ticket category
-          <select
-            value={category}
-            onChange={(e) => reset(Number(e.target.value))}
-            className="h-12 min-w-0 rounded-xl border border-[#aab8b3] bg-white px-3 text-base font-semibold text-[#182e2c] outline-none focus:border-[#173935]"
+      {/* Step 1: category. Starts empty on purpose. */}
+      <div className="border-b border-[#e6ebe8] bg-[#f6f8f4] px-4 py-4 sm:px-6">
+        <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:gap-4">
+          <label
+            htmlFor="floor-category"
+            className="flex items-center gap-2 text-[13px] font-black text-[#182e2c] sm:shrink-0"
           >
+            <span
+              className="flex h-6 w-6 items-center justify-center rounded-full bg-[#173935] text-[11px] font-black text-white"
+              aria-hidden="true"
+            >
+              1
+            </span>
+            Ticket category
+          </label>
+          <select
+            id="floor-category"
+            value={category === null ? "" : String(category)}
+            onChange={(e) => reset(e.target.value === "" ? null : Number(e.target.value))}
+            className="h-12 w-full rounded-xl border border-[#aab8b3] bg-white px-3 text-base font-semibold text-[#182e2c] outline-none focus:border-[#173935] sm:max-w-xs"
+          >
+            <option value="">Select a category</option>
             {CATS.map((c, i) => (
               <option key={c.name} value={i}>
                 {c.name}
               </option>
             ))}
           </select>
-        </label>
-        <label className="grid gap-1.5 text-[13px] font-bold text-[#182e2c]">
-          Sale preview
-          <select
-            value={mode}
-            disabled={isVip}
-            onChange={(e) => {
-              setMode(e.target.value as "table" | "seat");
-              setSeats([]);
-              setNotice("");
-            }}
-            className="h-12 min-w-0 rounded-xl border border-[#aab8b3] bg-white px-3 text-base font-semibold text-[#182e2c] outline-none focus:border-[#173935] disabled:opacity-50"
-          >
-            <option value="table">Whole table</option>
-            <option value="seat">Individual seats</option>
-          </select>
-        </label>
-      </div>
-
-      {/* Mobile-first: Table selection panel above the map */}
-      <div className="lg:hidden mb-4">
-        <aside className="rounded-2xl border border-[#d8dfdb] bg-white p-4">
-          <div className="mb-3 flex items-center gap-2">
-            <span
-              className="inline-block h-3.5 w-3.5 rounded-full border border-[#667]"
-              style={{ background: cat.color }}
-            />
-            <h3 className="text-lg font-black text-[#182e2c]">{cat.name}</h3>
-          </div>
-
-          <p className="text-sm font-semibold leading-6 text-[#485953]">{hint}</p>
-
-          {/* How-to guide */}
-          {!isVip && !isExtreme && !chosen && (
-            <div className="mt-3 rounded-xl bg-[#f0fdf4] border border-[#86efac] p-3">
-              <p className="text-[11px] font-black uppercase tracking-[0.1em] text-[#166534] mb-1">
-                How to select
-              </p>
-              <ul className="space-y-1 text-[12px] text-[#182e2c]">
-                <li className="flex items-start gap-1.5">1. <span>Pick a <strong>coloured table</strong> on the map, or choose from the dropdown below.</span></li>
-                <li className="flex items-start gap-1.5">2. <span>Choose <strong>Whole table</strong> to buy the full table, or <strong>Individual seats</strong> to pick specific seats.</span></li>
-                <li className="flex items-start gap-1.5">3. <span>In <strong>Individual seats</strong> mode, tap seats on the ring (seats 4 & 8 are unavailable).</span></li>
-                <li className="flex items-start gap-1.5">4. <span>Press <strong>Reserve table / Reserve seats</strong> to add to the ticket panel below.</span></li>
-              </ul>
-            </div>
-          )}
-
-          {packageForCat && (
-            <p className="mt-2 text-sm font-bold text-[#182e2c]">
-              {priceLabel(packagePrice)}
-              <span className="font-semibold text-[#5f7169]">
-                {packageSeats > 1 ? ` per table of ${packageSeats}` : " per guest"}
-              </span>
-            </p>
-          )}
-          {packageForCat && packageSeats > 1 && (
-            <p className="text-[12px] font-semibold text-[#5f7169]">
-              {priceLabel(seatPrice)} per seat when bought individually
-            </p>
-          )}
-
-          {listOpen && (
-            <select
-              ref={listRef}
-              aria-label="Choose a table"
-              value={chosenId || ""}
-              onChange={(e) => (e.target.value ? pick(e.target.value) : reset())}
-              className="mt-3 h-12 w-full rounded-xl border border-[#aab8b3] bg-white px-3 text-base sm:text-lg font-semibold text-[#182e2c] outline-none focus:border-[#173935] touch-manipulation"
-            >
-              <option value="">Choose a table</option>
-              {categoryMarkers
-                .filter((m) => isAvailable(m))
-                .map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.side} · Table {m.n}
-                  </option>
-                ))}
-            </select>
-          )}
-
-          {isExtreme && (
-            <p className="mt-3 rounded-xl border border-[#e7b7b4] bg-[#fdf1f0] px-3 py-2 text-[13px] font-bold text-[#8a2b26]">
-              This tier is shown for reference. Public sales have not been confirmed.
-            </p>
-          )}
-
-          {/* Seat ring (mobile) */}
-          {chosen && bySeat && (
-            <div className="mt-4">
-              {seats.length === 0 && (
-                <p className="mb-2 text-[12px] font-semibold text-[#182e2c] bg-[#fefce8] border border-[#fde047] rounded-lg p-2">
-                  Tap seats on the ring to select them. Seats 4 & 8 are not for sale.
-                </p>
+          {cat && (
+            <p className="text-[13px] font-semibold leading-5 text-[#46564f]">
+              {packageForCat ? (
+                <>
+                  <span className="font-black text-[#182e2c]">{priceLabel(packagePrice)}</span>
+                  {packageSeats > 1 ? ` per table of ${packageSeats}` : " per guest"}
+                  {packageSeats > 1 && (
+                    <span className="text-[#6b7d75]"> · {priceLabel(seatPrice)} per seat</span>
+                  )}
+                  {!isVip && !isExtreme && (
+                    <span className="text-[#6b7d75]"> · {openCount} open</span>
+                  )}
+                </>
+              ) : (
+                "Price on request"
               )}
-              <svg viewBox="0 0 250 220" role="img" aria-label="Ten numbered seats" className="w-full max-w-[280px] mx-auto">
-                <text x={125} y={113} fontSize={17} fontWeight={700} textAnchor="middle" fill="#344640">
-                  Table {chosen.n}
-                </text>
-                {Array.from({ length: tableSeats }, (_, i) => i + 1).map((n) => {
-                  const angle = ((n - 1) * Math.PI) / 5 - Math.PI / 2;
-                  const x = 125 + 82 * Math.cos(angle);
-                  const y = 110 + 82 * Math.sin(angle);
-                  const off = unavailableSeats.has(n);
-                  const fill = off ? "#d1d6d3" : chosen.color;
-                  const picked = seats.includes(n);
-                  return (
-                    <g
-                      key={`seat-${n}`}
-                      className={off ? undefined : "cursor-pointer"}
-                      tabIndex={off ? -1 : 0}
-                      role={off ? undefined : "button"}
-                      aria-label={`Seat ${n}${off ? " · Unavailable" : ""}`}
-                      aria-pressed={off ? undefined : picked}
-                      onClick={() => toggleSeat(n)}
-                      onKeyDown={(e) => {
-                        if (!off && (e.key === "Enter" || e.key === " ")) {
-                          e.preventDefault();
-                          toggleSeat(n);
-                        }
-                      }}
-                    >
-                      <title>
-                        Seat {n}
-                        {off ? " · Unavailable" : ""}
-                      </title>
-                      {picked && (
-                        <circle cx={x} cy={y} r={21} fill="none" stroke="#172b25" strokeWidth={3} />
-                      )}
-                      <circle cx={x} cy={y} r={16} fill={fill} stroke={off ? "#c9cfcb" : "#58645f"} strokeWidth={2} />
-                      <text
-                        x={x}
-                        y={y + 5}
-                        fontSize={15}
-                        fontWeight={700}
-                        textAnchor="middle"
-                        fill={off ? "#59655f" : inkFor(fill)}
-                        style={{ pointerEvents: "none" }}
-                      >
-                        {off ? "×" : n}
-                      </text>
-                    </g>
-                  );
-                })}
-              </svg>
-            </div>
-          )}
-
-          <p aria-live="polite" className="mt-3 min-h-[22px] text-sm font-bold text-[#182e2c]">
-            {chosen
-              ? `${chosen.side} · Table ${chosen.n} · ${
-                  bySeat
-                    ? seats.length
-                      ? `Seats ${[...seats].sort((a, b) => a - b).join(", ")}`
-                      : "Choose seats"
-                    : `${packageSeats} guest passes`
-                }`
-              : isVip
-              ? "One general-admission pass per guest."
-              : ""}
-          </p>
-
-          {chosen && !isVip && bySeat && seats.length > 0 && (
-            <p className="text-sm font-black text-[#173935]">
-              Total {priceLabel(seatPrice * seats.length)}
             </p>
           )}
-
-          <button
-            type="button"
-            onClick={handleReserve}
-            disabled={reserveDisabled}
-            className="mt-3 w-full rounded-xl bg-[#173935] px-4 py-3.5 text-base font-black text-white transition-colors hover:bg-[#11241e] disabled:cursor-not-allowed disabled:bg-[#e6eae8] disabled:text-[#65726d] touch-manipulation"
-          >
-            {reserveLabel}
-          </button>
-
-          <p aria-live="polite" className="mt-2 text-[13px] font-semibold leading-5 text-[#485953]">
-            {notice}
-          </p>
-        </aside>
+        </div>
       </div>
 
-      {/* Desktop: side-by-side layout */}
-      <div className="hidden lg:grid lg:grid-cols-[minmax(0,1fr)_310px] gap-4">
+      {/* Step 2 and 3: map, then selection. Stacked on phones, side by side on
+          desktop. One tree, so both always show the same state. */}
+      <div className="grid gap-4 p-3 sm:p-4 lg:grid-cols-[minmax(0,1fr)_336px] lg:items-start">
         {/* MAP */}
-        <div className="rounded-2xl border border-[#d8dfdb] bg-white p-3 sm:p-4">
-          <div className="mb-3 flex items-center justify-between gap-3 flex-wrap">
-            <h3 className="text-xl sm:text-2xl font-black text-[#182e2c]">Venue map</h3>
+        <div className="min-w-0 overflow-hidden rounded-2xl border border-[#e2e8e4] bg-white">
+          <div className="flex items-center justify-between gap-3 border-b border-[#eef1ee] px-3 py-2.5">
             <div className="flex items-center gap-2">
+              <h3 className="text-sm font-black uppercase tracking-[0.12em] text-[#42544d]">
+                Venue map
+              </h3>
+              {cat && (
+                <span className="hidden items-center gap-1.5 rounded-full bg-[#f3f6f3] px-2 py-0.5 text-[11px] font-bold text-[#42544d] sm:inline-flex">
+                  <span
+                    className="inline-block h-2.5 w-2.5 rounded-full border border-[#93a29b]"
+                    style={{ background: accent }}
+                  />
+                  {cat.name}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-1.5">
               <button
                 type="button"
                 aria-label="Zoom out"
                 onClick={() => setZoom((z) => Math.max(1, z - 0.5))}
-                className="h-12 w-12 sm:h-10 sm:w-10 rounded-lg border border-[#aab8b3] bg-white text-xl sm:text-lg font-black text-[#182e2c] active:scale-95 touch-manipulation"
+                disabled={zoom <= 1}
+                className="h-10 w-10 rounded-lg border border-[#aab8b3] bg-white text-lg font-black leading-none text-[#182e2c] transition-colors active:scale-95 disabled:opacity-40 touch-manipulation"
               >
-                −
+                -
               </button>
+              <span className="w-9 text-center text-[12px] font-black tabular-nums text-[#42544d]">
+                {zoom}x
+              </span>
               <button
                 type="button"
                 aria-label="Zoom in"
                 onClick={() => setZoom((z) => Math.min(3, z + 0.5))}
-                className="h-12 w-12 sm:h-10 sm:w-10 rounded-lg border border-[#aab8b3] bg-white text-xl sm:text-lg font-black text-[#182e2c] active:scale-95 touch-manipulation"
+                disabled={zoom >= 3}
+                className="h-10 w-10 rounded-lg border border-[#aab8b3] bg-white text-lg font-black leading-none text-[#182e2c] transition-colors active:scale-95 disabled:opacity-40 touch-manipulation"
               >
                 +
               </button>
             </div>
           </div>
 
-          <p className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-[11px] sm:text-[12px] font-semibold text-[#485953]">
+          <p className="flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-[#f2f4f2] px-3 py-2 text-[11px] font-semibold text-[#55665f]">
             <span className="inline-flex items-center gap-1.5">
               <span
-                className="inline-block h-3 w-3 sm:h-3.5 sm:w-3.5 rounded-full border border-[#667]"
-                style={{ background: cat.color }}
+                className="inline-block h-2.5 w-2.5 rounded-full border border-[#93a29b]"
+                style={{ background: cat ? accent : "#e0e4e1" }}
               />
-              Available in category
+              {cat ? "Open in this category" : "Table"}
             </span>
-            <span className="flex items-center gap-1">○ Other category</span>
-            <span className="flex items-center gap-1">× Unavailable</span>
-            <span className="flex items-center gap-1">◎ Selected</span>
+            <span className="inline-flex items-center gap-1.5 text-[#8b9a94]">
+              <span className="inline-block h-2.5 w-2.5 rounded-full border border-[#c2cbc6] bg-[#e0e4e1]" />
+              Other category
+            </span>
+            <span className="inline-flex items-center gap-1.5 text-[#8b9a94]">Unavailable</span>
+            <span className="inline-flex items-center gap-1.5 text-[#42544d]">
+              <span className="inline-block h-2.5 w-2.5 rounded-full ring-2 ring-[#172b25]" />
+              Selected
+            </span>
           </p>
 
-          <div className="overflow-auto rounded-xl border border-[#eef1ee] touch-pan-x touch-pan-y" style={{ WebkitOverflowScrolling: "touch" }}>
+          <div
+            className="overflow-auto overscroll-contain"
+            style={{ WebkitOverflowScrolling: "touch", maxHeight: "min(72vh, 640px)" }}
+          >
             <svg
               viewBox="-170 -82 1500 870"
               role="img"
-              aria-label="Warri Again venue, stage at bottom"
-              className="block h-auto max-w-none"
-              style={{ width: `${zoom * 100}%`, minWidth: `${(isNarrow ? 880 : 650) * zoom}px` }}
+              aria-label="Floor plan of the hall with numbered tables around the stage"
+              className="block"
+              style={{ width: `${zoom * 100}%`, minWidth: `${900 * zoom}px`, height: "auto" }}
             >
               <path
                 d="M-135 635 Q-185 100 290 6 Q580 -110 866 2 Q1320 95 1294 635 L1170 706 L1060 601 L100 601 L-30 707Z"
@@ -704,13 +590,13 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
               />
               <path d="M285 194H858V470H285Z" fill="#fff" stroke="#d5dcd7" strokeWidth={4} />
               <path d="M505 584 L578 535 L651 584 H804 V707 H353 V584Z" fill="#23423c" />
-              <text x={579} y={655} fill="#ffffff" fontSize={33} fontWeight={700} textAnchor="middle">
+              <text x={579} y={655} fill="#ffffff" fontSize={38} fontWeight={700} textAnchor="middle">
                 STAGE
               </text>
-              <text x={576} y={-9} fill="#344640" fontSize={17} fontWeight={700} textAnchor="middle">
+              <text x={576} y={-9} fill="#344640" fontSize={24} fontWeight={700} textAnchor="middle">
                 BAR / LOUNGE
               </text>
-              <text x={571} y={172} fill="#344640" fontSize={15} fontWeight={700} textAnchor="middle">
+              <text x={571} y={172} fill="#344640" fontSize={20} fontWeight={700} textAnchor="middle">
                 FOH
               </text>
 
@@ -718,7 +604,14 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
               {VIP_BANKS.map(([x, y, w, angle]) => (
                 <g key={`vip-${x}-${y}`} transform={`translate(${x} ${y}) rotate(${angle})`}>
                   <rect width={w} height={53} rx={10} fill={isVip ? "#efb3af" : "#e0e4e1"} />
-                  <text x={w / 2} y={32} fontSize={16} fontWeight={700} textAnchor="middle" fill="#344640">
+                  <text
+                    x={w / 2}
+                    y={34}
+                    fontSize={20}
+                    fontWeight={700}
+                    textAnchor="middle"
+                    fill="#344640"
+                  >
                     VIP
                   </text>
                 </g>
@@ -726,233 +619,380 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
 
               {/* Tables */}
               {markers.map((m) => {
-                const active = m.cat === category;
-                const off = blockedMarker(m.cat, m.n);
-                const unavailable = off || !isAvailable(m);
-                const ok = active && !unavailable;
-                const ink = active ? (unavailable ? "#d1d6d3" : m.color) : "#e0e4e1";
+                const state = tableState(m);
+                const active = category !== null && m.cat === category;
+                const open = state === "available" || state === "partial";
+                const selectable = active && open;
+                const fill = active ? (open ? m.color : "#d1d6d3") : "#e0e4e1";
                 const isChosen = chosenId === m.id;
-                const name = `${m.side} · Table ${m.n}${unavailable ? " · Unavailable" : ""}`;
+                const name = `${m.side} · Table ${m.n}${
+                  state === "blocked" || state === "sold"
+                    ? " · Unavailable"
+                    : state === "partial"
+                    ? " · Seats still open"
+                    : ""
+                }`;
                 return (
                   <g
                     key={m.id}
-                    className={ok ? "cursor-pointer" : undefined}
-                    tabIndex={ok ? 0 : -1}
-                    role={ok ? "button" : undefined}
+                    className={selectable ? "cursor-pointer" : undefined}
+                    tabIndex={selectable ? 0 : -1}
+                    role={selectable ? "button" : undefined}
                     aria-label={name}
-                    aria-pressed={ok ? isChosen : undefined}
-                    onClick={() => ok && pick(m.id)}
+                    aria-pressed={selectable ? isChosen : undefined}
+                    onClick={() => selectable && pick(m.id)}
                     onKeyDown={(e) => {
-                      if (ok && (e.key === "Enter" || e.key === " ")) {
+                      if (selectable && (e.key === "Enter" || e.key === " ")) {
                         e.preventDefault();
                         pick(m.id);
                       }
                     }}
                   >
                     <title>{name}</title>
-                    <circle cx={m.x} cy={m.y} r={20} fill="transparent" style={{ pointerEvents: ok ? "all" : "none" }} />
+                    <circle
+                      cx={m.x}
+                      cy={m.y}
+                      r={26}
+                      fill="transparent"
+                      style={{ pointerEvents: selectable ? "all" : "none" }}
+                    />
                     {isChosen && (
-                      <circle cx={m.x} cy={m.y} r={21} fill="none" stroke="#172b25" strokeWidth={3} />
+                      <circle cx={m.x} cy={m.y} r={24} fill="none" stroke="#172b25" strokeWidth={4} />
                     )}
                     <circle
                       cx={m.x}
                       cy={m.y}
-                      r={16}
-                      fill={ink}
-                      stroke={ok ? "#58645f" : "#c9cfcb"}
-                      strokeWidth={2}
+                      r={19}
+                      fill={fill}
+                      stroke={
+                        isChosen ? "#172b25" : state === "partial" ? "#6b7d75" : open ? "#58645f" : "#c9cfcb"
+                      }
+                      strokeWidth={state === "partial" ? 3 : 2}
+                      strokeDasharray={state === "partial" ? "5 3" : undefined}
                     />
                     <text
                       x={m.x}
-                      y={m.y + 5}
-                      fontSize={15}
+                      y={m.y + 7}
+                      fontSize={20}
                       fontWeight={700}
                       textAnchor="middle"
-                      fill={ok ? inkFor(ink) : "#626d67"}
+                      fill={active ? inkFor(fill) : "#5c6862"}
                       style={{ pointerEvents: "none" }}
                     >
-                      {active && unavailable ? "×" : m.n}
+                      {active && !open ? "x" : m.n}
                     </text>
                   </g>
                 );
               })}
             </svg>
           </div>
-          <p className="mt-2 text-[11px] sm:text-[12px] font-semibold text-[#6b7d75] sm:hidden">
-            Drag the map sideways to pan, or use + / − to zoom.
-          </p>
-          <p className="hidden sm:block mt-2 text-[11px] font-semibold text-[#6b7d75]">
-            Scroll or drag to pan the map. Use + / − to zoom (1×–3×).
+
+          <p className="border-t border-[#f2f4f2] px-3 py-2 text-[11px] font-semibold text-[#6b7d75]">
+            Swipe the map sideways to pan, or use - / + to zoom.
           </p>
         </div>
 
-        {/* SIDEBAR */}
-        <aside className="rounded-2xl border border-[#d8dfdb] bg-white p-4 sm:p-5">
-          <div className="mb-3 flex items-center gap-2">
-            <span
-              className="inline-block h-3.5 w-3.5 rounded-full border border-[#667]"
-              style={{ background: cat.color }}
-            />
-            <h3 className="text-lg font-black text-[#182e2c]">{cat.name}</h3>
-          </div>
-
-          <p className="text-sm font-semibold leading-6 text-[#485953]">{hint}</p>
-
-          {/* How-to guide */}
-          {!isVip && !isExtreme && !chosen && (
-            <div className="mt-3 rounded-xl bg-[#f0fdf4] border border-[#86efac] p-3">
-              <p className="text-[11px] font-black uppercase tracking-[0.1em] text-[#166534] mb-1">
-                How to select
+        {/* SELECTION PANEL */}
+        <aside className="min-w-0 rounded-2xl border border-[#e2e8e4] bg-white p-4">
+          {category === null ? (
+            <div className="space-y-2">
+              <p className="flex items-center gap-2 text-[13px] font-black text-[#182e2c]">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#173935] text-[11px] font-black text-white">
+                  2
+                </span>
+                Pick a category first
               </p>
-              <ul className="space-y-1 text-[12px] text-[#182e2c]">
-                <li className="flex items-start gap-1.5">1. <span>Click a <strong>coloured table</strong> on the map, or pick one from the dropdown.</span></li>
-                <li className="flex items-start gap-1.5">2. <span>Choose <strong>Whole table</strong> to buy the full table, or <strong>Individual seats</strong> to pick specific seats.</span></li>
-                <li className="flex items-start gap-1.5">3. <span>In <strong>Individual seats</strong> mode, click seats on the ring (seats 4 & 8 are unavailable).</span></li>
-                <li className="flex items-start gap-1.5">4. <span>Press <strong>Reserve table / Reserve seats</strong> to add to the ticket panel below.</span></li>
-              </ul>
+              <p className="text-[13px] font-semibold leading-6 text-[#55665f]">
+                Every category has its own tables and price. Choose one above and the map will
+                highlight the tables you can buy, with their numbers.
+              </p>
             </div>
-          )}
+          ) : isVip ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span
+                  className="inline-block h-3.5 w-3.5 rounded-full border border-[#93a29b]"
+                  style={{ background: accent }}
+                />
+                <h3 className="text-base font-black text-[#182e2c]">VIP admission</h3>
+              </div>
+              <p className="text-[13px] font-semibold leading-6 text-[#55665f]">
+                VIP is general admission, not a numbered table. Add it here, then choose how many
+                passes you need in the ticket panel.
+              </p>
+              <p className="text-sm font-black text-[#182e2c]">
+                {priceLabel(packagePrice)}
+                <span className="font-semibold text-[#6b7d75]"> per guest</span>
+              </p>
+              <button
+                type="button"
+                onClick={handleReserve}
+                className="w-full rounded-xl bg-[#173935] px-4 py-3.5 text-sm font-black text-white transition-colors hover:bg-[#11241e] touch-manipulation"
+              >
+                {reserveLabel}
+              </button>
+              <p aria-live="polite" className="text-[12px] font-semibold leading-5 text-[#55665f]">
+                {notice}
+              </p>
+            </div>
+          ) : isExtreme ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span
+                  className="inline-block h-3.5 w-3.5 rounded-full border border-[#93a29b]"
+                  style={{ background: accent }}
+                />
+                <h3 className="text-base font-black text-[#182e2c]">Platinum Extreme</h3>
+              </div>
+              <p className="rounded-xl border border-[#e7b7b4] bg-[#fdf1f0] px-3 py-2.5 text-[12px] font-bold leading-5 text-[#8a2b26]">
+                Shown for reference on the organiser&apos;s plan. Public sales for this tier have
+                not been confirmed, so it cannot be bought here.
+              </p>
+            </div>
+          ) : !chosen ? (
+            <div className="space-y-3">
+              <p className="flex items-center gap-2 text-[13px] font-black text-[#182e2c]">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#173935] text-[11px] font-black text-white">
+                  2
+                </span>
+                Choose your table
+              </p>
+              <p className="text-[13px] font-semibold leading-6 text-[#55665f]">
+                Tap a coloured table on the map, or pick the number here.
+              </p>
+              <select
+                aria-label="Choose a table"
+                value=""
+                onChange={(e) => (e.target.value ? pick(e.target.value) : reset())}
+                className="h-12 w-full rounded-xl border border-[#aab8b3] bg-white px-3 text-base font-semibold text-[#182e2c] outline-none focus:border-[#173935] touch-manipulation"
+              >
+                <option value="">Select a table number</option>
+                {categoryMarkers
+                  .filter(isAvailable)
+                  .map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.side} · Table {m.n}
+                    </option>
+                  ))}
+              </select>
+              <p className="text-[12px] font-semibold leading-5 text-[#6b7d75]">
+                {openCount} table{openCount === 1 ? "" : "s"} open in {CATS[category ?? 0].name}.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-[0.16em] text-[#6b7d75]">
+                    {chosen.side}
+                  </p>
+                  <h3 className="text-lg font-black leading-tight text-[#182e2c]">
+                    Table {chosen.n}
+                  </h3>
+                </div>
+                <span
+                  className="mt-1 inline-block h-4 w-4 flex-shrink-0 rounded-full border border-[#93a29b]"
+                  style={{ background: chosen.color }}
+                />
+              </div>
 
-          {packageForCat && (
-            <p className="mt-2 text-sm font-bold text-[#182e2c]">
-              {priceLabel(packagePrice)}
-              <span className="font-semibold text-[#5f7169]">
-                {packageSeats > 1 ? ` per table of ${packageSeats}` : " per guest"}
-              </span>
-            </p>
-          )}
-          {packageForCat && packageSeats > 1 && (
-            <p className="text-[12px] font-semibold text-[#5f7169]">
-              {priceLabel(seatPrice)} per seat when bought individually
-            </p>
-          )}
+              {/* Step 3: how to buy. No preselected option. */}
+              <p className="flex items-center gap-2 text-[13px] font-black text-[#182e2c]">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#173935] text-[11px] font-black text-white">
+                  3
+                </span>
+                {mode ? "Your choice" : "How would you like to buy?"}
+              </p>
 
-          {listOpen && (
-            <select
-              ref={listRef}
-              aria-label="Choose a table"
-              value={chosenId || ""}
-              onChange={(e) => (e.target.value ? pick(e.target.value) : reset())}
-              className="mt-3 h-12 w-full rounded-xl border border-[#aab8b3] bg-white px-3 text-base sm:text-lg font-semibold text-[#182e2c] outline-none focus:border-[#173935] touch-manipulation"
-            >
-              <option value="">Choose a table</option>
-              {categoryMarkers
-                .filter((m) => isAvailable(m))
-                .map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.side} · Table {m.n}
-                  </option>
-                ))}
-            </select>
-          )}
-
-          {isExtreme && (
-            <p className="mt-3 rounded-xl border border-[#e7b7b4] bg-[#fdf1f0] px-3 py-2 text-[13px] font-bold text-[#8a2b26]">
-              This tier is shown for reference. Public sales have not been confirmed.
-            </p>
-          )}
-
-          {/* Seat ring */}
-          {chosen && bySeat && (
-            <div className="mt-4">
-              {seats.length === 0 && (
-                <p className="mb-2 text-[12px] font-semibold text-[#182e2c] bg-[#fefce8] border border-[#fde047] rounded-lg p-2">
-                  Click seats on the ring to select them. Seats 4 & 8 are not for sale.
+              {chosenState === "partial" && mode !== "seat" && (
+                <p className="rounded-lg border border-[#f0c36d] bg-[#fffbeb] px-3 py-2 text-[12px] font-bold leading-5 text-[#92400e]">
+                  Some seats on this table are already taken, so only individual seats can be
+                  bought.
                 </p>
               )}
-              <svg viewBox="0 0 250 220" role="img" aria-label="Ten numbered seats" className="w-full max-w-[280px] mx-auto">
-                <text x={125} y={113} fontSize={17} fontWeight={700} textAnchor="middle" fill="#344640">
-                  Table {chosen.n}
-                </text>
-                {Array.from({ length: tableSeats }, (_, i) => i + 1).map((n) => {
-                  const angle = ((n - 1) * Math.PI) / 5 - Math.PI / 2;
-                  const x = 125 + 82 * Math.cos(angle);
-                  const y = 110 + 82 * Math.sin(angle);
-                  const off = unavailableSeats.has(n);
-                  const fill = off ? "#d1d6d3" : chosen.color;
-                  const picked = seats.includes(n);
-                  return (
-                    <g
-                      key={`seat-${n}`}
-                      className={off ? undefined : "cursor-pointer"}
-                      tabIndex={off ? -1 : 0}
-                      role={off ? undefined : "button"}
-                      aria-label={`Seat ${n}${off ? " · Unavailable" : ""}`}
-                      aria-pressed={off ? undefined : picked}
-                      onClick={() => toggleSeat(n)}
-                      onKeyDown={(e) => {
-                        if (!off && (e.key === "Enter" || e.key === " ")) {
-                          e.preventDefault();
-                          toggleSeat(n);
-                        }
-                      }}
+
+              <div className="grid gap-2">
+                <button
+                  type="button"
+                  disabled={chosenState !== "available"}
+                  onClick={() => {
+                    setMode("table");
+                    setSeats([]);
+                    setNotice("");
+                  }}
+                  className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                    mode === "table"
+                      ? "border-[#173935] bg-[#eef4f1]"
+                      : "border-[#dfe5e1] bg-white hover:border-[#aab8b3]"
+                  } disabled:cursor-not-allowed disabled:opacity-50`}
+                >
+                  <span className="min-w-0">
+                    <span className="block text-[13px] font-black text-[#182e2c]">Whole table</span>
+                    <span className="block text-[11px] font-semibold text-[#6b7d75]">
+                      All {packageSeats} seats, one payment
+                    </span>
+                  </span>
+                  <span className="flex-shrink-0 text-[13px] font-black text-[#182e2c]">
+                    {priceLabel(packagePrice)}
+                  </span>
+                </button>
+
+                {packageSeats > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMode("seat");
+                      setSeats([]);
+                      setNotice("");
+                    }}
+                    className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                      mode === "seat"
+                        ? "border-[#173935] bg-[#eef4f1]"
+                        : "border-[#dfe5e1] bg-white hover:border-[#aab8b3]"
+                    }`}
+                  >
+                    <span className="min-w-0">
+                      <span className="block text-[13px] font-black text-[#182e2c]">
+                        Individual seats
+                      </span>
+                      <span className="block text-[11px] font-semibold text-[#6b7d75]">
+                        Pick your own seat numbers
+                      </span>
+                    </span>
+                    <span className="flex-shrink-0 text-[13px] font-black text-[#182e2c]">
+                      {priceLabel(seatPrice)} each
+                    </span>
+                  </button>
+                )}
+              </div>
+
+              {bySeat && (
+                <div>
+                  <p className="mb-1 text-[12px] font-semibold leading-5 text-[#55665f]">
+                    {seats.length === 0
+                      ? "Tap a seat number. Seats 4 and 8 are not for sale."
+                      : `Seats ${[...seats]
+                          .sort((a, b) => a - b)
+                          .join(", ")} selected.`}
+                  </p>
+                  <svg
+                    viewBox="0 0 250 220"
+                    role="group"
+                    aria-label={`Seats on table ${chosen.n}`}
+                    className="mx-auto w-full max-w-[270px]"
+                  >
+                    <text
+                      x={125}
+                      y={116}
+                      fontSize={18}
+                      fontWeight={700}
+                      textAnchor="middle"
+                      fill="#344640"
                     >
-                      <title>
-                        Seat {n}
-                        {off ? " · Unavailable" : ""}
-                      </title>
-                      {picked && (
-                        <circle cx={x} cy={y} r={21} fill="none" stroke="#172b25" strokeWidth={3} />
-                      )}
-                      <circle cx={x} cy={y} r={16} fill={fill} stroke={off ? "#c9cfcb" : "#58645f"} strokeWidth={2} />
-                      <text
-                        x={x}
-                        y={y + 5}
-                        fontSize={15}
-                        fontWeight={700}
-                        textAnchor="middle"
-                        fill={off ? "#59655f" : inkFor(fill)}
-                        style={{ pointerEvents: "none" }}
-                      >
-                        {off ? "×" : n}
-                      </text>
-                    </g>
-                  );
-                })}
-              </svg>
+                      Table {chosen.n}
+                    </text>
+                    {Array.from({ length: tableSeats }, (_, i) => i + 1).map((n) => {
+                      const angle = ((n - 1) * Math.PI) / 5 - Math.PI / 2;
+                      const x = 125 + 82 * Math.cos(angle);
+                      const y = 110 + 82 * Math.sin(angle);
+                      const off = unavailableSeats.has(n);
+                      const picked = seats.includes(n);
+                      const fill = off ? "#d1d6d3" : chosen.color;
+                      return (
+                        <g
+                          key={`seat-${n}`}
+                          className={off ? undefined : "cursor-pointer"}
+                          tabIndex={off ? -1 : 0}
+                          role={off ? undefined : "button"}
+                          aria-label={`Seat ${n}${off ? " unavailable" : ""}`}
+                          aria-pressed={off ? undefined : picked}
+                          onClick={() => toggleSeat(n)}
+                          onKeyDown={(e) => {
+                            if (!off && (e.key === "Enter" || e.key === " ")) {
+                              e.preventDefault();
+                              toggleSeat(n);
+                            }
+                          }}
+                        >
+                          <title>{off ? `Seat ${n} unavailable` : `Seat ${n}`}</title>
+                          <circle
+                            cx={x}
+                            cy={y}
+                            r={22}
+                            fill="transparent"
+                            style={{ pointerEvents: off ? "none" : "all" }}
+                          />
+                          {picked && (
+                            <circle cx={x} cy={y} r={19} fill="none" stroke="#172b25" strokeWidth={3} />
+                          )}
+                          <circle
+                            cx={x}
+                            cy={y}
+                            r={16}
+                            fill={fill}
+                            stroke={off ? "#c9cfcb" : picked ? "#172b25" : "#58645f"}
+                            strokeWidth={picked ? 3 : 2}
+                          />
+                          <text
+                            x={x}
+                            y={y + 6}
+                            fontSize={17}
+                            fontWeight={700}
+                            textAnchor="middle"
+                            fill={off ? "#59655f" : inkFor(fill)}
+                            style={{ pointerEvents: "none" }}
+                          >
+                            {off ? "x" : n}
+                          </text>
+                        </g>
+                      );
+                    })}
+                  </svg>
+                </div>
+              )}
+
+              {mode && (
+                <div className="rounded-xl bg-[#f6f8f4] px-3 py-2.5">
+                  <p className="text-[12px] font-semibold text-[#42544d]">
+                    {bySeat
+                      ? `${seats.length || 0} x ${priceLabel(seatPrice)}`
+                      : `1 x ${priceLabel(packagePrice)}`}
+                  </p>
+                  <p className="mt-0.5 text-base font-black text-[#173935]">
+                    {priceLabel(bySeat ? seatPrice * seats.length : packagePrice)}
+                  </p>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={handleReserve}
+                disabled={reserveDisabled}
+                className="w-full rounded-xl bg-[#173935] px-4 py-3.5 text-sm font-black text-white transition-colors hover:bg-[#11241e] disabled:cursor-not-allowed disabled:bg-[#e6eae8] disabled:text-[#65726d] touch-manipulation"
+              >
+                {reserveLabel}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => reset(category)}
+                className="w-full rounded-lg px-2 py-1 text-[11px] font-black uppercase tracking-[0.12em] text-[#6b7d75] transition-colors hover:text-[#173935]"
+              >
+                Pick a different table
+              </button>
+
+              <p aria-live="polite" className="text-[12px] font-semibold leading-5 text-[#55665f]">
+                {notice}
+              </p>
             </div>
           )}
-
-          <p aria-live="polite" className="mt-3 min-h-[22px] text-sm font-bold text-[#182e2c]">
-            {chosen
-              ? `${chosen.side} · Table ${chosen.n} · ${
-                  bySeat
-                    ? seats.length
-                      ? `Seats ${[...seats].sort((a, b) => a - b).join(", ")}`
-                      : "Choose seats"
-                    : `${packageSeats} guest passes`
-                }`
-              : isVip
-              ? "One general-admission pass per guest."
-              : ""}
-          </p>
-
-          {chosen && !isVip && bySeat && seats.length > 0 && (
-            <p className="text-sm font-black text-[#173935]">
-              Total {priceLabel(seatPrice * seats.length)}
-            </p>
-          )}
-
-          <button
-            type="button"
-            onClick={handleReserve}
-            disabled={reserveDisabled}
-            className="mt-3 w-full rounded-xl bg-[#173935] px-4 py-3.5 text-base font-black text-white transition-colors hover:bg-[#11241e] disabled:cursor-not-allowed disabled:bg-[#e6eae8] disabled:text-[#65726d]"
-          >
-            {reserveLabel}
-          </button>
-
-          <p aria-live="polite" className="mt-2 text-[13px] font-semibold leading-5 text-[#485953]">
-            {notice}
-          </p>
         </aside>
       </div>
 
-      <p className="mt-5 text-[12px] sm:text-[13px] font-semibold leading-6 text-[#485953]">
+      <p className="border-t border-[#e6ebe8] px-4 py-3 text-[11px] font-semibold leading-5 text-[#6b7d75] sm:px-6">
         Availability is checked live against the organiser&apos;s table release. Sponsor allocations
         and the final table release require organiser approval.
       </p>
-      </div>
     </section>
   );
 }
