@@ -146,6 +146,8 @@ function PublicEventContent() {
   // Table and seat chosen on the seating plan. When it is set, the ticket panel
   // sells exactly that table or those seats instead of a generic pass count.
   const [floorSelection, setFloorSelection] = useState<FloorPlanSelection | null>(null);
+  // VIP is general admission: it is a choice, but not a table selection.
+  const [floorVip, setFloorVip] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -283,7 +285,16 @@ function PublicEventContent() {
   const cs = getCurrencySymbol(event?.currency || "NGN");
   const passPackages = (event.pass_packages || [])
     .filter((p: any) => p.name || p.price)
-    .sort((a: any, b: any) => (Number(a.price) || 0) - (Number(b.price) || 0));
+    .sort((a: any, b: any) => {
+      // On the seating-plan event VIP is general admission, so it reads last
+      // under "Tables and prices" rather than first because it is cheapest.
+      if (event?.slug === "warri-again-grand-spectacle-2026") {
+        const av = a.name === "VIP" ? 1 : 0;
+        const bv = b.name === "VIP" ? 1 : 0;
+        if (av !== bv) return av - bv;
+      }
+      return (Number(a.price) || 0) - (Number(b.price) || 0);
+    });
   const selectedPkg = passPackages[selectedPackageIndex] ?? passPackages[0] ?? null;
   const unitPrice = floorSelection
     ? floorSelection.unitPrice
@@ -299,9 +310,11 @@ function PublicEventContent() {
     if (selection.mode === "vip") {
       // VIP is general admission, not a numbered table, so it keeps the normal
       // quantity stepper instead of locking the panel to one pass.
+      setFloorVip(true);
       setFloorSelection(null);
       setQuantity(1);
     } else {
+      setFloorVip(false);
       setFloorSelection(selection);
       setQuantity(selection.quantity);
     }
@@ -347,6 +360,9 @@ function PublicEventContent() {
   // A table package is one table per unit, so it is never sold by a plain
   // quantity: the buyer has to pick the numbered table on the plan.
   const selectedIsTable = Number(selectedPkg?.seats) > 1;
+  // On the seating-plan event nothing is picked by default: the guest has to
+  // choose a table (or a VIP pass) before the panel prices anything.
+  const awaitingFloorChoice = isFloorPlanEvent && !floorSelection && !floorVip;
   const selectedRemaining = selectedAvailability?.remaining ?? null;
   const maxQuantity =
     selectedRemaining !== null ? Math.max(1, Math.min(10, selectedRemaining)) : 10;
@@ -756,6 +772,13 @@ function PublicEventContent() {
               </p>
               {isFreeEvent ? (
                 <p className="text-2xl font-black text-white">FREE ENTRY</p>
+              ) : awaitingFloorChoice ? (
+                <>
+                  <p className="text-2xl font-black text-white">Choose a table</p>
+                  <p className="mt-1 text-xs font-medium text-white/60">
+                    Pick a numbered table on the plan above, or add a VIP pass.
+                  </p>
+                </>
               ) : (
                 <>
                   <p className="text-2xl font-black text-white">
@@ -876,10 +899,10 @@ function PublicEventContent() {
                                 </span>
                               )}
                             </p>
-                            {(pkg.description || seats > 0) && (
+                            {(pkg.description || seats > 1) && (
                               <p className="text-xs text-[#94a3b8] truncate">
-                                {seats > 0 ? `Table of ${seats}` : ""}
-                                {seats > 0 && pkg.description ? " · " : ""}
+                                {seats > 1 ? `Table of ${seats}` : ""}
+                                {seats > 1 && pkg.description ? " · " : ""}
                                 {pkg.description || ""}
                               </p>
                             )}
@@ -990,6 +1013,7 @@ function PublicEventContent() {
                           type="button"
                           onClick={() => {
                             setFloorSelection(null);
+                            setFloorVip(false);
                             setQuantity(1);
                             document.getElementById("seating-plan")?.scrollIntoView({ behavior: "smooth", block: "start" });
                           }}
@@ -1000,7 +1024,35 @@ function PublicEventContent() {
                       </div>
                     </div>
                   )}
-                  {isFloorPlanEvent && selectedIsTable && !floorSelection && (
+                  {isFloorPlanEvent && floorVip && !floorSelection && (
+                    <div className="rounded-xl border-2 border-[#1ABC9C] bg-[#eafaf6] px-4 py-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#0f766e]">
+                            Your selection
+                          </p>
+                          <p className="mt-1 text-sm font-black leading-5 text-[#0D1B2A]">
+                            VIP pass, general admission
+                          </p>
+                          <p className="mt-1 text-xs font-semibold text-[#475569]">
+                            {cs}{(Number(passPackages.find((p: any) => p.name === "VIP")?.price) || 0).toLocaleString()} each
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFloorVip(false);
+                            setQuantity(1);
+                            document.getElementById("seating-plan")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                          }}
+                          className="flex-shrink-0 rounded-lg border border-[#0f766e]/30 px-2.5 py-1.5 text-[11px] font-black uppercase tracking-wider text-[#0f766e] hover:bg-white transition-colors"
+                        >
+                          Change
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {isFloorPlanEvent && !floorSelection && !floorVip && (
                     <a
                       href="#seating-plan"
                       className="flex items-center justify-between gap-3 rounded-xl border border-[#f0c36d] bg-[#fffbeb] px-4 py-3 transition-colors hover:border-[#d97706]"
@@ -1010,7 +1062,7 @@ function PublicEventContent() {
                           Table required
                         </span>
                         <span className="mt-0.5 block text-sm font-black text-[#0D1B2A]">
-                          Choose your {selectedPkg?.name || "table"} on the plan
+                          Choose your table on the plan
                         </span>
                         <span className="mt-0.5 block text-xs font-medium leading-5 text-[#475569]">
                           Tables and seats are picked by number, so you know exactly where you sit.
@@ -1028,7 +1080,7 @@ function PublicEventContent() {
                       </svg>
                     </a>
                   )}
-                  {isPaidEvent && !floorSelection && !selectedIsTable && (
+                  {isPaidEvent && !floorSelection && !selectedIsTable && !isFloorPlanEvent && (
                     <div>
                       <label className="text-xs font-bold uppercase tracking-wider text-[#94a3b8] block mb-1.5">
                         Quantity
@@ -1064,7 +1116,7 @@ function PublicEventContent() {
                     </div>
                   )}
 
-                  {isPaidEvent && unitPrice > 0 && (
+                  {isPaidEvent && unitPrice > 0 && !awaitingFloorChoice && (
                     <div className="rounded-xl bg-[#f8f9fc] border border-[#e8edf2] px-4 py-3 text-xs space-y-1.5">
                       <div className="flex justify-between text-[#64748b]">
                         <span>{cs}{unitPrice.toLocaleString()} x {quantity}</span>
@@ -1099,7 +1151,7 @@ function PublicEventContent() {
                     <div className="space-y-2">
                     <button
                       type="submit"
-                      disabled={purchasing || selectedSoldOut || (selectedIsTable && !floorSelection)}
+                      disabled={purchasing || awaitingFloorChoice || selectedSoldOut || (selectedIsTable && !floorSelection)}
                       className="w-full rounded-xl font-black text-sm py-3.5 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                       style={{
                         background: purchasing || selectedSoldOut ? "#94a3b8" : isFreeEvent ? "linear-gradient(135deg, #059669, #065f46)" : "linear-gradient(135deg, #1ABC9C, #16A085)",
@@ -1109,6 +1161,8 @@ function PublicEventContent() {
                     >
                       {selectedSoldOut
                         ? `${selectedPkg?.name || "This ticket"} is sold out`
+                        : awaitingFloorChoice
+                        ? "Choose your table on the plan"
                         : selectedIsTable && !floorSelection
                         ? "Choose your table on the plan"
                         : purchasing

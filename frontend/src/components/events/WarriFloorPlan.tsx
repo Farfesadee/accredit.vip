@@ -383,15 +383,18 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
 
   const reserveLabel = isVip
     ? "Add VIP pass"
+    : !mode
+    ? "Choose how to buy"
     : bySeat
     ? seats.length
       ? `Reserve ${seats.length} seat${seats.length === 1 ? "" : "s"}`
       : "Select your seats"
     : "Reserve this table";
 
+  // Nothing is preselected: a table alone is not a choice of how to buy it.
   const reserveDisabled = isVip
     ? false
-    : !chosen || (bySeat ? seats.length === 0 : chosenState !== "available");
+    : !chosen || !mode || (bySeat ? seats.length === 0 : chosenState !== "available");
 
   const handleReserve = () => {
     if (reserveDisabled) return;
