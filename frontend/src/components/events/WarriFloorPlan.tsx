@@ -22,7 +22,7 @@
  *   way they want to buy it.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { apiClient } from "@/lib/api-client";
 
 export type FloorPlanSelection = {
@@ -304,6 +304,15 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
   const [chosenId, setChosenId] = useState<string | null>(null);
   const [seats, setSeats] = useState<number[]>([]);
   const [zoom, setZoom] = useState(1);
+  const mapScrollRef = useRef<HTMLDivElement | null>(null);
+  // The plan is 900 CSS px wide at 1x, wider than a phone. Fit drops the scale
+  // until the whole hall is on screen, and + brings the table numbers back up.
+  const fitToPlan = () => {
+    const width = mapScrollRef.current?.clientWidth || 0;
+    if (!width) return;
+    const next = Math.min(1, Math.max(0.3, Math.round((width / 900) * 20) / 20));
+    setZoom(next);
+  };
   const [tables, setTables] = useState<Record<string, ApiTable>>({});
   const [notice, setNotice] = useState("");
 
@@ -543,23 +552,30 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
               <button
                 type="button"
                 aria-label="Zoom out"
-                onClick={() => setZoom((z) => Math.max(1, z - 0.5))}
-                disabled={zoom <= 1}
+                onClick={() => setZoom((z) => Math.max(0.3, Math.round((z - 0.2) * 10) / 10))}
+                disabled={zoom <= 0.3}
                 className="h-10 w-10 rounded-lg border border-[#aab8b3] bg-white text-lg font-black leading-none text-[#182e2c] transition-colors active:scale-95 disabled:opacity-40 touch-manipulation"
               >
                 -
               </button>
-              <span className="w-9 text-center text-[12px] font-black tabular-nums text-[#42544d]">
-                {zoom}x
+              <span className="w-10 text-center text-[12px] font-black tabular-nums text-[#42544d]">
+                {Math.round(zoom * 100)}%
               </span>
               <button
                 type="button"
                 aria-label="Zoom in"
-                onClick={() => setZoom((z) => Math.min(3, z + 0.5))}
+                onClick={() => setZoom((z) => Math.min(3, Math.round((z + 0.2) * 10) / 10))}
                 disabled={zoom >= 3}
                 className="h-10 w-10 rounded-lg border border-[#aab8b3] bg-white text-lg font-black leading-none text-[#182e2c] transition-colors active:scale-95 disabled:opacity-40 touch-manipulation"
               >
                 +
+              </button>
+              <button
+                type="button"
+                onClick={fitToPlan}
+                className="h-10 rounded-lg border border-[#aab8b3] bg-white px-2.5 text-[11px] font-black uppercase tracking-wider text-[#182e2c] transition-colors active:scale-95 touch-manipulation"
+              >
+                Fit
               </button>
             </div>
           </div>
@@ -584,6 +600,7 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
           </p>
 
           <div
+            ref={mapScrollRef}
             className="overflow-auto overscroll-contain"
             style={{ WebkitOverflowScrolling: "touch", maxHeight: "min(72vh, 640px)" }}
           >
@@ -700,7 +717,7 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
           </div>
 
           <p className="border-t border-[#f2f4f2] px-3 py-2 text-[11px] font-semibold text-[#6b7d75]">
-            Swipe the map sideways to pan, or use - / + to zoom.
+            Swipe the map to pan. Tap Fit to see the whole hall, or + to read the table numbers.
           </p>
         </div>
 
