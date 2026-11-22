@@ -1,5 +1,5 @@
 import secrets, hmac, hashlib, json, io, os, base64
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,7 +11,7 @@ from app.core.database import get_db
 from app.core.config import settings
 from app.core.security import get_current_user, extract_token
 from app.models.user import User
-from app.models.event import Event
+from app.models.event import Event, TableInventory
 from app.models.ticket_purchase import TicketPurchase
 from app.models.wallet import Wallet, WalletTransaction, DEFAULT_BALANCES
 from app.services.ticket_delivery import generate_ticket_qr, send_ticket_email, send_ticket_whatsapp, save_ticket_qr_image, build_ticket_pdf
@@ -27,6 +27,8 @@ class PurchaseRequest(BaseModel):
     quantity: int = Field(default=1, ge=1)
     payment_method: str = "paystack"
     package_name: str | None = None
+    table_numbers: list[str] | None = None  # For table-based tiers: ["S-01", "S-02"]
+    seat_numbers: list[int] | None = None   # For seat-based selection: [1, 3, 5]
     utm_source: str | None = None
     utm_medium: str | None = None
     utm_campaign: str | None = None
@@ -49,22 +51,130 @@ async def get_optional_user(request: Request, db: AsyncSession = Depends(get_db)
 
 
 async def _sold_quantities(db: AsyncSession, event_id: int) -> dict[str, int]:
-    """Seats already sold per package, counted from completed purchases.
+    """Stock already sold per package, counted from completed purchases.
 
     Only packages that declare a ``capacity`` care about this, so events whose
-    packages carry no capacity behave exactly as they did before.
+    packages carry no capacity behave exactly as they did before. Table
+    packages count tables rather than guests, because one unit of stock is one
+    table no matter how many seats were bought on it.
     """
     result = await db.execute(
-        select(TicketPurchase.package_name, TicketPurchase.quantity).where(
+        select(
+            TicketPurchase.package_name,
+            TicketPurchase.quantity,
+            TicketPurchase.table_numbers,
+        ).where(
             TicketPurchase.event_id == event_id,
             TicketPurchase.status == "completed",
         )
     )
     sold: dict[str, int] = {}
-    for name, qty in result.all():
+    for name, qty, table_numbers in result.all():
         key = name or ""
-        sold[key] = sold.get(key, 0) + int(qty or 0)
+        if isinstance(table_numbers, list) and table_numbers:
+            count = len(table_numbers)
+        else:
+            count = int(qty or 0)
+        sold[key] = sold.get(key, 0) + count
     return sold
+
+
+# A checkout holds its tables the moment it is created, so an abandoned
+# payment would otherwise lock a table out forever. Pending purchases older
+# than this window are treated as abandoned and their tables go back on sale.
+STALE_HOLD_MINUTES = 45
+
+
+def _hold_cutoff() -> datetime:
+    return datetime.now(timezone.utc) - timedelta(minutes=STALE_HOLD_MINUTES)
+
+
+async def _release_stale_holds(db: AsyncSession, event_id: int) -> None:
+    """Put tables held by unpaid, expired checkouts back on sale."""
+    stale_ids = (
+        await db.execute(
+            select(TicketPurchase.id).where(
+                TicketPurchase.event_id == event_id,
+                TicketPurchase.status == "pending",
+                TicketPurchase.created_at < _hold_cutoff(),
+            )
+        )
+    ).scalars().all()
+    if not stale_ids:
+        return
+    rows = (
+        await db.execute(
+            select(TableInventory).where(
+                TableInventory.event_id == event_id,
+                TableInventory.purchase_id.in_(stale_ids),
+            )
+        )
+    ).scalars().all()
+    if not rows:
+        return
+    # A table that already carries paid seats stays part sold even after an
+    # abandoned checkout releases its hold, so the unsold seats keep selling
+    # and a whole-table sale cannot quietly take seats that are spoken for.
+    sold_seats = await _sold_seats(db, event_id)
+    for table in rows:
+        table.purchase_id = None
+        table.status = (
+            "partially_sold" if sold_seats.get(table.table_number) else "available"
+        )
+    await db.commit()
+
+
+async def _sold_seats(db: AsyncSession, event_id: int) -> dict[str, set[int]]:
+    """Seat numbers already taken on each table, keyed by table code.
+
+    Counts completed purchases plus checkouts that are still live (younger than
+    the stale-hold window), so two buyers can never take the same seat while
+    still freeing seats from abandoned carts.
+    """
+    cutoff = _hold_cutoff()
+    rows = (
+        await db.execute(
+            select(
+                TicketPurchase.status,
+                TicketPurchase.created_at,
+                TicketPurchase.seat_assignments,
+                TicketPurchase.table_numbers,
+            ).where(
+                TicketPurchase.event_id == event_id,
+                TicketPurchase.status.in_(["pending", "completed"]),
+            )
+        )
+    ).all()
+
+    taken: dict[str, set[int]] = {}
+    for status, created_at, assignments, table_numbers in rows:
+        if status == "pending" and created_at is not None:
+            created = created_at
+            if created.tzinfo is None:
+                created = created.replace(tzinfo=timezone.utc)
+            if created < cutoff:
+                continue
+        if not assignments:
+            continue
+        single_table = (
+            table_numbers[0]
+            if isinstance(table_numbers, list) and len(table_numbers) == 1
+            else None
+        )
+        for item in assignments:
+            code = single_table
+            seat = item
+            if isinstance(item, dict):
+                code = item.get("table") or code
+                seat = item.get("seat")
+            try:
+                seat_number = int(seat)
+            except (TypeError, ValueError):
+                continue
+            if not code:
+                continue
+            taken.setdefault(str(code), set()).add(seat_number)
+    return taken
 
 
 def _package_remaining(package: dict, sold: int) -> int | None:
@@ -86,18 +196,48 @@ async def package_availability(event_id: int, db: AsyncSession = Depends(get_db)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
 
+    await _release_stale_holds(db, event_id)
+
+    # A published table map is the real stock for table tiers: count the tables
+    # still free rather than reconstructing it from past purchases.
+    table_stock: dict[str, dict[str, int]] = {}
+    inventory_rows = (
+        await db.execute(
+            select(TableInventory.tier_name, TableInventory.status).where(
+                TableInventory.event_id == event_id
+            )
+        )
+    ).all()
+    for tier_name, status in inventory_rows:
+        entry = table_stock.setdefault(tier_name, {"available": 0, "total": 0})
+        if status != "blocked":
+            entry["total"] += 1
+            if status == "available":
+                entry["available"] += 1
+
     sold = await _sold_quantities(db, event_id)
     packages = []
     for pkg in event.pass_packages or []:
         name = pkg.get("name")
         if not name:
             continue
-        sold_qty = sold.get(name, 0)
-        remaining = _package_remaining(pkg, sold_qty)
+        try:
+            seats = int(pkg.get("seats") or 1)
+        except (TypeError, ValueError):
+            seats = 1
+        stock = table_stock.get(name)
+        if stock is not None and seats > 1:
+            capacity = stock["total"]
+            remaining = stock["available"]
+            sold_qty = max(0, capacity - remaining)
+        else:
+            sold_qty = sold.get(name, 0)
+            remaining = _package_remaining(pkg, sold_qty)
+            capacity = pkg.get("capacity")
         packages.append(
             {
                 "name": name,
-                "capacity": pkg.get("capacity"),
+                "capacity": capacity,
                 "sold": sold_qty,
                 "remaining": remaining,
                 "sold_out": remaining == 0,
@@ -138,13 +278,52 @@ async def purchase_ticket(
     else:
         package_price = event.ticket_price or 0
 
+    # Published table map. When an event has inventory rows the map is the
+    # source of truth for stock: a table that is not on it cannot be sold, and
+    # one that is sold or blocked is unavailable. Events without inventory keep
+    # the plain quantity-based check, so nothing else changes.
+    await _release_stale_holds(db, event.id)
+    inventory_rows = (
+        await db.execute(
+            select(TableInventory).where(TableInventory.event_id == event.id)
+        )
+    ).scalars().all()
+    inventory = {t.table_number: t for t in inventory_rows}
+    has_inventory = bool(inventory)
+
+    try:
+        seats_per_table = int(selected_package.get("seats") or 1) if selected_package else 1
+    except (TypeError, ValueError):
+        seats_per_table = 1
+
+    # Tables are the packages that seat more than one guest on a fixed block.
+    is_table_package = (
+        selected_package is not None
+        and seats_per_table > 1
+        and selected_package.get("capacity") not in (None, "")
+    )
+    is_seat_package = is_table_package and bool(req.seat_numbers)
+    # A table tier present on the published map is stocked by that map, not by
+    # the coarse capacity counter in the package.
+    tier_on_map = bool(
+        selected_package
+        and any(t.tier_name == selected_package.get("name") for t in inventory_rows)
+    )
+    governed_by_inventory = is_table_package and tier_on_map
+
+    if is_seat_package:
+        # Individual seats are sold pro rata against the table price, so eight
+        # seats on a table of ten cost eight tenths of the table.
+        package_price = package_price / seats_per_table
+
     is_free = not package_price or package_price == 0
     if not is_free and event.tickets_available is not None and event.tickets_available < req.quantity:
         raise HTTPException(status_code=400, detail="Not enough tickets available")
 
     # Per-package stock (tables and limited tiers). Packages without a
-    # ``capacity`` skip this entirely, so other events are untouched.
-    if selected_package is not None:
+    # ``capacity`` skip this entirely, so other events are untouched. A tier
+    # published on the map is governed by its tables instead.
+    if selected_package is not None and not is_seat_package and not governed_by_inventory:
         sold = await _sold_quantities(db, event.id)
         remaining = _package_remaining(
             selected_package, sold.get(selected_package.get("name"), 0)
@@ -157,6 +336,100 @@ async def purchase_ticket(
                 status_code=409,
                 detail=f"Only {remaining} left for {label}. Reduce your quantity and try again.",
             )
+
+    if is_table_package and not is_seat_package:
+        if not req.table_numbers or len(req.table_numbers) == 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Package '{selected_package.get('name')}' requires table selection. Please select tables on the floor plan.",
+            )
+        if len(req.table_numbers) != req.quantity:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Selected {len(req.table_numbers)} tables but quantity is {req.quantity}. They must match.",
+            )
+
+        unavailable: list[str] = []
+        if has_inventory:
+            for code in req.table_numbers:
+                table = inventory.get(code)
+                if table is None:
+                    raise HTTPException(status_code=400, detail=f"Table {code} is not on the floor plan")
+                if table.tier_name != selected_package.get("name"):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Table {code} is a {table.tier_name}, not a {selected_package.get('name')}",
+                    )
+                if table.status != "available":
+                    unavailable.append(code)
+        else:
+            available_result = await db.execute(
+                select(TableInventory).where(
+                    TableInventory.event_id == event.id,
+                    TableInventory.table_number.in_(req.table_numbers),
+                    TableInventory.status == "available",
+                )
+            )
+            available_numbers = {t.table_number for t in available_result.scalars().all()}
+            unavailable = [n for n in req.table_numbers if n not in available_numbers]
+        if unavailable:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Tables not available: {', '.join(unavailable)}",
+            )
+
+    if is_seat_package:
+        if len(req.seat_numbers) > seats_per_table:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cannot select more than {seats_per_table} seats per table.",
+            )
+        if len(req.seat_numbers) != req.quantity:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Selected {len(req.seat_numbers)} seats but quantity is {req.quantity}. They must match.",
+            )
+        if len(set(req.seat_numbers)) != len(req.seat_numbers):
+            raise HTTPException(status_code=400, detail="Each seat can only be selected once.")
+
+        # The seating ring on the published plan leaves seats 4 and 8 empty.
+        blocked_seats = {4, 8}
+        for seat in req.seat_numbers:
+            if seat < 1 or seat > seats_per_table:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Invalid seat number: {seat}. Must be between 1 and {seats_per_table}.",
+                )
+            if seat in blocked_seats:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Seat {seat} is not for sale on this table.",
+                )
+
+        if has_inventory:
+            if not req.table_numbers or len(req.table_numbers) != 1:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Choose one table to select seats from.",
+                )
+            code = req.table_numbers[0]
+            table = inventory.get(code)
+            if table is None:
+                raise HTTPException(status_code=400, detail=f"Table {code} is not on the floor plan")
+            if table.tier_name != selected_package.get("name"):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Table {code} is a {table.tier_name}, not a {selected_package.get('name')}",
+                )
+            if table.status in ("sold", "blocked"):
+                raise HTTPException(status_code=409, detail=f"Table {code} is no longer available")
+            taken = blocked_seats | (await _sold_seats(db, event.id)).get(code, set())
+            clash = sorted(set(req.seat_numbers) & taken)
+            if clash:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Seat(s) {', '.join(str(s) for s in clash)} on table {code} are already taken.",
+                )
 
     # Per-package fixed charges (e.g. Black Market: General +250, Premium +2500).
     # Packages WITHOUT an explicit fee keep the legacy platform% + VAT math.
@@ -182,6 +455,11 @@ async def purchase_ticket(
         platform_fee = round(base_amount * settings.PLATFORM_FEE_PERCENT / 100) if not is_free else 0
         vat = round(base_amount * settings.VAT_PERCENT / 100) if not is_free else 0
         total = base_amount + vat
+
+    # Seat purchases are priced pro rata, so a table that does not split evenly
+    # can leave a fraction of a naira behind. Charge whole naira only.
+    base_amount = round(base_amount)
+    total = round(total)
 
     reference = f"TKT-{secrets.token_hex(8).upper()}"
 
@@ -223,6 +501,18 @@ async def purchase_ticket(
             status="completed",
             paid_at=datetime.now(timezone.utc),
             package_name=req.package_name,
+            table_numbers=req.table_numbers if req.table_numbers else None,
+            seat_assignments=(
+                [
+                    {
+                        "table": req.table_numbers[0] if req.table_numbers else None,
+                        "seat": seat,
+                    }
+                    for seat in req.seat_numbers
+                ]
+                if req.seat_numbers
+                else None
+            ),
             utm_source=req.utm_source,
             utm_medium=req.utm_medium,
             utm_campaign=req.utm_campaign,
@@ -230,6 +520,18 @@ async def purchase_ticket(
         db.add(purchase)
         await db.commit()
         await db.refresh(purchase)
+
+        if req.table_numbers:
+            table_result = await db.execute(
+                select(TableInventory).where(
+                    TableInventory.event_id == event.id,
+                    TableInventory.table_number.in_(req.table_numbers),
+                )
+            )
+            for t in table_result.scalars().all():
+                t.purchase_id = purchase.id
+                t.status = "partially_sold" if is_seat_package else "sold"
+            await db.commit()
 
         if event.tickets_available is not None:
             event.tickets_available -= req.quantity
@@ -316,6 +618,7 @@ async def purchase_ticket(
             "quantity": req.quantity,
             "authorization_url": None,
             "method": "wallet",
+            "paystack_public_key": settings.paystack_public_key(req.event_id),
         }
 
     purchase = TicketPurchase(
@@ -331,6 +634,18 @@ async def purchase_ticket(
         status="completed" if is_free else "pending",
         paid_at=datetime.now(timezone.utc) if is_free else None,
         package_name=req.package_name,
+        table_numbers=req.table_numbers if req.table_numbers else None,
+        seat_assignments=(
+            [
+                {
+                    "table": req.table_numbers[0] if req.table_numbers else None,
+                    "seat": seat,
+                }
+                for seat in req.seat_numbers
+            ]
+            if req.seat_numbers
+            else None
+        ),
         utm_source=req.utm_source,
         utm_medium=req.utm_medium,
         utm_campaign=req.utm_campaign,
@@ -338,6 +653,22 @@ async def purchase_ticket(
     db.add(purchase)
     await db.commit()
     await db.refresh(purchase)
+
+    # Link selected tables to this purchase. A whole-table sale takes the table
+    # out of circulation; an individual-seat sale only marks it part sold so the
+    # remaining seats stay on offer.
+    if req.table_numbers:
+        result = await db.execute(
+            select(TableInventory).where(
+                TableInventory.event_id == event.id,
+                TableInventory.table_number.in_(req.table_numbers),
+            )
+        )
+        tables = result.scalars().all()
+        for t in tables:
+            t.purchase_id = purchase.id
+            t.status = "partially_sold" if is_seat_package else "sold"
+        await db.commit()
 
     if is_free:
         # Send free event ticket via email
@@ -420,11 +751,12 @@ async def purchase_ticket(
             "vat": 0,
             "quantity": req.quantity,
             "authorization_url": None,
+            "paystack_public_key": settings.paystack_public_key(req.event_id),
         }
 
     paystack_url = None
     buyer_user = await get_optional_user(request, db)
-    paystack_secret = settings.paystack_secret_key(buyer_user.email if buyer_user else None)
+    paystack_secret = settings.paystack_secret_key(buyer_user.email if buyer_user else None, req.event_id)
     if paystack_secret:
         try:
             async with httpx.AsyncClient() as client:
@@ -457,6 +789,7 @@ async def purchase_ticket(
         "quantity": req.quantity,
         "authorization_url": paystack_url,
         "method": "paystack",
+        "paystack_public_key": settings.paystack_public_key(req.event_id),
     }
 
 
@@ -525,14 +858,20 @@ async def verify_purchase(
 
     # Confirm with Paystack that the charge really succeeded before fulfilling.
     # Try live key first, then test key (owner test payments).
+    # Include event 105 keys if the purchase is for that event.
+    event = purchase.event
     paystack_success = False
     tried_keys = []
-    for key in dict.fromkeys(
-        [
-            settings.PAYSTACK_SECRET_KEY,
-            settings.PAYSTACK_TEST_SECRET_KEY,
-        ]
-    ):
+    verify_keys = [
+        settings.PAYSTACK_SECRET_KEY,
+        settings.PAYSTACK_TEST_SECRET_KEY,
+    ]
+    if event and event.id == 105:
+        if settings.PAYSTACK_EVENT_105_SECRET_KEY:
+            verify_keys.insert(0, settings.PAYSTACK_EVENT_105_SECRET_KEY)
+        if settings.PAYSTACK_EVENT_105_TEST_SECRET_KEY:
+            verify_keys.insert(1, settings.PAYSTACK_EVENT_105_TEST_SECRET_KEY)
+    for key in dict.fromkeys(verify_keys):
         if not key or key in tried_keys:
             continue
         tried_keys.append(key)
@@ -750,3 +1089,225 @@ async def list_event_purchases(
         ).order_by(TicketPurchase.created_at.desc())
     )
     return result.scalars().all()
+
+
+# =============================================================================
+# Floor Plan & Table Selection Endpoints (Warri Again - Event 105)
+# =============================================================================
+
+class FloorPlanTableResponse(BaseModel):
+    id: int
+    table_number: str
+    tier_name: str
+    tier_category: str
+    x_position: float
+    y_position: float
+    shape: str
+    shape_data: dict | None
+    color: str
+    status: str
+    # Presentation details for the published plan. The file draws the same
+    # number in several zones (Silver 1-7 rear left, 1-12 lounge, 8-18 rear
+    # right), so the zone is what tells two tables apart.
+    side: str | None = None
+    display_number: int | None = None
+    seat_count: int = 0
+    sold_seats: list[int] = []
+    blocked: bool = False
+
+
+class FloorPlanResponse(BaseModel):
+    event_id: int
+    floor_plan_image: str | None
+    tables: list[FloorPlanTableResponse]
+
+
+@router.get("/events/{event_id}/floor-plan", response_model=FloorPlanResponse)
+async def get_floor_plan(
+    event_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get floor plan image and all table positions for an event."""
+    result = await db.execute(select(Event).where(Event.id == event_id))
+    event = result.scalar_one_or_none()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    await _release_stale_holds(db, event_id)
+
+    result = await db.execute(
+        select(TableInventory).where(TableInventory.event_id == event_id)
+    )
+    tables = result.scalars().all()
+    sold_seats = await _sold_seats(db, event_id)
+
+    # Build floor plan image URL
+    floor_plan_url = None
+    if event.floor_plan_image:
+        floor_plan_url = (
+            event.floor_plan_image
+            if str(event.floor_plan_image).startswith("http")
+            else f"{settings.FRONTEND_URL.rstrip('/')}{event.floor_plan_image}"
+        )
+
+    def _table_payload(t: TableInventory) -> FloorPlanTableResponse:
+        data = t.shape_data or {}
+        side = data.get("side")
+        display_number = data.get("display_number")
+        if display_number is None:
+            tail = str(t.table_number).rsplit("-", 1)[-1]
+            display_number = int(tail) if tail.isdigit() else None
+        return FloorPlanTableResponse(
+            id=t.id,
+            table_number=t.table_number,
+            tier_name=t.tier_name,
+            tier_category=t.tier_category,
+            x_position=t.x_position,
+            y_position=t.y_position,
+            shape=t.shape,
+            shape_data=data,
+            color=t.color,
+            status=t.status,
+            side=side,
+            display_number=display_number,
+            seat_count=int(data.get("seats") or 10),
+            sold_seats=sorted(sold_seats.get(t.table_number, set())),
+            blocked=t.status == "blocked" or bool(data.get("blocked")),
+        )
+
+    return FloorPlanResponse(
+        event_id=event_id,
+        floor_plan_image=floor_plan_url,
+        tables=[_table_payload(t) for t in tables],
+    )
+
+
+class AvailableTablesResponse(BaseModel):
+    event_id: int
+    tiers: dict[str, list[FloorPlanTableResponse]]
+
+
+@router.get("/events/{event_id}/tables/available", response_model=AvailableTablesResponse)
+async def get_available_tables(
+    event_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get available tables grouped by tier for the table selection UI."""
+    result = await db.execute(select(Event).where(Event.id == event_id))
+    event = result.scalar_one_or_none()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    result = await db.execute(
+        select(TableInventory)
+        .where(TableInventory.event_id == event_id)
+        .where(TableInventory.status == "available")
+    )
+    tables = result.scalars().all()
+
+    # Group by tier_category
+    tiers: dict[str, list[FloorPlanTableResponse]] = {}
+    for t in tables:
+        if t.tier_category not in tiers:
+            tiers[t.tier_category] = []
+        tiers[t.tier_category].append(
+            FloorPlanTableResponse(
+                id=t.id,
+                table_number=t.table_number,
+                tier_name=t.tier_name,
+                tier_category=t.tier_category,
+                x_position=t.x_position,
+                y_position=t.y_position,
+                shape=t.shape,
+                shape_data=t.shape_data or {},
+                color=t.color,
+                status=t.status,
+            )
+        )
+
+    return AvailableTablesResponse(event_id=event_id, tiers=tiers)
+
+
+class TableReserveRequest(BaseModel):
+    table_ids: list[int]  # TableInventory IDs to reserve
+    buyer_email: str = Field(min_length=1)
+    buyer_name: str = Field(min_length=1)
+    buyer_phone: str | None = None
+
+
+class TableReserveResponse(BaseModel):
+    reserved: bool
+    table_ids: list[int]
+    expires_at: str | None
+    message: str
+
+
+@router.post("/tables/reserve", response_model=TableReserveResponse)
+async def reserve_tables(
+    event_id: int,
+    req: TableReserveRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Reserve tables for 10 minutes during checkout."""
+    from datetime import datetime, timedelta, timezone
+
+    result = await db.execute(
+        select(TableInventory)
+        .where(TableInventory.id.in_(req.table_ids))
+        .where(TableInventory.event_id == event_id)
+        .where(TableInventory.status == "available")
+    )
+    tables = result.scalars().all()
+
+    if len(tables) != len(req.table_ids):
+        raise HTTPException(status_code=400, detail="One or more tables not available")
+
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+    for t in tables:
+        t.status = "reserved"
+        t.reserved_until = expires_at
+
+    await db.commit()
+
+    return TableReserveResponse(
+        reserved=True,
+        table_ids=[t.id for t in tables],
+        expires_at=expires_at.isoformat(),
+        message=f"Tables reserved for 10 minutes. Complete your purchase to confirm.",
+    )
+
+
+class TableReleaseRequest(BaseModel):
+    table_ids: list[int]
+
+
+@router.post("/tables/release")
+async def release_tables(
+    event_id: int,
+    req: TableReleaseRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Release reserved tables back to available."""
+    result = await db.execute(
+        select(TableInventory)
+        .where(TableInventory.id.in_(req.table_ids))
+        .where(TableInventory.event_id == event_id)
+        .where(TableInventory.status == "reserved")
+    )
+    tables = result.scalars().all()
+
+    for t in tables:
+        t.status = "available"
+        t.reserved_until = None
+
+    await db.commit()
+    return {"released": len(tables)}
+
+
+# Update PurchaseRequest to include table_numbers
+# (Already has table_numbers field in TicketPurchase model)
+# The purchase endpoint already reads req.package_name
+# We need to add table_numbers to PurchaseRequest
+
+# Update PurchaseRequest class (add after package_name)
+# table_numbers: list[str] | None = None

@@ -9,6 +9,10 @@ import { ErrorBoundary } from "@/components/shared/error-boundary";
 import { Navbar } from "@/components/shared/navbar";
 import { Footer } from "@/components/shared/footer";
 import { ReminderBanner } from "@/components/shared/reminder-banner";
+import WarriFloorPlan, {
+  FLOOR_CATEGORY_COLORS,
+  type FloorPlanSelection,
+} from "@/components/events/WarriFloorPlan";
 import { formatTimeForDisplay, getCurrencySymbol } from "@/lib/event-form-options";
 import { PhoneInput } from "@/components/shared/phone-input";
 
@@ -139,6 +143,11 @@ function PublicEventContent() {
   const [selectedPackageIndex, setSelectedPackageIndex] = useState(0);
   const [showConfirm, setShowConfirm] = useState(false);
   const [availability, setAvailability] = useState<Record<string, PackageAvailability>>({});
+  // Table and seat chosen on the seating plan. When it is set, the ticket panel
+  // sells exactly that table or those seats instead of a generic pass count.
+  const [floorSelection, setFloorSelection] = useState<FloorPlanSelection | null>(null);
+  // VIP is general admission: it is a choice, but not a table selection.
+  const [floorVip, setFloorVip] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -164,12 +173,16 @@ function PublicEventContent() {
 
   // Never leave the stepper above what the selected block still holds.
   useEffect(() => {
-    const pkgs = (event?.pass_packages || []).filter((p: any) => p.name || p.price);
+    // A chosen table or seat set already fixes the quantity, so leave it alone.
+    if (floorSelection) return;
+    const pkgs = (event?.pass_packages || [])
+      .filter((p: any) => p.name || p.price)
+      .sort((a: any, b: any) => (Number(a.price) || 0) - (Number(b.price) || 0));
     const pkg = pkgs[selectedPackageIndex] ?? pkgs[0];
     const remaining = pkg ? availability[pkg.name]?.remaining ?? null : null;
     const cap = remaining !== null ? Math.max(1, Math.min(10, remaining)) : 10;
     setQuantity((q) => Math.min(Math.max(1, q), cap));
-  }, [event, selectedPackageIndex, availability]);
+  }, [event, selectedPackageIndex, availability, floorSelection]);
 
   useEffect(() => {
     const ref = searchParams.get("purchase") || searchParams.get("trxref");
@@ -209,9 +222,15 @@ function PublicEventContent() {
           buyer_name: buyerName,
           buyer_email: buyerEmail,
           buyer_phone: buildFullPhone(),
-          quantity,
+          quantity: floorSelection ? floorSelection.quantity : quantity,
           payment_method: method,
-          package_name: pkg?.name || null,
+          package_name: floorSelection ? floorSelection.packageName : pkg?.name || null,
+          ...(floorSelection && floorSelection.tables.length
+            ? { table_numbers: floorSelection.tables }
+            : {}),
+          ...(floorSelection && floorSelection.mode === "seat" && floorSelection.seats.length
+            ? { seat_numbers: floorSelection.seats }
+            : {}),
           utm_source: utm.utm_source || undefined,
           utm_medium: utm.utm_medium || undefined,
           utm_campaign: utm.utm_campaign || undefined,
@@ -266,11 +285,43 @@ function PublicEventContent() {
   const cs = getCurrencySymbol(event?.currency || "NGN");
   const passPackages = (event.pass_packages || [])
     .filter((p: any) => p.name || p.price)
-    .sort((a: any, b: any) => (Number(a.price) || 0) - (Number(b.price) || 0));
+    .sort((a: any, b: any) => {
+      // On the seating-plan event VIP is general admission, so it reads last
+      // under "Tables and prices" rather than first because it is cheapest.
+      if (event?.slug === "warri-again-grand-spectacle-2026") {
+        const av = a.name === "VIP" ? 1 : 0;
+        const bv = b.name === "VIP" ? 1 : 0;
+        if (av !== bv) return av - bv;
+      }
+      return (Number(a.price) || 0) - (Number(b.price) || 0);
+    });
   const selectedPkg = passPackages[selectedPackageIndex] ?? passPackages[0] ?? null;
-  const unitPrice = selectedPkg
+  const unitPrice = floorSelection
+    ? floorSelection.unitPrice
+    : selectedPkg
     ? Number(selectedPkg.price) || 0
     : Number(event.ticket_price) || 0;
+
+  // The seating plan lives on this event only.
+  const isFloorPlanEvent = event?.slug === "warri-again-grand-spectacle-2026";
+
+  const handleFloorReserve = (selection: FloorPlanSelection) => {
+    const index = passPackages.findIndex((p: any) => p.name === selection.packageName);
+    if (selection.mode === "vip") {
+      // VIP is general admission, not a numbered table, so it keeps the normal
+      // quantity stepper instead of locking the panel to one pass.
+      setFloorVip(true);
+      setFloorSelection(null);
+      setQuantity(1);
+    } else {
+      setFloorVip(false);
+      setFloorSelection(selection);
+      setQuantity(selection.quantity);
+    }
+    if (index >= 0) setSelectedPackageIndex(index);
+    setError("");
+    document.getElementById("tickets-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   // A package that declares `all_in` is sold at exactly its listed price:
   // no platform fee, no VAT, nothing added at checkout.
@@ -306,6 +357,12 @@ function PublicEventContent() {
     (name ? availability[name] : undefined) || null;
   const selectedAvailability = availabilityFor(selectedPkg?.name);
   const selectedSoldOut = Boolean(selectedAvailability?.sold_out);
+  // A table package is one table per unit, so it is never sold by a plain
+  // quantity: the buyer has to pick the numbered table on the plan.
+  const selectedIsTable = Number(selectedPkg?.seats) > 1;
+  // On the seating-plan event nothing is picked by default: the guest has to
+  // choose a table (or a VIP pass) before the panel prices anything.
+  const awaitingFloorChoice = isFloorPlanEvent && !floorSelection && !floorVip;
   const selectedRemaining = selectedAvailability?.remaining ?? null;
   const maxQuantity =
     selectedRemaining !== null ? Math.max(1, Math.min(10, selectedRemaining)) : 10;
@@ -392,20 +449,102 @@ function PublicEventContent() {
         </div>
       )}
 
+      {/* Compact facts line for the seating-plan event: date, time, venue and
+          dress code in one strip instead of four separate cards. */}
+      {isFloorPlanEvent && (
+        <div className="border-b border-[#e8edf2] bg-[#f8f9fc]">
+          <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-x-5 gap-y-1.5 px-4 py-3 text-[13px] font-semibold text-[#475569] sm:px-6 lg:px-8">
+            <span className="inline-flex items-center gap-1.5">
+              <svg className="h-4 w-4 text-[#1ABC9C]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              {formatEventDate(event.event_date)}
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <svg className="h-4 w-4 text-[#1ABC9C]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              {formatTimeForDisplay(event.event_time)}
+              <span className="font-normal text-[#94a3b8]">{event.timezone}</span>
+            </span>
+            <span className="inline-flex min-w-0 items-center gap-1.5">
+              <svg className="h-4 w-4 flex-shrink-0 text-[#1ABC9C]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <span className="truncate">{event.venue}</span>
+            </span>
+            {event.dress_code && (
+              <span className="inline-flex items-center gap-1.5">
+                <svg className="h-4 w-4 text-[#1ABC9C]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                </svg>
+                {event.dress_code}
+              </span>
+            )}
+            {(event.latitude && event.longitude) || event.map_link ? (
+              <a
+                href={
+                  event.latitude && event.longitude
+                    ? `https://www.google.com/maps/dir/?api=1&destination=${event.latitude},${event.longitude}`
+                    : event.map_link
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 font-bold text-[#16A085] hover:text-[#1ABC9C]"
+              >
+                Directions
+                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+              </a>
+            ) : null}
+          </div>
+        </div>
+      )}
+
       {/* Main Content */}
-      <div className="flex-1 max-w-5xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 sm:py-12 grid gap-8 grid-cols-[minmax(0,1fr)] lg:gap-12 lg:grid-cols-[1fr_360px] lg:items-start">
+      <div
+        className={`flex-1 mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 sm:py-10 grid gap-8 grid-cols-[minmax(0,1fr)] lg:gap-10 lg:items-start ${
+          isFloorPlanEvent
+            ? "max-w-[1400px] lg:grid-cols-[minmax(0,1fr)_360px]"
+            : "max-w-5xl lg:grid-cols-[1fr_360px]"
+        }`}
+      >
+        {/* Seating plan leads the page on a seating-plan event: pick first, pay
+            second, read third. */}
+        {isFloorPlanEvent && (
+          <div className="order-1 min-w-0 lg:order-none lg:col-start-1 lg:row-start-1">
+            <WarriFloorPlan
+              eventId={Number(id)}
+              packages={passPackages as any}
+              currencySymbol={cs}
+              onReserve={handleFloorReserve}
+            />
+          </div>
+        )}
+
 
         {/* LEFT: Event Details */}
-        <div className="space-y-8">
-          {/* Back link */}
-          <Link href="/attend" className="inline-flex items-center gap-2 rounded-xl px-5 py-3 bg-white border-2 border-[#1ABC9C] text-sm font-bold text-[#0D1B2A] hover:bg-[#1ABC9C] hover:text-white transition-all shadow-md hover:shadow-lg hover:scale-105 duration-200">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-            Back to Discover
-          </Link>
+        <div
+          className={
+            isFloorPlanEvent
+              ? "order-3 space-y-8 min-w-0 lg:order-none lg:col-start-1 lg:row-start-2"
+              : "space-y-8"
+          }
+        >
+          {/* Back link (the seating-plan page leads with the plan instead) */}
+          {!isFloorPlanEvent && (
+            <Link href="/attend" className="inline-flex items-center gap-2 rounded-xl px-5 py-3 bg-white border-2 border-[#1ABC9C] text-sm font-bold text-[#0D1B2A] hover:bg-[#1ABC9C] hover:text-white transition-all shadow-md hover:shadow-lg hover:scale-105 duration-200">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+              </svg>
+              Back to Discover
+            </Link>
+          )}
 
-          {/* Quick info chips */}
+          {/* Quick info chips (the seating-plan page carries one facts strip under the hero) */}
+          {!isFloorPlanEvent && (
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="flex items-start gap-3 rounded-xl border border-[#e8edf2] bg-[#f8f9fc] p-4">
               <span className="text-[#1ABC9C] mt-0.5">
@@ -485,9 +624,10 @@ function PublicEventContent() {
               </div>
             )}
           </div>
+          )}
 
-          {/* Mobile: GET TICKET CTA */}
-          {!isEnded && (
+          {/* Mobile: GET TICKET CTA (not on the seating-plan page) */}
+          {!isEnded && !isFloorPlanEvent && (
           <div className="lg:hidden">
             <a
               href="#tickets-section"
@@ -514,27 +654,53 @@ function PublicEventContent() {
             <AboutSection description={event.description} />
           )}
 
-          {/* Lineup */}
+          {/* Lineup: photographs, not icons. Each block lists its own acts. */}
           {lineup.length > 0 && (
             <div>
               <h2 className="text-lg font-black text-[#0D1B2A] mb-4">Lineup</h2>
-              <div className="grid gap-3 sm:grid-cols-2">
-                {lineup.map((person: any, i: number) => (
-                  <div key={i} className="flex items-center gap-3 rounded-xl border border-[#e8edf2] bg-[#f8f9fc] p-4">
-                    <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-white text-sm font-black"
-                      style={{ background: "linear-gradient(135deg, #1ABC9C, #16A085)" }}
-                    >
-                      {(person.name || "?")[0].toUpperCase()}
-                    </div>
-                    <div>
-                      <p className="text-xs font-bold uppercase tracking-wider text-[#94a3b8]">
-                        {person.role || "Guest"}
-                      </p>
-                      <p className="text-sm font-bold text-[#0D1B2A]">{person.name || "To be announced"}</p>
-                    </div>
-                  </div>
-                ))}
+              <div className="space-y-3">
+                {[
+                  { role: "Music", label: "Music", image: "/warri/lineup-music.jpg", blurb: "Live bands and headline sets" },
+                  { role: "Comedy", label: "Comedy", image: "/warri/lineup-comedy.jpg", blurb: "Stand-up from the main stage" },
+                  { role: "DJ", label: "DJs", image: "/warri/lineup-dj.jpg", blurb: "Decks running all night" },
+                ].map((section) => {
+                  const people = lineup.filter((p: any) => p.role === section.role);
+                  if (people.length === 0) return null;
+                  return (
+                    <details key={section.role} className="group overflow-hidden rounded-2xl border border-[#e8edf2] bg-white">
+                      <summary className="flex cursor-pointer list-none items-center gap-3 p-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1ABC9C]/40">
+                        <img
+                          src={section.image}
+                          alt={`${section.label} at the event`}
+                          width={64}
+                          height={64}
+                          loading="lazy"
+                          className="h-16 w-16 flex-shrink-0 rounded-xl object-cover"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-black text-[#0D1B2A]">{section.label}</span>
+                          <span className="mt-0.5 block truncate text-xs font-semibold text-[#64748b]">
+                            {people.length} act{people.length === 1 ? "" : "s"} · {section.blurb}
+                          </span>
+                        </span>
+                        <svg className="h-5 w-5 flex-shrink-0 text-[#94a3b8] transition-transform duration-200 group-open:rotate-180" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </summary>
+                      <ul className="border-t border-[#eef2f6] px-3 py-2">
+                        {people.map((person: any, i: number) => (
+                          <li
+                            key={`${section.role}-${i}`}
+                            className="flex items-start gap-2 py-1.5 text-sm font-bold text-[#0D1B2A]"
+                          >
+                            <span className="mt-[7px] h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[#1ABC9C]" aria-hidden="true" />
+                            <span className="min-w-0">{person.name || "To be announced"}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -586,8 +752,15 @@ function PublicEventContent() {
           </div>
         </div>
 
-        {/* RIGHT: Ticket Panel (sticky on desktop) */}
-        <div id="tickets-section" className="lg:sticky lg:top-24 space-y-4">
+        {/* RIGHT: Ticket Panel (sticky on desktop, second on mobile) */}
+        <div
+          id="tickets-section"
+          className={
+            isFloorPlanEvent
+              ? "order-2 scroll-mt-24 space-y-4 min-w-0 lg:order-none lg:col-start-2 lg:row-start-1 lg:row-span-2 lg:sticky lg:top-24"
+              : "lg:sticky lg:top-24 space-y-4"
+          }
+        >
           <div className="rounded-2xl border border-[#e8edf2] overflow-hidden shadow-[0_8px_32px_rgba(15,23,42,0.08)]">
             {/* Panel header */}
             <div
@@ -599,11 +772,28 @@ function PublicEventContent() {
               </p>
               {isFreeEvent ? (
                 <p className="text-2xl font-black text-white">FREE ENTRY</p>
+              ) : awaitingFloorChoice ? (
+                <>
+                  <p className="text-2xl font-black text-white">Choose a table</p>
+                  <p className="mt-1 text-xs font-medium text-white/60">
+                    Pick a numbered table on the plan above, or add a VIP pass.
+                  </p>
+                </>
               ) : (
                 <>
                   <p className="text-2xl font-black text-white">
                     {cs}{unitPrice.toLocaleString()}
-                    <span className="text-sm font-normal text-white/60 ml-1">per ticket</span>
+                    <span className="text-sm font-normal text-white/60 ml-1">
+                      {floorSelection
+                        ? floorSelection.mode === "seat"
+                          ? "per seat"
+                          : floorSelection.mode === "vip"
+                          ? "per guest"
+                          : "per table"
+                        : selectedIsTable
+                        ? "per table"
+                        : "per ticket"}
+                    </span>
                   </p>
                   {!isAllIn && (
                     <div className="mt-2 space-y-0.5 text-xs text-white/50">
@@ -645,10 +835,13 @@ function PublicEventContent() {
               )}
             </div>
 
-            {/* Pass packages */}
+            {/* Pass packages. On the seating-plan event this doubles as the
+                tier price list; the plan above is the selector. */}
             {passPackages.length > 0 && (
               <div className="px-6 py-4 border-b border-[#e8edf2] bg-[#f8f9fc] min-w-0 overflow-hidden">
-                <p className="text-xs font-bold uppercase tracking-wider text-[#94a3b8] mb-3">Choose your pass</p>
+                <p className="text-xs font-bold uppercase tracking-wider text-[#94a3b8] mb-3">
+                  {isFloorPlanEvent ? "Tables and prices" : "Choose your pass"}
+                </p>
                 <div className="space-y-2">
                   {passPackages.map((pkg: any, i: number) => {
                     const price = Number(pkg.price) || 0;
@@ -656,27 +849,42 @@ function PublicEventContent() {
                     const avail = availabilityFor(pkg.name);
                     const soldOut = Boolean(avail?.sold_out);
                     const seats = Number(pkg.seats) || Number(avail?.seats) || 0;
-                      const pkgColor = pkg.color || "#1ABC9C";
+                    const pkgColor =
+                      (isFloorPlanEvent && FLOOR_CATEGORY_COLORS[pkg.name]) ||
+                      pkg.color ||
+                      "#1ABC9C";
+                    // On the seating-plan event this list is a price reference
+                    // only: the table is chosen on the plan, so the rows are not
+                    // interactive and carry no radio button.
+                    const Row: any = isFloorPlanEvent ? "div" : "label";
                     return (
-                      <label
+                      <Row
                         key={i}
                         className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 min-w-0 overflow-hidden transition-colors ${
                           soldOut
                             ? "border-[#e8edf2] bg-[#f1f5f9] opacity-60 cursor-not-allowed"
-                            : selected
+                            : selected && !isFloorPlanEvent
                             ? `border-${pkgColor} bg-[${pkgColor}15] cursor-pointer`
-                            : `bg-white border-[#e8edf2] hover:border-[${pkgColor}]/40 cursor-pointer`
+                            : `bg-white border-[#e8edf2] ${isFloorPlanEvent ? "" : `hover:border-[${pkgColor}]/40 cursor-pointer`}`
                         }`}
                       >
                         <div className="flex items-center gap-3 min-w-0">
-                          <input
-                            type="radio"
-                            name="pass-package"
-                            checked={selected}
-                            disabled={soldOut}
-                            onChange={() => setSelectedPackageIndex(i)}
-                            className={`accent-[${pkgColor}] w-4 h-4 flex-shrink-0 disabled:cursor-not-allowed`}
-                          />
+                          {isFloorPlanEvent ? (
+                            <span
+                              className="h-4 w-4 flex-shrink-0 rounded-full border border-[#cbd5e1]"
+                              style={{ background: soldOut ? "#cbd5e1" : pkgColor }}
+                              aria-hidden="true"
+                            />
+                          ) : (
+                            <input
+                              type="radio"
+                              name="pass-package"
+                              checked={selected}
+                              disabled={soldOut}
+                              onChange={() => setSelectedPackageIndex(i)}
+                              className={`accent-[${pkgColor}] w-4 h-4 flex-shrink-0 disabled:cursor-not-allowed`}
+                            />
+                          )}
                           <div className="min-w-0">
                             <p className="text-sm font-semibold text-[#0D1B2A] flex items-center gap-2 flex-wrap">
                               {pkg.name || "Pass"}
@@ -691,10 +899,10 @@ function PublicEventContent() {
                                 </span>
                               )}
                             </p>
-                            {(pkg.description || seats > 0) && (
+                            {(pkg.description || seats > 1) && (
                               <p className="text-xs text-[#94a3b8] truncate">
-                                {seats > 0 ? `Table of ${seats}` : ""}
-                                {seats > 0 && pkg.description ? " · " : ""}
+                                {seats > 1 ? `Table of ${seats}` : ""}
+                                {seats > 1 && pkg.description ? " · " : ""}
                                 {pkg.description || ""}
                               </p>
                             )}
@@ -706,7 +914,7 @@ function PublicEventContent() {
                         >
                           {price > 0 ? `${cs}${price.toLocaleString()}` : "Free"}
                         </span>
-                      </label>
+                      </Row>
                     );
                   })}
                 </div>
@@ -786,7 +994,96 @@ function PublicEventContent() {
                       />
                     </div>
                   </div>
-                  {isPaidEvent && (
+                  {floorSelection && (
+                    <div className="rounded-xl border-2 border-[#1ABC9C] bg-[#eafaf6] px-4 py-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#0f766e]">
+                            Your selection
+                          </p>
+                          <p className="mt-1 text-sm font-black leading-5 text-[#0D1B2A] break-words">
+                            {floorSelection.label}
+                          </p>
+                          <p className="mt-1 text-xs font-semibold text-[#475569]">
+                            {cs}{floorSelection.unitPrice.toLocaleString()} each
+                            {floorSelection.quantity > 1 ? ` · ${floorSelection.quantity} places` : ""}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFloorSelection(null);
+                            setFloorVip(false);
+                            setQuantity(1);
+                            document.getElementById("seating-plan")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                          }}
+                          className="flex-shrink-0 rounded-lg border border-[#0f766e]/30 px-2.5 py-1.5 text-[11px] font-black uppercase tracking-wider text-[#0f766e] hover:bg-white transition-colors"
+                        >
+                          Change
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {isFloorPlanEvent && floorVip && !floorSelection && (
+                    <div className="rounded-xl border-2 border-[#1ABC9C] bg-[#eafaf6] px-4 py-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-black uppercase tracking-[0.14em] text-[#0f766e]">
+                            Your selection
+                          </p>
+                          <p className="mt-1 text-sm font-black leading-5 text-[#0D1B2A]">
+                            VIP pass, general admission
+                          </p>
+                          <p className="mt-1 text-xs font-semibold text-[#475569]">
+                            {cs}{(Number(passPackages.find((p: any) => p.name === "VIP")?.price) || 0).toLocaleString()} each
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFloorVip(false);
+                            setQuantity(1);
+                            document.getElementById("seating-plan")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                          }}
+                          className="flex-shrink-0 rounded-lg border border-[#0f766e]/30 px-2.5 py-1.5 text-[11px] font-black uppercase tracking-wider text-[#0f766e] hover:bg-white transition-colors"
+                        >
+                          Change
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {isFloorPlanEvent && !floorSelection && !floorVip && (
+                    <a
+                      href="#seating-plan"
+                      className="flex items-center justify-between gap-3 rounded-xl border border-[#f0c36d] bg-[#fffbeb] px-4 py-3 transition-colors hover:border-[#d97706]"
+                    >
+                      <span className="min-w-0">
+                        <span className="block text-[10px] font-black uppercase tracking-[0.14em] text-[#92400e]">
+                          Table required
+                        </span>
+                        <span className="mt-0.5 block text-sm font-black text-[#0D1B2A]">
+                          Choose your table on the plan
+                        </span>
+                        <span className="mt-0.5 block text-xs font-medium leading-5 text-[#475569]">
+                          Tables and seats are picked by number, so you know exactly where you sit.
+                        </span>
+                      </span>
+                      <svg
+                        className="h-5 w-5 flex-shrink-0 text-[#92400e]"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2.5}
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                      </svg>
+                    </a>
+                  )}
+                  {isPaidEvent &&
+                    !floorSelection &&
+                    !selectedIsTable &&
+                    (!isFloorPlanEvent || floorVip) && (
                     <div>
                       <label className="text-xs font-bold uppercase tracking-wider text-[#94a3b8] block mb-1.5">
                         Quantity
@@ -799,7 +1096,7 @@ function PublicEventContent() {
                           className="w-11 h-11 rounded-xl border border-[#d9e2ec] text-xl font-black text-[#0D1B2A] hover:border-[#1ABC9C] hover:text-[#1ABC9C] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                           aria-label="Decrease quantity"
                         >
-                          −
+                          -
                         </button>
                         <span className="min-w-16 text-center text-sm font-black text-[#0D1B2A]">
                           {quantity} ticket{quantity > 1 ? "s" : ""}
@@ -822,10 +1119,10 @@ function PublicEventContent() {
                     </div>
                   )}
 
-                  {isPaidEvent && unitPrice > 0 && (
+                  {isPaidEvent && unitPrice > 0 && !awaitingFloorChoice && (
                     <div className="rounded-xl bg-[#f8f9fc] border border-[#e8edf2] px-4 py-3 text-xs space-y-1.5">
                       <div className="flex justify-between text-[#64748b]">
-                        <span>{cs}{unitPrice.toLocaleString()} × {quantity}</span>
+                        <span>{cs}{unitPrice.toLocaleString()} x {quantity}</span>
                         <span>{cs}{(unitPrice * quantity).toLocaleString()}</span>
                       </div>
                       {(packageFee > 0 || !isAllIn) && (
@@ -857,7 +1154,7 @@ function PublicEventContent() {
                     <div className="space-y-2">
                     <button
                       type="submit"
-                      disabled={purchasing || selectedSoldOut}
+                      disabled={purchasing || awaitingFloorChoice || selectedSoldOut || (selectedIsTable && !floorSelection)}
                       className="w-full rounded-xl font-black text-sm py-3.5 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
                       style={{
                         background: purchasing || selectedSoldOut ? "#94a3b8" : isFreeEvent ? "linear-gradient(135deg, #059669, #065f46)" : "linear-gradient(135deg, #1ABC9C, #16A085)",
@@ -867,6 +1164,10 @@ function PublicEventContent() {
                     >
                       {selectedSoldOut
                         ? `${selectedPkg?.name || "This ticket"} is sold out`
+                        : awaitingFloorChoice
+                        ? "Choose your table on the plan"
+                        : selectedIsTable && !floorSelection
+                        ? "Choose your table on the plan"
                         : purchasing
                         ? "Processing..."
                         : isFreeEvent
@@ -896,11 +1197,15 @@ function PublicEventContent() {
                   </div>
                   <div className="flex justify-between gap-3 px-4 py-2.5">
                     <span className="text-[#64748b] shrink-0">Phone</span>
-                    <span className="font-bold text-[#0D1B2A] text-right break-words min-w-0">{buildFullPhone() || "—"}</span>
+                    <span className="font-bold text-[#0D1B2A] text-right break-words min-w-0">{buildFullPhone() || "Not provided"}</span>
                   </div>
                   <div className="flex justify-between gap-3 px-4 py-2.5">
-                    <span className="text-[#64748b] shrink-0">Tickets</span>
-                    <span className="font-bold text-[#0D1B2A] text-right">{quantity} × {selectedPkg?.name || "Standard"}</span>
+                    <span className="text-[#64748b] shrink-0">{floorSelection ? "Selection" : "Tickets"}</span>
+                    <span className="font-bold text-[#0D1B2A] text-right break-words min-w-0">
+                      {floorSelection
+                        ? floorSelection.label
+                        : `${quantity} x ${selectedPkg?.name || "Standard"}`}
+                    </span>
                   </div>
                   <div className="flex justify-between gap-3 px-4 py-2.5">
                     <span className="text-[#64748b] shrink-0">Total</span>
