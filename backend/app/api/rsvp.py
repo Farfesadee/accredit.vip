@@ -16,7 +16,6 @@ from app.api.qr_codes import get_or_create_guest_qr
 from app.services.email_service import send_email
 from app.services.sms_service import send_sms
 from app.services.whatsapp_service import send_whatsapp
-from app.services.whatsapp_cloud_service import send_whatsapp_cloud
 from app.services.qr_service import qr_to_url
 
 router = APIRouter()
@@ -33,10 +32,9 @@ class RSVPResponse(BaseModel):
 
 
 async def _send_whatsapp(to: str, message: str, media_url: str | None = None) -> tuple[bool, str | None]:
-    if settings.WHATSAPP_CLOUD_TOKEN and settings.WHATSAPP_CLOUD_PHONE_ID:
-        ok = await send_whatsapp_cloud(to, message, media_url)
-        if ok:
-            return ok, None
+    # send_whatsapp already tries Meta Cloud first and falls back to Twilio.
+    # The old wrapper here unpacked the Cloud tuple into a single variable, so a
+    # failed Cloud send looked like a success and blocked the fallback.
     return await send_whatsapp(to, message, media_url)
 
 
