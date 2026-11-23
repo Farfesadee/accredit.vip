@@ -185,6 +185,18 @@ async def _send_qr_after_rsvp(guest_id: int, event_id: int):
                                 "_content_sid": annette_qr_sid,
                             }
                             ok, provider_id = await _shared_send_whatsapp(guest.phone, body, media_url=None, content_vars=content_vars)
+
+                        # Meta Cloud confirm template (generic, approved UTILITY):
+                        # {{1}} = guest name, {{2}} = event title. Points to email for the QR code.
+                        meta_cloud_confirm_template = getattr(settings, "WHATSAPP_CLOUD_CONFIRM_TEMPLATE", "")
+                        if not ok and meta_cloud_confirm_template:
+                            from app.services.whatsapp_cloud_service import send_whatsapp_cloud_template
+                            ok, provider_id = await send_whatsapp_cloud_template(
+                                guest.phone,
+                                meta_cloud_confirm_template,
+                                [guest.name or "", event.title or ""],
+                            )
+
                         elif not ok:
                             ok, provider_id = await _send_whatsapp(guest.phone, body, media_url=qr_media_url)
                         if provider_id:
