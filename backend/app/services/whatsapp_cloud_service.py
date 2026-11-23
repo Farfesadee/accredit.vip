@@ -77,6 +77,7 @@ async def send_whatsapp_cloud_template(
     template_name: str,
     parameters: list[str],
     media_url: str | None = None,
+    header_handle: str | None = None,
 ) -> tuple[bool, str | None]:
     to = _normalize_phone(to)
     """
@@ -95,7 +96,7 @@ async def send_whatsapp_cloud_template(
         "type": "template",
         "template": {
             "name": template_name,
-            "language": {"code": "en"},
+            "language": {"code": "en_US"},
             "components": [
                 {
                     "type": "body",
@@ -104,7 +105,14 @@ async def send_whatsapp_cloud_template(
             ],
         },
     }
-    if media_url:
+    if header_handle:
+        data["template"]["components"].append(
+            {
+                "type": "header",
+                "parameters": [{"type": "image", "image": {"link": header_handle}}],
+            }
+        )
+    elif media_url:
         data["type"] = "template"
         data["template"]["components"].append(
             {

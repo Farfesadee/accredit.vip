@@ -2207,9 +2207,11 @@ async def _send_to_guest(
                     venue_str,
                     rsvp_link,
                 ]
+                # Template header image URL
+                header_image_url = "https://accredit.vip/uploads/warri/warri-cover.jpg"
                 from app.services.whatsapp_cloud_service import send_whatsapp_cloud_template
                 ok, provider_id = await send_whatsapp_cloud_template(
-                    guest.phone, meta_cloud_invite_template, content_vars
+                    guest.phone, meta_cloud_invite_template, content_vars, media_url=header_image_url
                 )
                 if not ok and media_to_send:
                     # Fallback to free-form (flyer + text) via Twilio
