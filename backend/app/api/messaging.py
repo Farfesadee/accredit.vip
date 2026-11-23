@@ -2160,6 +2160,12 @@ async def _send_to_guest(
                 # stays the fallback until Meta approves the template.
                 invite_content_sid = settings.TWILIO_WHATSAPP_ANCHOR_INVITE_CONTENT_SID
                 use_invite_template = True
+
+            # Meta Cloud invite template (generic, approved): {{1}}=name, {{2}}=event_title,
+            # {{3}}=date, {{4}}=venue, {{5}}=RSVP link. Used for all events when configured.
+            meta_cloud_invite_template = getattr(settings, "WHATSAPP_CLOUD_INVITE_TEMPLATE", "")
+            use_meta_cloud_invite = bool(meta_cloud_invite_template)
+
             media_to_send = _absolute_url(flyer_url) if flyer_url else None
             if include_qr and annette_invite_template:
                 # Event 72 only: the approved template carries the wording and the
@@ -2179,6 +2185,35 @@ async def _send_to_guest(
                 # Single media item on WhatsApp: the QR (flyer embedded in it).
                 qr_media_url = _absolute_url(qr_image_url) if qr_image_url else None
                 ok, provider_id = await _send_whatsapp(guest.phone, body, media_url=qr_media_url or media_to_send)
+            elif use_meta_cloud_invite:
+                # Meta Cloud WhatsApp template (accredit_invite_v1): {{1}}=name, {{2}}=event_title,
+                # {{3}}=date, {{4}}=venue, {{5}}=RSVP link.
+                # Falls back to free-form flyer + text if template send fails.
+                rsvp_link = invite_link_for(event, guest)
+                # Format date nicely
+                from datetime import date as dt_date
+                event_date = event.event_date
+                if isinstance(event_date, str):
+                    try:
+                        event_date = dt_date.fromisoformat(event_date)
+                    except ValueError:
+                        event_date = None
+                date_str = event_date.strftime("%A, %d %B %Y") if event_date else ""
+                venue_str = event.venue or ""
+                content_vars = [
+                    guest.name or "",
+                    event.title or "",
+                    date_str,
+                    venue_str,
+                    rsvp_link,
+                ]
+                from app.services.whatsapp_cloud_service import send_whatsapp_cloud_template
+                ok, provider_id = await send_whatsapp_cloud_template(
+                    guest.phone, meta_cloud_invite_template, content_vars
+                )
+                if not ok and media_to_send:
+                    # Fallback to free-form (flyer + text) via Twilio
+                    ok, provider_id = await _send_whatsapp(guest.phone, body, media_url=media_to_send)
             elif use_invite_template:
                 # Twilio WhatsApp template (fixed flyer header + {{1}}=name; ACAMB
                 # and wedding templates also take {{2}}=per-guest RSVP link)
