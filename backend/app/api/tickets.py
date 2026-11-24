@@ -843,13 +843,15 @@ async def get_purchase_status(
     return purchase
 
 
+from sqlalchemy.orm import selectinload
+
 @router.post("/purchase/verify/{reference}")
 async def verify_purchase(
     reference: str,
     db: AsyncSession = Depends(get_db),
 ):
     result = await db.execute(
-        select(TicketPurchase).where(TicketPurchase.reference == reference)
+        select(TicketPurchase).where(TicketPurchase.reference == reference).options(selectinload(TicketPurchase.event))
     )
     purchase = result.scalar_one_or_none()
     if not purchase:
