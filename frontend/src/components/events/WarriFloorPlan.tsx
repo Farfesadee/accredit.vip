@@ -520,9 +520,6 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
           masthead above, so this bar only explains what to do here. */}
       <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-1.5 border-b border-[#e6ebe8] bg-[#173935] px-4 py-4 sm:px-6 sm:py-5">
         <div className="min-w-0">
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#9fd3c4]">
-            SELECT TICKET
-          </p>
           <h2 className="mt-1 text-xl font-black leading-tight tracking-[-0.02em] text-white sm:text-2xl">
             SELECT TICKET
           </h2>
@@ -809,7 +806,7 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
           </div>
 
           <p className="border-t border-[#f2f4f2] px-3 py-2 text-[11px] font-semibold text-[#6b7d75]">
-            Swipe the map to pan. Tap Fit to see the whole hall.
+            Swipe the map. Tap Fit to see the sitting arrangements.
           </p>
         </div>
 
@@ -947,12 +944,7 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
                 <h3 className="text-base font-black text-[#182e2c]">VIP admission</h3>
               </div>
               <p className="text-[13px] font-semibold leading-6 text-[#55665f]">
-                VIP is general admission, not a numbered table. Add it here, then choose how many
-                passes you need in the ticket panel.
-              </p>
-              <p className="text-sm font-black text-[#182e2c]">
-                {priceLabel(packagePrice)}
-                <span className="font-semibold text-[#6b7d75]"> per guest</span>
+                VIP is general admission. Add it to proceed to payment.
               </p>
               <button
                 type="button"
