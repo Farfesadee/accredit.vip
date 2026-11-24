@@ -729,8 +729,8 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
                 const active = category !== null && m.cat === category;
                 const open = state === "available" || state === "partial";
                 const selectable = active && open && !mgmtMode; // Disable guest selection in management mode
-                // Fill: sold/blocked/unavailable = red, available = category color
-                const fill = (state === "sold" || state === "blocked" || (!open && active)) ? "#e53e3e" : active ? (open ? m.color : "#e53e3e") : "#e53e3e";
+                // Fill: available/partial = category color, sold/blocked = red, inactive = grey
+                const fill = state === "available" || state === "partial" ? m.color : state === "sold" || state === "blocked" ? "#e53e3e" : "#e0e4e1";
                 const isChosen = chosenId === m.id;
                 const isMgmtChosen = mgmtTableId && mgmtMode === "table" && tables[m.code]?.id === mgmtTableId;
                 const name = `${m.side} · Table ${m.n}${

@@ -76,6 +76,7 @@ export default function AdminEventsPage() {
   const [availInput, setAvailInput] = useState("");
   const [spotlightOn, setSpotlightOn] = useState(false);
   const [paystackKeyMode, setPaystackKeyMode] = useState<"live" | "test" | "">("");
+  const [tableCategoriesEnabled, setTableCategoriesEnabled] = useState<string[]>([]);
   const [inviteSubj, setInviteSubj] = useState("");
   const [inviteBody, setInviteBody] = useState("");
   const [fTitle, setFTitle] = useState("");
@@ -142,6 +143,7 @@ export default function AdminEventsPage() {
     setAvailInput(e.tickets_available === null || e.tickets_available === undefined ? "" : String(e.tickets_available));
     setSpotlightOn(!!e.spotlight);
     setPaystackKeyMode(e.paystack_key_mode || "");
+    setTableCategoriesEnabled(e.table_categories_enabled || []);
     setInviteSubj(e.invite_subject || "");
     setInviteBody(e.invite_body || "");
     setFTitle(e.title || "");
@@ -171,6 +173,7 @@ export default function AdminEventsPage() {
         is_public: isPublic,
         status: statusSel,
         spotlight: spotlightOn,
+        table_categories_enabled: tableCategoriesEnabled.length > 0 ? tableCategoriesEnabled : undefined,
       };
       body.registration_close_at = closeAtInput ? new Date(closeAtInput).toISOString() : "";
       if (fTitle.trim()) body.title = fTitle.trim();
