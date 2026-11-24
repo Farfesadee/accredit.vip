@@ -974,6 +974,30 @@ function EventDetailContent() {
         />
 
         <div className={`flex-1 min-w-0 transition-all duration-300 ${sidebarOpen ? "lg:ml-64" : "lg:ml-20"}`}>
+          {/* Headcount mode banner */}
+          {event.headcount_mode && (
+            <div className="bg-gradient-to-r from-red-600 to-red-700 px-4 sm:px-6 py-4">
+              <Link
+                href={`/dashboard/events/${id}/headcount`}
+                className="flex items-center justify-between max-w-5xl mx-auto"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-xl bg-white/20">
+                    <Users className="h-5 w-5 text-white" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-white">Headcount mode active</p>
+                    <p className="text-xs text-red-100">One QR on every wristband · Every scan counts · No guest list</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-white/90">Open the gate dashboard</span>
+                  <ChevronRight className="h-5 w-5 text-white" />
+                </div>
+              </Link>
+            </div>
+          )}
+
           <div
             ref={tabsRef}
             className={`z-20 bg-slate-50 pb-2 pt-2 px-4 sm:px-6 shadow-sm border-b border-slate-200 transition-none ${tabsFixed ? "fixed left-0 right-0 top-16" : ""}`}

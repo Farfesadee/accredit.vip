@@ -1,0 +1,14 @@
+# Binary assets are stored byte for byte. The deploy workflow rsyncs the
+# checkout to the server, so a line-ending conversion here would ship a
+# damaged PDF or image.
+*.pdf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.mp4 binary
+*.mp3 binary
+*.woff binary
+*.woff2 binary

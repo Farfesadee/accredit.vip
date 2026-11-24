@@ -5,6 +5,7 @@ from app.models.guest import Guest
 from app.models.invite import InviteMessage, InviteBatch
 from app.models.qr_code import QRCode
 from app.models.checkin import CheckIn
+from app.models.headcount import HeadcountScan
 from app.models.payment import Payment
 from app.models.audit_log import AuditLog
 from app.models.event_settings import EventSetting
@@ -32,7 +33,7 @@ from app.models.platform_setting import PlatformSetting
 
 all_models = [
     User, Event, EventDay, Guest, InviteMessage, InviteBatch, QRCode, CheckIn,
-    Payment, AuditLog, EventSetting, SupportTicket, Attachment,
+    HeadcountScan, Payment, AuditLog, EventSetting, SupportTicket, Attachment,
     FlierAsset, AccreditationRequest, StaffAssignment, TicketPurchase,
     PasswordResetToken, TrialUsage, Subscription, CommunityPost,
     DataGroup, DataProfile, DataRequest, WaitlistEntry, Coupon,

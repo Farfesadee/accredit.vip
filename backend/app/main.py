@@ -12,7 +12,7 @@ from app.core.database import init_db
 from app.core.rate_limit import RateLimitMiddleware
 
 logger = logging.getLogger(__name__)
-from app.api import auth, events, guests, qr_codes, verification, payments, admin, rsvp, burial_rsvp, event_registration, messaging, tickets, uploads, contact, trials, subscriptions, posts, ai, notifications, tracking, webhooks, guest_management, invite_sending, admin_dashboard, checkin_scanner, waitlist_api, coupons_api, rsvp_questions_api, event_templates_api, wallet_api, trial_migration, withdrawals, admin_events, admin_event_days, admin_audience, pickup_api, std_messages, failed_messages, email_campaign, announcements, platform_settings
+from app.api import auth, events, guests, qr_codes, verification, payments, admin, rsvp, burial_rsvp, event_registration, messaging, tickets, uploads, contact, trials, subscriptions, posts, ai, notifications, tracking, webhooks, guest_management, invite_sending, admin_dashboard, checkin_scanner, waitlist_api, coupons_api, rsvp_questions_api, event_templates_api, wallet_api, trial_migration, withdrawals, admin_events, admin_event_days, admin_audience, pickup_api, std_messages, failed_messages, email_campaign, announcements, platform_settings, headcount
 
 
 @asynccontextmanager
@@ -169,6 +169,7 @@ app.include_router(failed_messages.router, tags=["Failed Messages"])
 app.include_router(email_campaign.router, tags=["Email Campaign"])
 app.include_router(announcements.router, prefix="/api/v1", tags=["Announcements"])
 app.include_router(platform_settings.router, prefix="/api/v1", tags=["Platform Settings"])
+app.include_router(headcount.router, prefix="/api/v1", tags=["Headcount"])
 
 
 @app.get("/api/v1/assets/banner.gif")

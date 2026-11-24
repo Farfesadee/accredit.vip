@@ -61,6 +61,13 @@ class Event(Base):
     ticket_policy = Column(Text, nullable=True)
     # Floor plan image for table selection
     floor_plan_image = Column(String, nullable=True)
+    # Headcount events have no guest list at all. One shared QR is printed on
+    # every wristband and each scan is one person through the gate, so the
+    # dashboard counts scans instead of matching guests.
+    headcount_mode = Column(Boolean, default=False)
+    # Optional expected number of people per night, used only to draw a target
+    # line on the headcount dashboard. NULL means no target is shown.
+    headcount_target = Column(Integer, nullable=True)
     post_attempts = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

@@ -50,6 +50,8 @@ export type EventData = {
   invite_subject?: string | null;
   invite_body?: string | null;
   ticket_policy?: string | null;
+  headcount_mode?: boolean;
+  headcount_target?: number | null;
 };
 
 export type EventFilters = {

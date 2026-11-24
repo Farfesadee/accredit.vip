@@ -563,6 +563,7 @@ async def scanner_events(user: User = Depends(get_current_user), db: AsyncSessio
             "status": e.status,
             "day_count": day_counts.get(e.id, 0),
             "multi_day": day_counts.get(e.id, 0) > 0,
+            "headcount_mode": bool(getattr(e, "headcount_mode", False)),
         }
         for e in events
     ]
