@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, func, JSON
+from sqlalchemy.orm import relationship
 from app.core.database import Base
 
 
@@ -30,3 +31,5 @@ class TicketPurchase(Base):
     # unaffected.
     table_numbers = Column(JSON, nullable=True)
     seat_assignments = Column(JSON, nullable=True)
+
+    event = relationship("Event", foreign_keys=[event_id])
