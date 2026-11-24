@@ -305,6 +305,23 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
   const [seats, setSeats] = useState<number[]>([]);
   const [zoom, setZoom] = useState(1);
   const mapScrollRef = useRef<HTMLDivElement | null>(null);
+  const mapCardRef = useRef<HTMLDivElement | null>(null);
+  const panelRef = useRef<HTMLElement | null>(null);
+  // Each step hands the guest to the next one: the map after a category is
+  // chosen, the selection panel after a table is picked. It only moves when the
+  // target is not already on screen, so desktop (where the map and the panel
+  // sit side by side) never jumps while phones scroll step by step.
+  const bringIntoView = (el: HTMLElement | null) => {
+    if (typeof window === "undefined" || !el) return;
+    const navOffset = 88;
+    const { top } = el.getBoundingClientRect();
+    if (top >= navOffset && top <= window.innerHeight * 0.45) return;
+    window.scrollTo({ top: window.scrollY + top - navOffset, behavior: "smooth" });
+  };
+  const nextFrame = (el: HTMLElement | null) => {
+    if (typeof window === "undefined") return;
+    window.requestAnimationFrame(() => bringIntoView(el));
+  };
   // The plan is 900 CSS px wide at 1x, wider than a phone. Fit drops the scale
   // until the whole hall is on screen, and + brings the table numbers back up.
   const fitToPlan = () => {
@@ -354,11 +371,13 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
     if (nextCategory !== undefined) setCategory(nextCategory);
   };
 
-  const pick = (id: string) => {
+  const pick = (id: string, move = false) => {
     setChosenId(id);
     setSeats([]);
     setMode(null);
     setNotice("");
+    // Tapping the map hands the guest straight to the selection panel.
+    if (move) nextFrame(panelRef.current);
   };
 
   const toggleSeat = (seat: number) => {
@@ -463,8 +482,8 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
       id="seating-plan"
       className="scroll-mt-24 overflow-hidden rounded-3xl border border-[#d8dfdb] bg-white"
     >
-      {/* Slim header. The event name, venue and date already sit in the hero
-          above, so this bar only explains what to do here. */}
+      {/* Slim header. The event name, date and venue sit in the compact
+          masthead above, so this bar only explains what to do here. */}
       <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-1.5 border-b border-[#e6ebe8] bg-[#173935] px-4 py-4 sm:px-6 sm:py-5">
         <div className="min-w-0">
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#9fd3c4]">
@@ -497,7 +516,13 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
           <select
             id="floor-category"
             value={category === null ? "" : String(category)}
-            onChange={(e) => reset(e.target.value === "" ? null : Number(e.target.value))}
+            onChange={(e) => {
+              const next = e.target.value === "" ? null : Number(e.target.value);
+              reset(next);
+              // A chosen category lights up the map's tables, so carry the
+              // guest down to the map instead of leaving them to scroll.
+              if (next !== null) nextFrame(mapCardRef.current);
+            }}
             className="h-12 w-full rounded-xl border border-[#aab8b3] bg-white px-3 text-base font-semibold text-[#182e2c] outline-none focus:border-[#173935] sm:max-w-xs"
           >
             <option value="">Select a category</option>
@@ -532,7 +557,7 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
           desktop. One tree, so both always show the same state. */}
       <div className="grid gap-4 p-3 sm:p-4 lg:grid-cols-[minmax(0,1fr)_336px] lg:items-start">
         {/* MAP */}
-        <div className="min-w-0 overflow-hidden rounded-2xl border border-[#e2e8e4] bg-white">
+        <div ref={mapCardRef} className="min-w-0 overflow-hidden rounded-2xl border border-[#e2e8e4] bg-white">
           <div className="flex items-center justify-between gap-3 border-b border-[#eef1ee] px-3 py-2.5">
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-black uppercase tracking-[0.12em] text-[#42544d]">
@@ -669,11 +694,11 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
                     role={selectable ? "button" : undefined}
                     aria-label={name}
                     aria-pressed={selectable ? isChosen : undefined}
-                    onClick={() => selectable && pick(m.id)}
+                    onClick={() => selectable && pick(m.id, true)}
                     onKeyDown={(e) => {
                       if (selectable && (e.key === "Enter" || e.key === " ")) {
                         e.preventDefault();
-                        pick(m.id);
+                        pick(m.id, true);
                       }
                     }}
                   >
@@ -722,7 +747,7 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
         </div>
 
         {/* SELECTION PANEL */}
-        <aside className="min-w-0 rounded-2xl border border-[#e2e8e4] bg-white p-4">
+        <aside ref={panelRef} className="min-w-0 rounded-2xl border border-[#e2e8e4] bg-white p-4">
           {category === null ? (
             <div className="space-y-2">
               <p className="flex items-center gap-2 text-[13px] font-black text-[#182e2c]">

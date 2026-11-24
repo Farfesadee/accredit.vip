@@ -410,37 +410,40 @@ function PublicEventContent() {
       />
       <Navbar variant="light" />
 
-      {/* Hero Banner */}
-      <div className="relative w-full h-48 sm:h-56 overflow-hidden">
-        {imgUrl ? (
-          <img src={imgUrl} alt={event.title} className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center" style={{ background: heroBg }}>
-            <CategoryIcon cat={cat} className="w-20 h-20 text-white/20" />
-          </div>
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-        <div className="absolute bottom-0 left-0 right-0 px-4 sm:px-8 pb-6 sm:pb-8 max-w-5xl mx-auto w-full">
-          <span
-            className="inline-block text-[10px] font-black uppercase tracking-[0.18em] px-3 py-1 rounded-full mb-3"
-            style={{ background: "rgba(26,188,156,0.85)", color: "white" }}
-          >
-            {cat.toUpperCase() || "EVENT"}
-          </span>
-          {isEnded && (
-            <span
-              className="inline-block text-[10px] font-black uppercase tracking-[0.18em] px-3 py-1 rounded-full mb-3 ml-2"
-              style={{ background: "#64748b", color: "white" }}
-            >
-              Ended
-            </span>
+      {/* Hero Banner. The seating-plan page carries no flyer hero: its masthead
+          below is compact so the plan itself is the first thing a visitor sees. */}
+      {!isFloorPlanEvent && (
+        <div className="relative w-full h-48 sm:h-56 overflow-hidden">
+          {imgUrl ? (
+            <img src={imgUrl} alt={event.title} className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center" style={{ background: heroBg }}>
+              <CategoryIcon cat={cat} className="w-20 h-20 text-white/20" />
+            </div>
           )}
-          <h1 className="text-white text-2xl sm:text-4xl font-black leading-tight drop-shadow-md">
-            {event.title}
-          </h1>
-          <p className="text-white/75 text-sm mt-1 font-medium">by {event.host_name}</p>
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+          <div className="absolute bottom-0 left-0 right-0 px-4 sm:px-8 pb-6 sm:pb-8 max-w-5xl mx-auto w-full">
+            <span
+              className="inline-block text-[10px] font-black uppercase tracking-[0.18em] px-3 py-1 rounded-full mb-3"
+              style={{ background: "rgba(26,188,156,0.85)", color: "white" }}
+            >
+              {cat.toUpperCase() || "EVENT"}
+            </span>
+            {isEnded && (
+              <span
+                className="inline-block text-[10px] font-black uppercase tracking-[0.18em] px-3 py-1 rounded-full mb-3 ml-2"
+                style={{ background: "#64748b", color: "white" }}
+              >
+                Ended
+              </span>
+            )}
+            <h1 className="text-white text-2xl sm:text-4xl font-black leading-tight drop-shadow-md">
+              {event.title}
+            </h1>
+            <p className="text-white/75 text-sm mt-1 font-medium">by {event.host_name}</p>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Payment pending banner */}
       {purchaseStatus && purchaseStatus.status !== "completed" && (
@@ -449,11 +452,30 @@ function PublicEventContent() {
         </div>
       )}
 
-      {/* Compact facts line for the seating-plan event: date, time, venue and
-          dress code in one strip instead of four separate cards. */}
+      {/* Compact masthead for the seating-plan event. No flyer hero: the event
+          identity and the facts share one short strip, so the seating plan is
+          the first thing a visitor sees. */}
       {isFloorPlanEvent && (
         <div className="border-b border-[#e8edf2] bg-[#f8f9fc]">
-          <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-x-5 gap-y-1.5 px-4 py-3 text-[13px] font-semibold text-[#475569] sm:px-6 lg:px-8">
+          <div className="mx-auto max-w-[1400px] px-4 py-3.5 sm:px-6 lg:px-8">
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <h1 className="text-xl font-black leading-tight text-[#0D1B2A] sm:text-2xl">
+                {event.title}
+              </h1>
+              <span
+                className="rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.16em] text-[#0f766e]"
+                style={{ background: "rgba(26,188,156,0.14)" }}
+              >
+                {cat || "Event"}
+              </span>
+              {isEnded && (
+                <span className="rounded-full bg-[#64748b] px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.16em] text-white">
+                  Ended
+                </span>
+              )}
+              <span className="text-xs font-semibold text-[#64748b]">by {event.host_name}</span>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[13px] font-semibold text-[#475569]">
             <span className="inline-flex items-center gap-1.5">
               <svg className="h-4 w-4 text-[#1ABC9C]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -499,6 +521,7 @@ function PublicEventContent() {
                 </svg>
               </a>
             ) : null}
+            </div>
           </div>
         </div>
       )}
@@ -835,9 +858,9 @@ function PublicEventContent() {
               )}
             </div>
 
-            {/* Pass packages. On the seating-plan event this doubles as the
-                tier price list; the plan above is the selector. */}
-            {passPackages.length > 0 && (
+            {/* Pass packages. The seating-plan event carries no tier list here:
+                the plan above is the selector and already prints each price. */}
+            {passPackages.length > 0 && !isFloorPlanEvent && (
               <div className="px-6 py-4 border-b border-[#e8edf2] bg-[#f8f9fc] min-w-0 overflow-hidden">
                 <p className="text-xs font-bold uppercase tracking-wider text-[#94a3b8] mb-3">
                   {isFloorPlanEvent ? "Tables and prices" : "Choose your pass"}
