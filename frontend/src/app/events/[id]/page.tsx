@@ -725,9 +725,9 @@ function PublicEventContent() {
                 <p className="text-2xl font-black text-white">FREE ENTRY</p>
               ) : awaitingFloorChoice ? (
                 <>
-                  <p className="text-2xl font-black text-white">Choose a table</p>
+                  <p className="text-2xl font-black text-white">SELECT TICKET</p>
                   <p className="mt-1 text-xs font-medium text-white/60">
-                    Pick a numbered table on the plan above, or add a VIP pass.
+                    Pick VIP or a table on the plan above.
                   </p>
                 </>
               ) : (

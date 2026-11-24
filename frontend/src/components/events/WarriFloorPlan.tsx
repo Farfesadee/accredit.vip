@@ -71,15 +71,15 @@ type Marker = {
 };
 
 const CATS = [
-  { name: "Silver Table", color: "#12c9ed", prefix: "SL" },
-  { name: "Gold Table", color: "#47ed15", prefix: "GL" },
-  { name: "Premium Gold", color: "#009337", prefix: "PGL" },
-  { name: "Platinum Star", color: "#ffda48", prefix: "PS" },
-  { name: "Platinum Legacy", color: "#3465ac", prefix: "PL" },
-  { name: "Platinum Prime", color: "#956536", prefix: "PPM" },
-  { name: "Platinum Prestige", color: "#ff9c36", prefix: "PP" },
-  { name: "Platinum Extreme", color: "#cb3700", prefix: "PE" },
-  { name: "VIP", color: "#c42d23", prefix: "VIP" },
+  { name: "Silver Table", color: "#12c9ed", prefix: "SL", enabled: false },
+  { name: "Gold Table", color: "#47ed15", prefix: "GL", enabled: false },
+  { name: "Premium Gold", color: "#009337", prefix: "PGL", enabled: false },
+  { name: "Platinum Star", color: "#ffda48", prefix: "PS", enabled: false },
+  { name: "Platinum Legacy", color: "#3465ac", prefix: "PL", enabled: false },
+  { name: "Platinum Prime", color: "#956536", prefix: "PPM", enabled: false },
+  { name: "Platinum Prestige", color: "#ff9c36", prefix: "PP", enabled: false },
+  { name: "Platinum Extreme", color: "#cb3700", prefix: "PE", enabled: false },
+  { name: "VIP", color: "#c42d23", prefix: "VIP", enabled: true },
 ];
 
 /**
@@ -407,17 +407,16 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
 
   const cat = category === null ? null : CATS[category];
   const isVip = category === 8;
-  const isExtreme = category === 7;
-  const bySeat = mode === "seat";
+  // Only VIP is enabled, tables disabled per client request
   const packageForCat = cat ? packages.find((p) => p.name === cat.name) || null : null;
   const packageSeats = Math.max(1, Number(packageForCat?.seats) || 1);
   const packagePrice = Number(packageForCat?.price) || 0;
-  const seatPrice = packageSeats > 1 ? Math.round(packagePrice / packageSeats) : packagePrice;
 
   const chosen = chosenId ? markers.find((m) => m.id === chosenId) || null : null;
   const chosenTable = chosen ? tables[chosen.code] : undefined;
   const tableSeats = Math.max(1, Number(chosenTable?.seat_count) || packageSeats);
   const soldSeats = new Set<number>(chosenTable?.sold_seats || []);
+  // Unavailable seats include blocked (4, 8) and sold - shown in red
   const unavailableSeats = new Set<number>([...BLOCKED_SEATS, ...Array.from(soldSeats)]);
 
   const reset = (nextCategory?: number | null) => {
@@ -470,16 +469,12 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
     ? "Add VIP pass"
     : !mode
     ? "Choose how to buy"
-    : bySeat
-    ? seats.length
-      ? `Reserve ${seats.length} seat${seats.length === 1 ? "" : "s"}`
-      : "Select your seats"
     : "Reserve this table";
 
   // Nothing is preselected: a table alone is not a choice of how to buy it.
   const reserveDisabled = isVip
     ? false
-    : !chosen || !mode || (bySeat ? seats.length === 0 : chosenState !== "available");
+    : !chosen || !mode || chosenState !== "available";
 
   const handleReserve = () => {
     if (reserveDisabled) return;
@@ -499,35 +494,17 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
     }
     if (!chosen) return;
     const label = `${chosen.side} · Table ${chosen.n}`;
-    if (bySeat) {
-      onReserve({
-        packageName: cat?.name || "",
-        mode: "seat",
-        tables: [chosen.code],
-        seats: [...seats].sort((a, b) => a - b),
-        quantity: seats.length,
-        unitPrice: seatPrice,
-        totalPrice: seatPrice * seats.length,
-        label: `${label} · Seat${seats.length === 1 ? "" : "s"} ${[...seats]
-          .sort((a, b) => a - b)
-          .join(", ")}`,
-      });
-      setNotice(
-        `${seats.length} seat${seats.length === 1 ? "" : "s"} on ${label} added to the ticket panel below.`,
-      );
-    } else {
-      onReserve({
-        packageName: cat?.name || "",
-        mode: "table",
-        tables: [chosen.code],
-        seats: [],
-        quantity: 1,
-        unitPrice: packagePrice,
-        totalPrice: packagePrice,
-        label: `${label} · Whole table, ${packageSeats} seats`,
-      });
-      setNotice(`${label} added to the ticket panel below.`);
-    }
+    onReserve({
+      packageName: cat?.name || "",
+      mode: "table",
+      tables: [chosen.code],
+      seats: [],
+      quantity: 1,
+      unitPrice: packagePrice,
+      totalPrice: packagePrice,
+      label: `${label} · Table, ${packageSeats} seats`,
+    });
+    setNotice(`${label} added to the ticket panel below.`);
   };
 
   const categoryMarkers = category === null ? [] : markers.filter((m) => m.cat === category);
@@ -544,14 +521,14 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
       <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-1.5 border-b border-[#e6ebe8] bg-[#173935] px-4 py-4 sm:px-6 sm:py-5">
         <div className="min-w-0">
           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#9fd3c4]">
-            Seating plan
+            SELECT TICKET
           </p>
           <h2 className="mt-1 text-xl font-black leading-tight tracking-[-0.02em] text-white sm:text-2xl">
-            Choose Ticket
+            SELECT TICKET
           </h2>
         </div>
         <p className="max-w-sm text-[12px] font-semibold leading-5 text-white/75 sm:text-[13px]">
-          VIP passes or tables — pick your experience.
+          VIP or table — pick your experience.
         </p>
       </header>
 
@@ -585,7 +562,7 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
                 />
                 VIP
               </button>
-              {/* Other categories in dropdown */}
+              {/* Other categories in dropdown - disabled for now, only VIP active */}
               <div className="relative flex-1 min-w-[200px] sm:max-w-xs">
                 <select
                   id="floor-category"
@@ -597,12 +574,13 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
                       if (next !== null) nextFrame(mapCardRef.current);
                     }
                   }}
-                  className="h-12 w-full rounded-xl border border-[#aab8b3] bg-white px-3 text-base font-semibold text-[#182e2c] outline-none focus:border-[#173935] appearance-none pr-10"
+                  disabled={true}
+                  className="h-12 w-full rounded-xl border border-[#aab8b3] bg-[#f5f5f5] px-3 text-base font-semibold text-[#999] outline-none appearance-none pr-10"
                 >
-                  <option value="">Select a table category</option>
+                  <option value="">Table categories coming soon</option>
                   {CATS.slice(0, 8).map((c, i) => (
-                    <option key={c.name} value={i}>
-                      {c.name}
+                    <option key={c.name} value={i} disabled>
+                      {c.name} (unavailable)
                     </option>
                   ))}
                 </select>
@@ -611,18 +589,12 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
                 </span>
               </div>
             </div>
-            {cat && (
+            {cat && isVip && (
               <p className="text-[13px] font-semibold leading-5 text-[#46564f] mt-2">
                 {packageForCat ? (
                   <>
                     <span className="font-black text-[#182e2c]">{priceLabel(packagePrice)}</span>
                     {packageSeats > 1 ? ` per table of ${packageSeats}` : " per guest"}
-                    {packageSeats > 1 && (
-                      <span className="text-[#6b7d75]"> · {priceLabel(seatPrice)} per seat</span>
-                    )}
-                    {!isVip && !isExtreme && (
-                      <span className="text-[#6b7d75]"> · {openCount} open</span>
-                    )}
                   </>
                 ) : (
                   "Price on request"
@@ -837,7 +809,7 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
           </div>
 
           <p className="border-t border-[#f2f4f2] px-3 py-2 text-[11px] font-semibold text-[#6b7d75]">
-            Swipe the map to pan. Tap Fit to see the whole hall, or + to read the table numbers.
+            Swipe the map to pan. Tap Fit to see the whole hall.
           </p>
         </div>
 
@@ -993,20 +965,6 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
                 {notice}
               </p>
             </div>
-          ) : isExtreme ? (
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <span
-                  className="inline-block h-3.5 w-3.5 rounded-full border border-[#93a29b]"
-                  style={{ background: accent }}
-                />
-                <h3 className="text-base font-black text-[#182e2c]">Platinum Extreme</h3>
-              </div>
-              <p className="rounded-xl border border-[#e7b7b4] bg-[#fdf1f0] px-3 py-2.5 text-[12px] font-bold leading-5 text-[#8a2b26]">
-                Shown for reference on the organiser&apos;s plan. Public sales for this tier have
-                not been confirmed, so it cannot be bought here.
-              </p>
-            </div>
           ) : !chosen ? (
             <div className="space-y-3">
               <p className="flex items-center gap-2 text-[13px] font-black text-[#182e2c]">
@@ -1033,9 +991,6 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
                     </option>
                   ))}
               </select>
-              <p className="text-[12px] font-semibold leading-5 text-[#6b7d75]">
-                {openCount} table{openCount === 1 ? "" : "s"} open in {CATS[category ?? 0].name}.
-              </p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -1054,18 +1009,17 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
                 />
               </div>
 
-              {/* Step 3: how to buy. No preselected option. */}
+              {/* Direct table selection - no seat mode */}
               <p className="flex items-center gap-2 text-[13px] font-black text-[#182e2c]">
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#173935] text-[11px] font-black text-white">
                   3
                 </span>
-                {mode ? "Your choice" : "How would you like to buy?"}
+                Confirm your table
               </p>
 
-              {chosenState === "partial" && mode !== "seat" && (
+              {chosenState === "partial" && (
                 <p className="rounded-lg border border-[#f0c36d] bg-[#fffbeb] px-3 py-2 text-[12px] font-bold leading-5 text-[#92400e]">
-                  Some seats on this table are already taken, so only individual seats can be
-                  bought.
+                  Some seats on this table are already taken, so it cannot be bought whole.
                 </p>
               )}
 
@@ -1073,65 +1027,25 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
                 <button
                   type="button"
                   disabled={chosenState !== "available"}
-                  onClick={() => {
-                    setMode("table");
-                    setSeats([]);
-                    setNotice("");
-                  }}
-                  className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left transition-colors ${
-                    mode === "table"
-                      ? "border-[#173935] bg-[#eef4f1]"
-                      : "border-[#dfe5e1] bg-white hover:border-[#aab8b3]"
-                  } disabled:cursor-not-allowed disabled:opacity-50`}
+                  onClick={handleReserve}
+                  className="flex items-center justify-between gap-2 rounded-xl border border-[#173935] bg-[#eef4f1] px-3 py-2.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <span className="min-w-0">
-                    <span className="block text-[13px] font-black text-[#182e2c]">Whole table</span>
+                    <span className="block text-[13px] font-black text-[#182e2c]">Table</span>
                     <span className="block text-[11px] font-semibold text-[#6b7d75]">
-                      All {packageSeats} seats, one payment
+                      {packageSeats} seats, one payment
                     </span>
                   </span>
                   <span className="flex-shrink-0 text-[13px] font-black text-[#182e2c]">
                     {priceLabel(packagePrice)}
                   </span>
                 </button>
-
-                {packageSeats > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMode("seat");
-                      setSeats([]);
-                      setNotice("");
-                    }}
-                    className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left transition-colors ${
-                      mode === "seat"
-                        ? "border-[#173935] bg-[#eef4f1]"
-                        : "border-[#dfe5e1] bg-white hover:border-[#aab8b3]"
-                    }`}
-                  >
-                    <span className="min-w-0">
-                      <span className="block text-[13px] font-black text-[#182e2c]">
-                        Individual seats
-                      </span>
-                      <span className="block text-[11px] font-semibold text-[#6b7d75]">
-                        Pick your own seat numbers
-                      </span>
-                    </span>
-                    <span className="flex-shrink-0 text-[13px] font-black text-[#182e2c]">
-                      {priceLabel(seatPrice)} each
-                    </span>
-                  </button>
-                )}
               </div>
 
-              {bySeat && (
+              {!isVip && (
                 <div>
                   <p className="mb-1 text-[12px] font-semibold leading-5 text-[#55665f]">
-                    {seats.length === 0
-                      ? "Tap a seat number. Seats 4 and 8 are not for sale."
-                      : `Seats ${[...seats]
-                          .sort((a, b) => a - b)
-                          .join(", ")} selected.`}
+                    Seats 4 and 8 are not for sale.
                   </p>
                   <svg
                     viewBox="0 0 250 220"
@@ -1156,7 +1070,6 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
                       const isSold = soldSeats.has(n);
                       const isBlocked = BLOCKED_SEATS.includes(n);
                       const off = isBlocked;
-                      const picked = seats.includes(n);
                       const isMgmtPicked = mgmtMode === "seat" && mgmtSeats.includes(n);
                       // Fill: sold = red, blocked = grey, available = category color
                       const fill = isSold ? "#e53e3e" : off ? "#d1d6d3" : chosen.color;
@@ -1167,22 +1080,18 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
                           tabIndex={(!off && !isSold && !mgmtMode) || (canManage && mgmtMode === "seat") ? 0 : -1}
                           role={(!off && !isSold && !mgmtMode) || (canManage && mgmtMode === "seat") ? "button" : undefined}
                           aria-label={`Seat ${n}${isSold ? " sold" : off ? " unavailable" : ""}`}
-                          aria-pressed={isMgmtPicked || picked}
+                          aria-pressed={isMgmtPicked}
                           onClick={() => {
                             if (mgmtMode === "seat" && canManage) {
                               setMgmtSeats(prev => prev.includes(n) ? prev.filter(s => s !== n) : [...prev, n].sort((a,b)=>a-b));
-                            } else if (!isSold && !off && !mgmtMode) {
-                              toggleSeat(n);
                             }
                           }}
                           onKeyDown={(e) => {
-                            if ((!off && !isSold && !mgmtMode) || (canManage && mgmtMode === "seat")) {
+                            if ((canManage && mgmtMode === "seat")) {
                               if (e.key === "Enter" || e.key === " ") {
                                 e.preventDefault();
                                 if (mgmtMode === "seat" && canManage) {
                                   setMgmtSeats(prev => prev.includes(n) ? prev.filter(s => s !== n) : [...prev, n].sort((a,b)=>a-b));
-                                } else {
-                                  toggleSeat(n);
                                 }
                               }
                             }
@@ -1199,16 +1108,13 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
                           {isMgmtPicked && (
                             <circle cx={x} cy={y} r={19} fill="none" stroke="#e53e3e" strokeWidth={3} strokeDasharray="6 4" />
                           )}
-                          {picked && !mgmtMode && (
-                            <circle cx={x} cy={y} r={19} fill="none" stroke="#172b25" strokeWidth={3} />
-                          )}
                           <circle
                             cx={x}
                             cy={y}
                             r={16}
                             fill={fill}
-                            stroke={off ? "#c9cfcb" : (picked || isMgmtPicked) ? "#e53e3e" : "#58645f"}
-                            strokeWidth={(picked || isMgmtPicked) ? 3 : 2}
+                            stroke={off ? "#c9cfcb" : isMgmtPicked ? "#e53e3e" : "#58645f"}
+                            strokeWidth={isMgmtPicked ? 3 : 2}
                           />
                           <text
                             x={x}
@@ -1231,12 +1137,10 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
               {mode && (
                 <div className="rounded-xl bg-[#f6f8f4] px-3 py-2.5">
                   <p className="text-[12px] font-semibold text-[#42544d]">
-                    {bySeat
-                      ? `${seats.length || 0} x ${priceLabel(seatPrice)}`
-                      : `1 x ${priceLabel(packagePrice)}`}
+                    1 x {priceLabel(packagePrice)}
                   </p>
                   <p className="mt-0.5 text-base font-black text-[#173935]">
-                    {priceLabel(bySeat ? seatPrice * seats.length : packagePrice)}
+                    {priceLabel(packagePrice)}
                   </p>
                 </div>
               )}
