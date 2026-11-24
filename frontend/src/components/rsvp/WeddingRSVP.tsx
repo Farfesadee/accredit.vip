@@ -721,6 +721,19 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
                 {content.traditional.location ? `, ${content.traditional.location}` : ""}
               </p>
             )}
+            {content.traditional.venue && (
+              <a
+                href={dirUrl(
+                  [content.traditional.venue, content.traditional.location].filter(Boolean).join(", ")
+                )}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-2 inline-block text-xs font-bold underline underline-offset-4"
+                style={{ color: GOLD_LIGHT }}
+              >
+                Get directions
+              </a>
+            )}
           </div>
         )}
 
@@ -751,6 +764,7 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
             {/* Chronological: the traditional falls two days before the white
                 wedding, so it reads first. */}
             {[
+              { look: content.dress_code.traditional, shades: false },
               { look: content.dress_code.wedding, shades: true },
             ]
               .filter((entry) => Boolean(entry.look))
@@ -842,7 +856,9 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
             <p className="text-sm opacity-70 mt-2">
               {declined
                 ? "Your reply has been recorded. You will be missed."
-                : "Your attendance has been recorded. A confirmation message is on its way to your email and WhatsApp. Your entry pass will follow closer to the day."}
+                : eventAttendance === "traditional"
+                  ? "Your attendance has been recorded. We will be in touch closer to the day."
+                  : "Your attendance has been recorded. A confirmation message is on its way to your email and WhatsApp. Your entry pass will follow closer to the day."}
             </p>
             {guestToken && (
               <button
@@ -865,7 +881,8 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
             {!showEventPicker ? (
               <>
                 <p className="text-xs text-center mb-4" style={{ color: MUTED, maxWidth: "320px", margin: "0 auto 1.5rem" }}>
-                  This RSVP is for the <strong>White Wedding</strong> on Saturday, 19 December 2026.
+                  This RSVP is for the <strong>White Wedding</strong> on Saturday, 19 December 2026.<br />
+                  The Traditional Wedding on Thursday, 17 December 2026 uses access cards only.
                 </p>
                 <p className="font-serif text-2xl mb-2">Will you be attending?</p>
                 <p className="text-xs text-center mb-4 opacity-60" style={{ maxWidth: "320px", margin: "0 auto 1.5rem" }}>
@@ -931,6 +948,12 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
                         <p className="text-[11px] mt-0.5" style={{ color: MUTED }}>{opt.date}</p>
                         {opt.value === "white_wedding" && (
                           <p className="text-[10px] mt-1 font-medium" style={{ color: GOLD }}>Dress code: Gentlemen black tie, Ladies pastels with fascinators</p>
+                        )}
+                        {opt.value === "traditional" && (
+                          <p className="text-[10px] mt-1 font-medium" style={{ color: GOLD }}>Dress code: Gentlemen dark green and white, Ladies asoebi</p>
+                        )}
+                        {opt.value === "both" && (
+                          <p className="text-[10px] mt-1 font-medium" style={{ color: GOLD }}>White wedding: black tie (men) / pastels (women). Traditional: dark green and white (men) / asoebi (women).</p>
                         )}
                       </div>
                     </div>

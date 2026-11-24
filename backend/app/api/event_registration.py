@@ -85,6 +85,13 @@ def wedding_content() -> dict:
                 "women": "Pastel colours, with fascinators",
                 "note": "Gentlemen: black tie. Ladies: soft pastel tones, with fascinators.",
             },
+            "traditional": {
+                "label": "The Traditional Wedding",
+                "when": "Thursday, 17 December 2026",
+                "men": "Dark green and white",
+                "women": "Asoebi",
+                "note": "Gentlemen: dark green and white. Ladies: the friends of the couple asoebi.",
+            },
             # Names only: the client asked us to drop the colour swatches and
             # keep the shade names as words.
             "colors": [
@@ -100,6 +107,8 @@ def wedding_content() -> dict:
         },
         "attendance_options": [
             { "value": "white_wedding", "label": "White Wedding", "date": "Saturday, 19 December 2026" },
+            { "value": "traditional", "label": "Traditional Wedding", "date": "Thursday, 17 December 2026" },
+            { "value": "both", "label": "Both", "date": "Both days" },
         ],
         "video_url": "/uploads/wedding-0cd6a8bc64df.mp4",
         # Opening curtain the client supplied (their montage). Silent clip: the
@@ -142,7 +151,7 @@ def wedding_content() -> dict:
             },
             {
                 "q": "Where is the traditional wedding?",
-                "a": "Maha Event Center, Garki Area 8, Abuja, on Thursday, 17 December 2026 from 2:00 PM.",
+                "a": "Maha Event Center, Garki Area 8, Abuja, on Thursday, 17 December 2026 from 2:00 PM. The When and Where section carries directions from wherever you are.",
             },
             {
                 "q": "What should I wear to the white wedding?",
