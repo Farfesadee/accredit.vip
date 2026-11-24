@@ -4,20 +4,43 @@ import { useEffect, useRef, useState } from "react";
 import jsQR from "jsqr";
 import { Camera, X } from "lucide-react";
 
-interface QRScannerProps {
+export interface QRScannerProps {
   onScan: (token: string) => void;
   onError: (message: string) => void;
   onStart: () => void;
   onStop: () => void;
   scanningDisabled?: boolean;
+  /**
+   * "cooldown" (default): the same code may fire again after a short pause,
+   * which is what a guest code wants when a verify call has to be retried.
+   * "exit": the code must leave the frame before it can fire again. A
+   * headcount event prints one code on every wristband, so without this a
+   * wristband held under the lens would be counted over and over.
+   */
+  repeatMode?: "cooldown" | "exit";
 }
 
-export default function QRScanner({ onScan, onError, onStart, onStop, scanningDisabled }: QRScannerProps) {
+const SAME_CODE_COOLDOWN_MS = 2500;
+
+export default function QRScanner({
+  onScan,
+  onError,
+  onStart,
+  onStop,
+  scanningDisabled,
+  repeatMode = "cooldown",
+}: QRScannerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const mountedRef = useRef(true);
   const frameTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Last code accepted from the camera, and when. Kept in refs because the
+  // decode loop is an interval and must never read stale state.
+  const heldCodeRef = useRef<string>("");
+  const lastFiredRef = useRef<number>(0);
+  const repeatModeRef = useRef(repeatMode);
+  repeatModeRef.current = repeatMode;
 
   const [scannerStarted, setScannerStarted] = useState(false);
   const [error, setError] = useState("");
@@ -30,6 +53,7 @@ export default function QRScanner({ onScan, onError, onStart, onStop, scanningDi
   }, []);
 
   function stopMedia() {
+    heldCodeRef.current = "";
     if (frameTimerRef.current) {
       clearInterval(frameTimerRef.current);
       frameTimerRef.current = null;
@@ -69,10 +93,24 @@ export default function QRScanner({ onScan, onError, onStart, onStop, scanningDi
       inversionAttempts: "dontInvert",
     });
 
-    if (code) {
-      const token = code.data;
-      onScan(token);
+    if (!code) {
+      // Nothing in view: the next sighting of any code is a fresh read.
+      heldCodeRef.current = "";
+      return;
     }
+
+    const token = code.data;
+    const now = Date.now();
+    if (token === heldCodeRef.current) {
+      // In headcount mode a code stays "held" until it physically leaves the
+      // frame, so one wristband cannot be counted twice by a steady hand.
+      if (repeatModeRef.current === "exit") return;
+      if (now - lastFiredRef.current < SAME_CODE_COOLDOWN_MS) return;
+    }
+
+    heldCodeRef.current = token;
+    lastFiredRef.current = now;
+    onScan(token);
   };
 
   const startScanner = async () => {

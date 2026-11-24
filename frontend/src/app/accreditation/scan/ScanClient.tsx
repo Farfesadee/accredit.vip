@@ -6,9 +6,12 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { apiClient, API_BASE } from "@/lib/api-client";
 import { useAuth } from "@/contexts/auth-context";
-import { Check, X, Search, Camera, User, Clock, Loader, ChevronDown, QrCode, LogOut, Scan, FileText, Plane, Building2, MapPin, Bus, Calendar, Lock } from "lucide-react";
+import { Check, X, Search, Camera, User, Clock, Loader, ChevronDown, QrCode, LogOut, Scan, FileText, Plane, Building2, MapPin, Bus, Calendar, Lock, RotateCcw, Users, TrendingUp } from "lucide-react";
+import type { QRScannerProps } from "@/components/accreditation/QRScanner";
 
 const QRScanner = dynamic(() => import("@/components/accreditation/QRScanner"), { ssr: false });
+// Cast to accept repeatMode - dynamic import doesn't carry props type through
+const TypedQRScanner = QRScanner as React.ComponentType<QRScannerProps>;
 
 type Mode = "scanner" | "manual";
 
@@ -164,6 +167,17 @@ export function AccreditationScanClient() {
   const [eventDays, setEventDays] = useState<Day[]>([]);
   const [selectedDayId, setSelectedDayId] = useState<number | null>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+
+  // --- Headcount mode (events with no guest list) ---
+  // Every scan of the shared wristband code is one guest. Nothing is matched,
+  // so the gate shows a running total instead of a guest card.
+  const [headcount, setHeadcount] = useState<any>(null);
+  const [hcBusy, setHcBusy] = useState(false);
+  const [hcLast, setHcLast] = useState<{ total: number; night: number; at: string; day?: string | null } | null>(null);
+  const [hcFlash, setHcFlash] = useState(false);
+  const [hcUndoing, setHcUndoing] = useState(false);
+  const [hcGate, setHcGate] = useState("Main gate");
+  const isHeadcount = Boolean(selectedEvent?.headcount_mode);
   const LOCATION_OPTIONS = ["Airport", "Abuja Continental", "Abuja Continental 1", "Abuja Continental 2", "Abuja Continental 3", "Abuja Continental 4", "Abuja Continental 5", "Abuja Continental 6", "Transcorp", "Transcorp 1", "Transcorp 2", "Transcorp 3", "Transcorp 4", "Transcorp 5", "ICC", "ICC Guests"];
   const AC_SUBS = ["Airport", "ICC"];
   const TRANSCORP_SUBS = ["Airport", "ICC"];
@@ -258,6 +272,16 @@ export function AccreditationScanClient() {
     }
   }, [selectedDayId]);
 
+  const loadHeadcount = useCallback(async (eventId: number, dayId?: number) => {
+    try {
+      const qs = dayId ? `?event_day_id=${dayId}` : "";
+      const d = await apiClient<any>(`/scanner/events/${eventId}/headcount${qs}`);
+      setHeadcount(d);
+    } catch {
+      // keep the last numbers on screen rather than blanking the gate
+    }
+  }, []);
+
   const loadActivity = useCallback(async (eventId: number, page: number = 1, q: string = "", dayId?: number) => {
     setActivityLoading(true);
     try {
@@ -291,17 +315,19 @@ export function AccreditationScanClient() {
       setActivityPage(1);
       setActivitySearch("");
       loadActivity(selectedEvent.id, 1, "", selectedDayId ?? undefined);
+      if (selectedEvent.headcount_mode) loadHeadcount(selectedEvent.id, selectedDayId ?? undefined);
     }
-  }, [selectedEvent, loadStats, loadActivity, loadDays, selectedDayId]);
+  }, [selectedEvent, loadStats, loadActivity, loadDays, loadHeadcount, selectedDayId]);
 
   useEffect(() => {
     if (!selectedEvent) return;
     const interval = setInterval(() => {
       if (activityPage === 1 && !activitySearch) loadActivity(selectedEvent.id, 1, "", selectedDayId ?? undefined);
       loadStats(selectedEvent.id, selectedDayId ?? undefined);
+      if (selectedEvent.headcount_mode) loadHeadcount(selectedEvent.id, selectedDayId ?? undefined);
     }, 10000);
     return () => clearInterval(interval);
-  }, [selectedEvent, loadActivity, loadStats, activityPage, activitySearch, selectedDayId]);
+  }, [selectedEvent, loadActivity, loadStats, loadHeadcount, activityPage, activitySearch, selectedDayId]);
 
   const handleEventChange = (eventId: number) => {
     setScanResult(null);
@@ -311,6 +337,8 @@ export function AccreditationScanClient() {
     setMode("scanner");
     setEventDays([]);
     setSelectedDayId(null);
+    setHeadcount(null);
+    setHcLast(null);
     const ev = events.find((e) => e.id === eventId) || null;
     setSelectedEvent(ev);
     if (ev) localStorage.setItem("accreditation_event_id", String(ev.id));
@@ -321,7 +349,69 @@ export function AccreditationScanClient() {
   const lastScanTimeRef = useRef<number>(0);
 
   // --- Scanner handlers ---
+  const recordHeadcount = async (token: string) => {
+    if (hcBusy) return;
+    setHcBusy(true);
+    setError("");
+    try {
+      const body: any = { token };
+      if (selectedDayId) body.event_day_id = selectedDayId;
+      const loc = getEffectiveLocation() || selectedLocation;
+      if (loc) body.location = loc;
+      const res = await apiClient<any>("/headcount/scan", { method: "POST", body });
+      if (res.status === "counted") {
+        setHcLast({
+          total: res.total,
+          night: res.night_total,
+          at: new Date().toISOString(),
+          day: res.day?.name || null,
+        });
+        setHcFlash(true);
+        setTimeout(() => setHcFlash(false), 900);
+        if (selectedEvent?.headcount_mode) loadHeadcount(selectedEvent.id, selectedDayId ?? undefined);
+      } else {
+        setError(res.message || "This scan was not counted.");
+      }
+    } catch (err: any) {
+      setError(err.message || "Could not record that entry.");
+    } finally {
+      setHcBusy(false);
+    }
+  };
+
+  const undoHeadcount = async () => {
+    if (!selectedEvent || hcUndoing) return;
+    const token = headcount?.qr_target;
+    if (!token) return;
+    setHcUndoing(true);
+    try {
+      const res = await apiClient<any>("/scanner/headcount/undo", {
+        method: "POST",
+        body: { token, event_day_id: selectedDayId || undefined },
+      });
+      if (res.status === "noop") {
+        showToast(res.message || "Nothing to undo", "error");
+      } else {
+        setHcLast(null);
+        setHeadcount(res);
+        showToast("Entry removed", "success");
+      }
+    } catch (err: any) {
+      setError(err.message || "Could not undo that entry.");
+    } finally {
+      setHcUndoing(false);
+    }
+  };
+
   const handleVerify = async (token: string) => {
+    // A headcount wristband carries one shared code. It is counted every time
+    // it is presented, so none of the per-guest dedupe below applies.
+    const looksHeadcount = /\/h\/[^/]+/.test(token);
+    if (isHeadcount || looksHeadcount) {
+      await recordHeadcount(token);
+      return;
+    }
+
     const now = Date.now();
     if (token === lastScannedRef.current && now - lastScanTimeRef.current < 3000) return;
     lastScannedRef.current = token;
@@ -616,9 +706,126 @@ export function AccreditationScanClient() {
     </header>
   );
 
-  const renderEventStats = () => (
-    <div className="mb-6 rounded-xl bg-white/5 border border-white/10 p-4">
-      <div className="flex flex-col gap-4">
+  const renderHeadcountBar = () => {
+    const hc = headcount;
+    const accent = selectedEvent?.theme_color || "#E31E24";
+    const nights: any[] = hc?.days || [];
+    const selected = hc?.selected_day;
+
+    return (
+      <div className="space-y-3">
+        <style>{`@keyframes hcPop { 0% { transform: scale(1); } 30% { transform: scale(1.16); } 100% { transform: scale(1); } } .hc-pop { animation: hcPop .9s ease-out; }`}</style>
+
+        <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-4 sm:p-5">
+          <span className="absolute inset-x-0 top-0 h-1" style={{ backgroundColor: accent }} />
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-[0.28em] text-white/40">Headcount event</p>
+              <p className="mt-1 truncate text-lg font-bold">{selectedEvent.title}</p>
+              <p className="mt-1 text-[11px] text-white/40">
+                No guest list. Every scan of the wristband code is one guest through the gate.
+              </p>
+            </div>
+            <span
+              className="flex-shrink-0 rounded-md px-2 py-1 text-[9px] font-black uppercase tracking-[0.2em] text-white"
+              style={{ backgroundColor: accent }}
+            >
+              Counting
+            </span>
+          </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">
+                {selected?.is_today ? "Tonight" : "This night"}
+              </p>
+              <p
+                className={`mt-1 text-4xl font-black leading-none ${hcFlash ? "hc-pop" : ""}`}
+                style={{ color: accent }}
+              >
+                {hc?.night_total ?? 0}
+              </p>
+              <p className="mt-1 truncate text-[10px] text-white/35">
+                {selected ? selected.heading || selected.name : "No night selected"}
+              </p>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">All nights</p>
+              <p className={`mt-1 text-4xl font-black leading-none text-white ${hcFlash ? "hc-pop" : ""}`}>
+                {hc?.total ?? 0}
+              </p>
+              <p className="mt-1 text-[10px] text-white/35">Running total</p>
+            </div>
+          </div>
+
+          {nights.length > 0 && (
+            <div className="mt-4 border-t border-white/10 pt-3">
+              <p className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">
+                <Calendar className="h-3.5 w-3.5" style={{ color: accent }} />
+                Night
+              </p>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {nights.map((d: any) => {
+                  const active = selectedDayId === d.id || (!selectedDayId && selected?.id === d.id);
+                  return (
+                    <button
+                      key={d.id}
+                      onClick={() => {
+                        setSelectedDayId(d.id);
+                        if (selectedEvent) loadHeadcount(selectedEvent.id, d.id);
+                      }}
+                      disabled={!d.accreditation_open}
+                      className={`flex min-h-[44px] flex-shrink-0 flex-col items-start rounded-xl border px-3 py-2 text-left transition ${
+                        active
+                          ? "border-transparent text-white shadow-lg"
+                          : d.accreditation_open
+                          ? "border-white/10 bg-white/5 text-white/70 hover:bg-white/10"
+                          : "cursor-not-allowed border-white/5 bg-white/[0.02] text-white/25"
+                      }`}
+                      style={active ? { backgroundColor: accent } : undefined}
+                    >
+                      <span className="text-[10px] font-bold uppercase tracking-[0.14em]">
+                        {d.name}
+                        {d.is_today && <span className="ml-1 rounded bg-black/25 px-1 text-[8px]">TODAY</span>}
+                      </span>
+                      <span className="text-sm font-black">{d.count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              {selected && !selected.accreditation_open && (
+                <p className="mt-2 flex items-center gap-1.5 text-[11px] font-medium text-amber-400">
+                  <Lock className="h-3 w-3" /> Scanning is closed for {selected.heading || selected.name}.
+                </p>
+              )}
+            </div>
+          )}
+
+          <div className="mt-3 flex items-center justify-between gap-2 border-t border-white/10 pt-3">
+            <p className="text-[11px] text-white/40">
+              {hc?.last_scan_at
+                ? `Last scan ${new Date(hc.last_scan_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`
+                : "No scans yet"}
+            </p>
+            <button
+              onClick={undoHeadcount}
+              disabled={hcUndoing || !hc?.last_scan_at}
+              className="flex min-h-[36px] items-center gap-1.5 rounded-lg bg-white/10 px-3 text-[11px] font-bold text-white/70 transition hover:bg-white/20 disabled:opacity-30"
+            >
+              {hcUndoing ? <Loader className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+              Undo last scan
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderEventStats = () => {
+    if (isHeadcount) return renderHeadcountBar();
+    return (
+      <div className="mb-6 rounded-xl bg-white/5 border border-white/10 p-4">
+        <div className="flex flex-col gap-4">
         <div className="min-w-0">
           <p className="text-xs font-semibold text-white/60 uppercase tracking-wide mb-1">Event</p>
           <p className="text-lg sm:text-xl font-bold truncate">{selectedEvent.title}</p>
@@ -759,10 +966,110 @@ export function AccreditationScanClient() {
         )}
       </div>
     </div>
-  );
+    );
+  };
 
-  const renderActivitySidebar = () => (
-    <div>
+  const renderHeadcountLog = () => {
+    const recent: any[] = headcount?.recent || [];
+    const gates: any[] = headcount?.gates || [];
+    const hourly: any[] = headcount?.hourly || [];
+    const maxHour = Math.max(...hourly.map((h) => h.count), 1);
+    const accent = selectedEvent?.theme_color || "#E31E24";
+    const hourLabel = (hour: number) => `${hour % 12 || 12}${hour >= 12 ? "PM" : "AM"}`;
+
+    return (
+      <div>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-white/60">
+            <Clock className="h-4 w-4" style={{ color: accent }} />
+            Gate activity
+          </h2>
+          <div className="flex items-center gap-1.5">
+            <div className="h-2 w-2 animate-pulse rounded-full bg-green-500" />
+            <span className="text-[10px] font-semibold text-green-400">LIVE</span>
+          </div>
+        </div>
+
+        <div className="min-h-[500px] space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4 lg:sticky lg:top-20">
+          <div>
+            <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">Arrivals by hour</p>
+            <div className="flex h-24 items-end gap-1">
+              {hourly.map((row) => (
+                <div key={row.hour} className="flex flex-1 flex-col items-center gap-1">
+                  <div
+                    className="w-full rounded-t"
+                    style={{
+                      height: `${Math.max(3, Math.round((row.count / maxHour) * 100))}%`,
+                      backgroundColor: row.count > 0 ? accent : "rgba(255,255,255,0.08)",
+                    }}
+                  />
+                  <span className="text-[8px] font-semibold text-white/30">{hourLabel(row.hour)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {gates.length > 0 && (
+            <div className="border-t border-white/10 pt-3">
+              <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">By gate</p>
+              <div className="space-y-2">
+                {gates.map((g) => (
+                  <div key={g.location} className="flex items-center justify-between text-xs">
+                    <span className="truncate font-semibold text-white/80">{g.location}</span>
+                    <span className="font-bold" style={{ color: accent }}>{g.count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="border-t border-white/10 pt-3">
+            <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.2em] text-white/40">
+              Last {Math.min(recent.length, 12)} entries
+            </p>
+            {recent.length === 0 ? (
+              <div className="py-8 text-center text-white/30">
+                <User className="mx-auto mb-2 h-8 w-8 opacity-50" />
+                <p className="text-sm">No entries on this night yet</p>
+                <p className="mt-1 text-xs">Scan a wristband and it appears here</p>
+              </div>
+            ) : (
+              <div className="max-h-[300px] space-y-1.5 overflow-y-auto">
+                {recent.slice(0, 12).map((scan, index) => (
+                  <div key={scan.id} className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-2.5">
+                    <span className="w-6 flex-shrink-0 text-[11px] font-bold text-white/25">
+                      {Math.max(1, (headcount?.night_total || 0) - index)}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold">
+                        {scan.scanned_at
+                          ? new Date(scan.scanned_at).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              second: "2-digit",
+                            })
+                          : ""}
+                      </p>
+                      <p className="truncate text-[11px] text-white/45">
+                        {scan.location}
+                        {scan.staff ? ` · ${scan.staff}` : ""}
+                      </p>
+                    </div>
+                    <Check className="h-3.5 w-3.5 flex-shrink-0 text-green-400" />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderActivitySidebar = () => {
+    if (isHeadcount) return renderHeadcountLog();
+    return (
+      <div>
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-xs font-bold uppercase tracking-wide text-white/60 flex items-center gap-2">
           <Clock className="w-4 h-4 text-teal-500" />
@@ -830,7 +1137,8 @@ export function AccreditationScanClient() {
         )}
       </div>
     </div>
-  );
+    );
+  };
 
   // --- MODE: scanner ---
   const renderScanner = () => (
@@ -847,16 +1155,54 @@ export function AccreditationScanClient() {
         <div>
           <h2 className="text-xs font-bold uppercase tracking-wide text-white/60 mb-3 flex items-center gap-2">
             <QrCode className="w-4 h-4 text-teal-500" />
-            Live Scanner
+            {isHeadcount ? "Scan the wristband" : "Live Scanner"}
           </h2>
-          <QRScanner
+          <TypedQRScanner
             onScan={handleVerify}
             onError={setError}
             onStart={() => { setError(""); setScanResult(null); }}
             onStop={() => {}}
             scanningDisabled={false}
+            repeatMode={isHeadcount ? "exit" : "cooldown"}
           />
+          {isHeadcount && (
+            <p className="mt-2 text-center text-[11px] leading-relaxed text-white/35">
+              Lift the wristband away from the camera between guests. A code still in frame is not
+              counted twice.
+            </p>
+          )}
         </div>
+        {isHeadcount && hcLast && (
+          <div
+            className={`flex items-center gap-3 rounded-2xl border p-4 transition-colors ${
+              hcFlash ? "border-green-500/60 bg-green-900/40" : "border-white/10 bg-white/5"
+            }`}
+          >
+            <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full bg-green-600/25">
+              <Check className="h-5 w-5 text-green-400" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-green-400">
+                +1 counted{hcBusy ? "" : ""}
+                <span className="ml-2 font-normal text-white/40">
+                  {new Date(hcLast.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                </span>
+              </p>
+              <p className="text-xs text-white/60">
+                Tonight {hcLast.night} · All nights {hcLast.total}
+                {hcLast.day ? ` · ${hcLast.day}` : ""}
+              </p>
+            </div>
+            <button
+              onClick={undoHeadcount}
+              disabled={hcUndoing}
+              className="flex min-h-[40px] flex-shrink-0 items-center gap-1.5 rounded-xl bg-white/10 px-3 text-xs font-semibold text-white/70 transition hover:bg-white/20 disabled:opacity-40"
+            >
+              {hcUndoing ? <Loader className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+              Undo
+            </button>
+          </div>
+        )}
         {scanResult && (
           <>
             <div className="fixed inset-0 bg-black/60 z-30 lg:hidden" onClick={() => setScanResult(null)} />
@@ -1189,7 +1535,7 @@ export function AccreditationScanClient() {
                 mode === "manual"
                   ? "bg-blue-600/20 text-blue-400 border border-blue-500/40"
                   : "bg-white/5 text-white/50 hover:bg-white/10 hover:text-white/80 border border-transparent"
-              }`}
+              } ${selectedEvent?.headcount_mode ? "hidden" : ""}`}
             >
               <FileText className="w-5 h-5" />
               Manual Entry
