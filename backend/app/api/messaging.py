@@ -2728,6 +2728,159 @@ async def send_invites(
     return response
 
 
+# ── Send WhatsApp invites only to guests who never got a WhatsApp invite ──
+# and haven't RSVP'd yet. Uses Meta Cloud API only (no Twilio).
+# Filter logic:
+#   - rsvp_status must be "pending" (skip accepted/declined)
+#   - must have a phone number
+#   - must NOT have a WhatsApp message with status "sent"/"delivered"/"read"
+#   - if WhatsApp message exists with status "failed", retry is allowed
+@router.post("/{event_id}/send-whatsapp-invites")
+async def send_whatsapp_invites(
+    event_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    event_result = await db.execute(
+        select(Event).where(Event.id == event_id, Event.organizer_id == user.id)
+    )
+    event = event_result.scalar_one_or_none()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    # Get all guests for this event
+    guests_result = await db.execute(
+        select(Guest).where(Guest.event_id == event_id)
+    )
+    all_guests = guests_result.scalars().all()
+
+    # Build WhatsApp message status map per guest (latest WhatsApp message)
+    guest_ids = [g.id for g in all_guests]
+    whatsapp_status: dict[int, str] = {}
+    if guest_ids:
+        wa_result = await db.execute(
+            select(InviteMessage).where(
+                InviteMessage.guest_id.in_(guest_ids),
+                InviteMessage.channel == "whatsapp",
+            )
+        )
+        for msg in wa_result.scalars().all():
+            gid = msg.guest_id
+            existing = whatsapp_status.get(gid)
+            if not existing or (
+                msg.created_at
+                and existing.get("created_at")
+                and msg.created_at > existing["created_at"]
+            ):
+                whatsapp_status[gid] = {
+                    "status": msg.status,
+                    "created_at": msg.created_at,
+                }
+
+    # Filter eligible guests
+    eligible: list[Guest] = []
+    skipped: list[dict] = []
+
+    for g in all_guests:
+        # Must have phone
+        if not g.phone:
+            skipped.append({"id": g.id, "name": g.name, "reason": "no phone"})
+            continue
+        # Must not have RSVP'd (accepted/declined)
+        if g.rsvp_status in ("accepted", "declined"):
+            skipped.append({"id": g.id, "name": g.name, "reason": "already RSVP'd"})
+            continue
+        # Must NOT have received WhatsApp (sent/delivered/read)
+        wa = whatsapp_status.get(g.id)
+        if wa and wa["status"] in ("sent", "delivered", "read"):
+            skipped.append({"id": g.id, "name": g.name, "reason": "WhatsApp already sent"})
+            continue
+        # Eligible: pending RSVP, no WhatsApp sent/delivered, has phone
+        eligible.append(g)
+
+    if not eligible:
+        return {
+            "sent": 0,
+            "total": len(all_guests),
+            "skipped": len(skipped),
+            "skipped_guests": skipped,
+            "message": "No eligible guests for WhatsApp invite.",
+        }
+
+    # Send via Meta Cloud API only
+    meta_cloud_invite_template = getattr(settings, "WHATSAPP_CLOUD_INVITE_TEMPLATE", "")
+    if not meta_cloud_invite_template:
+        raise HTTPException(
+            status_code=500,
+            detail="WhatsApp Cloud invite template not configured.",
+        )
+
+    from app.services.whatsapp_cloud_service import send_whatsapp_cloud_template
+
+    # Prepare event details for template variables
+    from datetime import date as dt_date
+
+    event_date = event.event_date
+    if isinstance(event_date, str):
+        try:
+            event_date = dt_date.fromisoformat(event_date)
+        except ValueError:
+            event_date = None
+    date_str = event_date.strftime("%A, %d %B %Y") if event_date else ""
+    venue_str = event.venue or ""
+    template_header_image = "https://accredit.vip/uploads/warri/warri-cover.jpg"
+
+    sent = 0
+    failed = 0
+    failed_guests: list[dict] = []
+
+    for guest in eligible:
+        rsvp_link = invite_link_for(event, guest)
+        content_vars = [
+            guest.name or "",
+            event.title or "",
+            date_str,
+            venue_str,
+            rsvp_link,
+        ]
+
+        ok, provider_id = await send_whatsapp_cloud_template(
+            guest.phone,
+            meta_cloud_invite_template,
+            content_vars,
+            media_url=template_header_image,
+        )
+
+        # Record the message
+        msg = InviteMessage(
+            batch_id=None,
+            guest_id=guest.id,
+            channel="whatsapp",
+            status="sent" if ok else "failed",
+            provider_message_id=provider_id,
+            error=None if ok else str(provider_id),
+        )
+        db.add(msg)
+
+        if ok:
+            sent += 1
+        else:
+            failed += 1
+            failed_guests.append({"id": guest.id, "name": guest.name, "error": str(provider_id)})
+
+    await db.commit()
+
+    return {
+        "sent": sent,
+        "failed": failed,
+        "total": len(eligible),
+        "skipped": len(skipped),
+        "skipped_guests": skipped,
+        "failed_guests": failed_guests,
+        "message": f"WhatsApp invites sent: {sent}/{len(eligible)}",
+    }
+
+
 # ── Send invite to ONE specific guest ──
 
 @router.post("/{event_id}/guests/{guest_id}/send-invite")

@@ -219,6 +219,9 @@ export default function GuestsTabContent({
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [revealedPhones, setRevealedPhones] = useState<Set<number>>(new Set());
+  const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
+  const [whatsappResult, setWhatsappResult] = useState<{ sent: number; failed: number; total: number; skipped: number; skipped_guests: any[]; failed_guests: any[]; message: string } | null>(null);
+  const [whatsappError, setWhatsappError] = useState<string | null>(null);
 
   function maskPhone(phone: string): string {
     if (phone.length <= 6) return phone;
@@ -262,6 +265,38 @@ export default function GuestsTabContent({
     selectedGuests.size === displayedGuests.length
       ? setSelectedGuests(new Set())
       : setSelectedGuests(new Set(displayedGuests.map(g => g.id)));
+  };
+
+  const sendWhatsAppInvites = async () => {
+    setSendingWhatsApp(true);
+    setWhatsappResult(null);
+    setWhatsappError(null);
+    try {
+      const res = await apiClient<any>(`/events/${eventId}/send-whatsapp-invites`, {
+        method: "POST",
+      });
+      setWhatsappResult(res);
+      const { sent = 0, failed = 0, total = 0 } = res;
+      const failedGuests = res.failed_guests || [];
+      let msg = `WhatsApp invites sent: ${sent}/${total}`;
+      if (failedGuests.length) {
+        const names = failedGuests.slice(0, 3).map((g: any) => g.name).join(", ");
+        const more = failedGuests.length > 3 ? ` and ${failedGuests.length - 3} more` : "";
+        msg += `. ${failedGuests.length} failed: ${names}${more}.`;
+        showToast?.(msg, "error");
+      } else if (sent === total && total > 0) {
+        showToast?.("WhatsApp invites sent successfully");
+      } else if (sent > 0) {
+        showToast?.(msg, "error");
+      } else {
+        showToast?.("No WhatsApp invites sent.", "error");
+      }
+    } catch (err: any) {
+      const detail = err.detail || err.message;
+      setWhatsappError(typeof detail === "string" ? detail : "Could not send WhatsApp invites.");
+      showToast?.(whatsappError || "Could not send WhatsApp invites", "error");
+    }
+    setSendingWhatsApp(false);
   };
 
   const acceptedCount = guests.filter(g => g.rsvp_status === "accepted").length;
@@ -669,6 +704,10 @@ export default function GuestsTabContent({
                 {sending ? <Loader className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                 {sending ? "Sending..." : <><span className="hidden sm:inline">Send </span>Invites</>}
               </Button>
+              <Button onClick={sendWhatsAppInvites} disabled={sendingWhatsApp} className="text-white h-9 px-3 font-medium rounded-lg disabled:opacity-50 flex items-center gap-1.5 text-xs" style={{ background: "#1ABC9C", borderColor: "#1ABC9C" }}>
+                {sendingWhatsApp ? <Loader className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                {sendingWhatsApp ? "Sending WhatsApp..." : <><span className="hidden sm:inline">Send WhatsApp Invites</span></>}
+              </Button>
               <Button onClick={() => sendInvites(true)} disabled={sending || !canSendInvites} variant="outline" className="h-9 px-3 font-medium rounded-lg text-xs" style={{ borderColor: ACCENT, color: ACCENT }}>
                 Resend
               </Button>
@@ -689,6 +728,20 @@ export default function GuestsTabContent({
             <div className="mt-3 rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-700 flex items-center gap-2">
               <Check className="w-4 h-4" />
               Sent {sendResult.total_sent || 0} / {sendResult.total_guests || 0}
+            </div>
+          )}
+
+          {whatsappError && (
+            <div className="mt-3 rounded-lg bg-red-50 border border-red-200 p-3 text-sm text-red-700">{whatsappError}</div>
+          )}
+
+          {whatsappResult && (
+            <div className="mt-3 rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-700 flex items-center gap-2">
+              <Check className="w-4 h-4" />
+              Sent {whatsappResult.sent} / {whatsappResult.total}
+              {whatsappResult.failed > 0 && (
+                <span className="ml-2 text-red-700">{whatsappResult.failed} failed</span>
+              )}
             </div>
           )}
         </div>
