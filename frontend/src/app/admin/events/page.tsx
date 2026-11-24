@@ -11,6 +11,7 @@ import { NotificationBell } from "@/components/notification-bell";
 import { AdminLogoutButton } from "@/components/admin/logout-button";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { EventDaysCard } from "@/components/admin/event-days-card";
+import WarriFloorPlan from "@/components/events/WarriFloorPlan";
 
 function maskEmail(email: string) {
   const [local, domain] = email.split("@");
@@ -704,6 +705,21 @@ export default function AdminEventsPage() {
 
                 {/* Multi-day schedule: per-day accreditation switches and per-day reports */}
                 <EventDaysCard eventId={ctrlEvent.id} eventDate={ctrlEvent.event_date} />
+                {/* Warri Again seating plan management (event 105 only) */}
+                {ctrlEvent.id === 105 && (
+                  <div className="mt-6">
+                    <h3 className="text-base font-black text-[#0D1B2A] mb-3">Seating Plan Management</h3>
+                    <p className="text-xs text-[#94a3b8] mb-4">Manage table and seat availability directly on the plan. Click tables or seats to mark them as closed, open, or sold.</p>
+                    <WarriFloorPlan
+                      eventId={ctrlEvent.id}
+                      packages={ctrlEvent.pass_packages || []}
+                      currencySymbol="₦"
+                      onReserve={() => {}}
+                      isOrganizer={true}
+                      isAdmin={true}
+                    />
+                  </div>
+                )}
               </div>
             )}
           </div>

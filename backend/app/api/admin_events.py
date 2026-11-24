@@ -304,6 +304,7 @@ class EventControlsUpdate(BaseModel):
     event_date: str | None = None
     event_time: str | None = None
     description: str | None = None
+    paystack_key_mode: str | None = None
 
 
 def _controls_dict(event: Event) -> dict:
@@ -328,6 +329,7 @@ def _controls_dict(event: Event) -> dict:
         "invite_subject": event.invite_subject,
         "invite_body": event.invite_body,
         "slug": event.slug,
+        "paystack_key_mode": getattr(event, "paystack_key_mode", None),
     }
 
 
@@ -436,6 +438,12 @@ async def admin_update_event_controls(
     if req.description is not None:
         event.description = req.description
         changes.append("description updated")
+    if req.paystack_key_mode is not None:
+        if req.paystack_key_mode not in ("live", "test", None, ""):
+            raise HTTPException(status_code=400, detail="paystack_key_mode must be 'live' or 'test'")
+        val = req.paystack_key_mode if req.paystack_key_mode else None
+        changes.append(f"paystack key mode {event.paystack_key_mode} -> {val or 'default'}")
+        event.paystack_key_mode = val
     if req.is_public is not None:
         changes.append(f"visibility -> {'public' if req.is_public else 'private'}")
         event.is_public = req.is_public

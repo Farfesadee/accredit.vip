@@ -307,10 +307,6 @@ function PublicEventContent() {
   // The seating plan lives on this event only.
   const isFloorPlanEvent = event?.slug === "warri-again-grand-spectacle-2026";
 
-  // Check if current user is organizer or admin for this event
-  const isOrganizer = isFloorPlanEvent && user && event.organizer_id === user.id;
-  const isAdmin = isFloorPlanEvent && user && (user.role === "admin" || user.role === "super_admin");
-
   const handleFloorReserve = (selection: FloorPlanSelection) => {
     const index = passPackages.findIndex((p: any) => p.name === selection.packageName);
     if (selection.mode === "vip") {
@@ -475,8 +471,6 @@ function PublicEventContent() {
               packages={passPackages as any}
               currencySymbol={cs}
               onReserve={handleFloorReserve}
-              isOrganizer={!!isOrganizer}
-              isAdmin={!!isAdmin}
             />
           </div>
         )}
