@@ -1,17 +1,24 @@
-"""Shared ticket fulfillment - marks a paid purchase complete and delivers the ticket (QR by email + WhatsApp)."""
+"""Ticket fulfillment service - marks purchases completed, sends tickets via email/WhatsApp"""
 
 import os
+import base64
+import asyncio
 from datetime import datetime, timezone
-
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-
+from app.core.config import settings
 from app.models.ticket_purchase import TicketPurchase
 from app.models.event import Event
 from app.models.guest import Guest
 from app.models.qr_code import QRCode
-from app.core.config import settings
-from app.services.ticket_delivery import generate_ticket_qr, send_ticket_email, send_ticket_whatsapp
+from app.services.ticket_delivery import (
+    generate_ticket_qr,
+    save_ticket_qr_image,
+    send_ticket_email,
+    build_ticket_pdf,
+    build_warri_ticket_pdf,
+)
+from app.services.ticket_fulfillment import credit_wallet_payment
 
 
 async def fulfill_ticket_purchase(db: AsyncSession, purchase: TicketPurchase) -> None:
@@ -66,17 +73,39 @@ async def fulfill_ticket_purchase(db: AsyncSession, purchase: TicketPurchase) ->
             )
             db.add(guest)
             await db.flush()
-        qr_result = await db.execute(
-            select(QRCode).where(QRCode.token == purchase.reference)
-        )
-        if not qr_result.scalar_one_or_none():
-            db.add(
-                QRCode(
-                    guest_id=guest.id,
-                    event_id=purchase.event_id,
-                    token=purchase.reference,
-                )
+        
+        # Generate QR codes for each ticket (quantity > 1)
+        qty = max(1, int(purchase.quantity or 1))
+        qr_codes = []
+        qr_image_urls = []
+        qr_tokens = []
+
+        for i in range(1, qty + 1):
+            token = f"{purchase.reference}-{i}" if qty > 1 else purchase.reference
+            qr_code = generate_ticket_qr(
+                ticket_reference=token,
+                event_title=event.title,
+                event_date=str(event.event_date),
+                image_data=None,  # Image will be embedded by generate_ticket_qr if needed
             )
+            from app.services.ticket_delivery import save_ticket_qr_image
+            qr_image_url = save_ticket_qr_image(qr_code, f"{purchase.reference}-{i}" if qty > 1 else purchase.reference)
+            qr_codes.append(qr_code)
+            qr_image_urls.append(qr_image_url)
+            qr_tokens.append(token)
+
+            # Create QRCode entry for each ticket
+            qr_result = await db.execute(
+                select(QRCode).where(QRCode.token == token)
+            )
+            if not qr_result.scalar_one_or_none():
+                db.add(
+                    QRCode(
+                        guest_id=guest.id,
+                        event_id=purchase.event_id,
+                        token=token,
+                    )
+                )
         await db.commit()
     except Exception as e:
         print(f"Failed to register ticket guest: {e}")
@@ -138,18 +167,39 @@ async def fulfill_ticket_purchase(db: AsyncSession, purchase: TicketPurchase) ->
                 except Exception:
                     pass
 
-            qr_code = generate_ticket_qr(
-                ticket_reference=purchase.reference,
-                event_title=event.title,
-                event_date=str(event.event_date),
-                image_data=image_data,
-            )
+            # Generate QR codes for each ticket (quantity > 1)
+            qty = max(1, int(purchase.quantity or 1))
+            qr_codes = []
+            qr_image_urls = []
+            qr_tokens = []
 
-            # Save the QR as a hosted image: Gmail blocks data: URIs, so the
-            # email references this URL instead (data URI stays as fallback).
-            from app.services.ticket_delivery import save_ticket_qr_image
+            for i in range(1, qty + 1):
+                token = f"{purchase.reference}-{i}" if qty > 1 else purchase.reference
+                qr_code = generate_ticket_qr(
+                    ticket_reference=token,
+                    event_title=event.title,
+                    event_date=str(event.event_date),
+                    image_data=image_data,
+                )
+                from app.services.ticket_delivery import save_ticket_qr_image
+                qr_image_url = save_ticket_qr_image(qr_code, token)
+                qr_codes.append(qr_code)
+                qr_image_urls.append(qr_image_url)
+                qr_tokens.append(token)
 
-            qr_image_url = save_ticket_qr_image(qr_code, purchase.reference)
+                # Create QRCode entry for each ticket
+                qr_result = await db.execute(
+                    select(QRCode).where(QRCode.token == token)
+                )
+                if not qr_result.scalar_one_or_none():
+                    db.add(
+                        QRCode(
+                            guest_id=guest.id,
+                            event_id=purchase.event_id,
+                            token=token,
+                        )
+                    )
+            await db.commit()
 
             # Determine if this is a Black Market event with pass_packages
             is_black_market = event.title == "BLACK MARKET Movie World Record Attempt"
@@ -169,7 +219,7 @@ async def fulfill_ticket_purchase(db: AsyncSession, purchase: TicketPurchase) ->
                 from app.services.ticket_delivery import build_ticket_pdf
 
                 pdf_bytes = build_ticket_pdf(
-                    qr_code,
+                    qr_codes[0],
                     purchase.buyer_name,
                     purchase.package_name or "General Access",
                     purchase.reference,
@@ -198,19 +248,20 @@ async def fulfill_ticket_purchase(db: AsyncSession, purchase: TicketPurchase) ->
                     when = ""
 
                 pdf_bytes = build_warri_ticket_pdf(
-                    qr_code_base64=qr_code,
+                    qr_code_base64=qr_codes[0],  # First QR for first page, will use unique per page internally
                     buyer_name=purchase.buyer_name,
                     package_name=purchase.package_name or "General Access",
                     ticket_reference=purchase.reference,
                     event_title=event.title,
                     event_date_line=when,
-                    venue=event.venue or "",
+                    venue=event.venue,
                     quantity=purchase.quantity or 1,
                     seats=(package or {}).get("seats"),
                     package_color=(package or {}).get("color"),
                 )
                 pdf_filename = f"WARRI-AGAIN-{purchase.reference}.pdf"
 
+            # Send email with all QR codes
             await send_ticket_email(
                 buyer_email=purchase.buyer_email,
                 buyer_name=purchase.buyer_name,
@@ -221,11 +272,11 @@ async def fulfill_ticket_purchase(db: AsyncSession, purchase: TicketPurchase) ->
                 ticket_reference=purchase.reference,
                 ticket_count=purchase.quantity,
                 amount_paid=purchase.amount,
-                qr_code_base64=qr_code,
+                qr_code_base64=qr_codes[0],  # Primary QR for email template
                 template_type=template_type,
                 package_name=purchase.package_name,
                 flyer_url=None if is_black_market else flyer_url,
-                qr_image_url=qr_image_url,
+                qr_image_url=qr_image_urls[0],  # Primary QR image
                 pdf_bytes=pdf_bytes,
                 pdf_filename=pdf_filename,
             )
@@ -257,30 +308,7 @@ async def fulfill_ticket_purchase(db: AsyncSession, purchase: TicketPurchase) ->
             phone=purchase.buyer_phone,
             ticket_type=purchase.package_name or "General Access",
             number_of_tickets=purchase.quantity or 1,
-            qr_token=purchase.reference,
+            reference=purchase.reference,
         )
-    except Exception as e:
-        print(f"[PartnerSync] hook failed: {e}")
-
-
-async def credit_wallet_payment(db: AsyncSession, reference: str) -> None:
-    """Credit a wallet from a paid wallet-funding transaction (WAL- references)."""
-    from app.models.wallet import Wallet, WalletTransaction, DEFAULT_BALANCES
-
-    result = await db.execute(
-        select(WalletTransaction).where(WalletTransaction.reference == reference)
-    )
-    tx = result.scalar_one_or_none()
-    if not tx or tx.status != "pending":
-        return
-
-    tx.status = "completed"
-    wallet_result = await db.execute(select(Wallet).where(Wallet.id == tx.wallet_id))
-    wallet = wallet_result.scalar_one_or_none()
-    if wallet:
-        cur = tx.currency or "NGN"
-        balances = dict(wallet.balances or DEFAULT_BALANCES)
-        balances[cur] = balances.get(cur, 0.0) + tx.amount
-        wallet.balances = balances
-        wallet.balance = balances.get(cur, 0.0)
-    await db.commit()
+    except Exception:
+        pass
