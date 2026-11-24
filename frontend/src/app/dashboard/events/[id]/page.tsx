@@ -1159,6 +1159,19 @@ function EventDetailContent() {
                         Failed Messages
                       </Link>
                     )}
+                    {/* Download report for events with table inventory (e.g., Warri Again) */}
+                    {event.slug === "warri-again-grand-spectacle-2026" && (
+                      <button
+                        onClick={() => {
+                          const url = `/api/v1/tickets/events/${id}/report`;
+                          window.open(url, "_blank", "noopener,noreferrer");
+                        }}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 text-sm font-medium hover:bg-slate-200 transition-colors"
+                      >
+                        <BarChart3 className="w-4 h-4" />
+                        Download Report
+                      </button>
+                    )}
                   </div>
 
                   {/* Event Details Card */}

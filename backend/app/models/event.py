@@ -69,6 +69,9 @@ class Event(Base):
     # line on the headcount dashboard. NULL means no target is shown.
     headcount_target = Column(Integer, nullable=True)
     post_attempts = Column(Integer, default=0)
+    # Paystack key mode for this event: "live" or "test". NULL = use platform default.
+    # Per-event override set in admin/event controls.
+    paystack_key_mode = Column(String, nullable=True)  # "live" | "test" | NULL
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 

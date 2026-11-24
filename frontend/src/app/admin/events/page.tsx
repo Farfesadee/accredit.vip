@@ -74,6 +74,7 @@ export default function AdminEventsPage() {
   const [priceInput, setPriceInput] = useState("");
   const [availInput, setAvailInput] = useState("");
   const [spotlightOn, setSpotlightOn] = useState(false);
+  const [paystackKeyMode, setPaystackKeyMode] = useState<"live" | "test" | "">("");
   const [inviteSubj, setInviteSubj] = useState("");
   const [inviteBody, setInviteBody] = useState("");
   const [fTitle, setFTitle] = useState("");
@@ -139,6 +140,7 @@ export default function AdminEventsPage() {
     setPriceInput(e.ticket_price === null || e.ticket_price === undefined ? "" : String(e.ticket_price));
     setAvailInput(e.tickets_available === null || e.tickets_available === undefined ? "" : String(e.tickets_available));
     setSpotlightOn(!!e.spotlight);
+    setPaystackKeyMode(e.paystack_key_mode || "");
     setInviteSubj(e.invite_subject || "");
     setInviteBody(e.invite_body || "");
     setFTitle(e.title || "");
@@ -649,6 +651,9 @@ export default function AdminEventsPage() {
                   </button>
                   <button onClick={() => setSpotlightOn(!spotlightOn)} className={`px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${spotlightOn ? "bg-amber-100 text-amber-700" : "bg-slate-200 text-slate-600"}`}>
                     Spotlight: {spotlightOn ? "FEATURED" : "OFF"}
+                  </button>
+                  <button onClick={() => { if (!ctrlEvent) return; const next = paystackKeyMode === "test" ? "live" : "test"; apiClient(`/admin/events/${ctrlEvent.id}/controls`, { method: "PATCH", body: { paystack_key_mode: next } }).then(r => { setCtrlEvent({...ctrlEvent, paystack_key_mode: next }); setPaystackKeyMode(next); setCtrlMsg({ok:true, text:`Paystack mode: ${next}`}); fetchEvents(); }).catch(e => setCtrlMsg({ok:false, text:e.message})) }} className={`px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${paystackKeyMode === "test" ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"}`}>
+                    Paystack: {paystackKeyMode === "test" ? "TEST MODE" : "LIVE MODE"}
                   </button>
                   <div className="sm:col-span-2 grid gap-2 sm:grid-cols-3">
                     <div>

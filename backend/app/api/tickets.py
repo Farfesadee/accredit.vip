@@ -618,7 +618,7 @@ async def purchase_ticket(
             "quantity": req.quantity,
             "authorization_url": None,
             "method": "wallet",
-            "paystack_public_key": settings.paystack_public_key(req.event_id),
+            "paystack_public_key": settings.paystack_public_key(req.event_id, event.paystack_key_mode),
         }
 
     purchase = TicketPurchase(
@@ -751,12 +751,14 @@ async def purchase_ticket(
             "vat": 0,
             "quantity": req.quantity,
             "authorization_url": None,
-            "paystack_public_key": settings.paystack_public_key(req.event_id),
+            "paystack_public_key": settings.paystack_public_key(req.event_id, event.paystack_key_mode),
         }
 
     paystack_url = None
     buyer_user = await get_optional_user(request, db)
-    paystack_secret = settings.paystack_secret_key(buyer_user.email if buyer_user else None, req.event_id)
+    paystack_secret = settings.paystack_secret_key(
+        buyer_user.email if buyer_user else None, req.event_id, event.paystack_key_mode
+    )
     if paystack_secret:
         try:
             async with httpx.AsyncClient() as client:
@@ -789,7 +791,7 @@ async def purchase_ticket(
         "quantity": req.quantity,
         "authorization_url": paystack_url,
         "method": "paystack",
-        "paystack_public_key": settings.paystack_public_key(req.event_id),
+        "paystack_public_key": settings.paystack_public_key(req.event_id, event.paystack_key_mode),
     }
 
 
@@ -1302,6 +1304,226 @@ async def release_tables(
 
     await db.commit()
     return {"released": len(tables)}
+
+
+# =============================================================================
+# Table/Seat Management Endpoints (Warri Again - Event 105)
+# =============================================================================
+
+class TableStatusUpdateRequest(BaseModel):
+    table_ids: list[int]
+    status: str  # "available" | "blocked" | "sold"
+
+
+class SeatStatusUpdateRequest(BaseModel):
+    table_id: int
+    seat_numbers: list[int]
+    status: str  # "available" | "sold"
+
+
+@router.patch("/events/{event_id}/tables/status", response_model=dict)
+async def update_table_status(
+    event_id: int,
+    req: TableStatusUpdateRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Close/open tables manually (organizer or admin)."""
+    event_result = await db.execute(
+        select(Event).where(Event.id == event_id)
+    )
+    event = event_result.scalar_one_or_none()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    # Check permission: organizer or admin
+    if event.organizer_id != user.id and user.role not in ("admin", "super_admin"):
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    if req.status not in ("available", "blocked", "sold"):
+        raise HTTPException(status_code=400, detail="Invalid status. Use: available, blocked, sold")
+
+    result = await db.execute(
+        select(TableInventory)
+        .where(TableInventory.id.in_(req.table_ids))
+        .where(TableInventory.event_id == event_id)
+    )
+    tables = result.scalars().all()
+
+    if len(tables) != len(req.table_ids):
+        raise HTTPException(status_code=400, detail="One or more tables not found")
+
+    for t in tables:
+        # Don't override "partially_sold" to "available" directly; require explicit action
+        if t.status == "partially_sold" and req.status == "available":
+            # Check if any seats are still sold
+            sold = await _sold_seats(db, event_id)
+            if sold.get(t.table_number):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Table {t.table_number} has sold seats. Release seats first or mark as partially_sold."
+                )
+        t.status = req.status
+        if req.status in ("sold", "blocked"):
+            t.purchase_id = None  # Clear any pending purchase hold
+            t.reserved_until = None
+
+    await db.commit()
+    return {"updated": len(tables), "status": req.status}
+
+
+@router.patch("/events/{event_id}/seats/status", response_model=dict)
+async def update_seat_status(
+    event_id: int,
+    req: SeatStatusUpdateRequest,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Close/open individual seats on a table (organizer or admin)."""
+    event_result = await db.execute(
+        select(Event).where(Event.id == event_id)
+    )
+    event = event_result.scalar_one_or_none()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    if event.organizer_id != user.id and user.role not in ("admin", "super_admin"):
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    if req.status not in ("available", "sold"):
+        raise HTTPException(status_code=400, detail="Invalid status. Use: available, sold")
+
+    table_result = await db.execute(
+        select(TableInventory).where(
+            TableInventory.id == req.table_id,
+            TableInventory.event_id == event_id,
+        )
+    )
+    table = table_result.scalar_one_or_none()
+    if not table:
+        raise HTTPException(status_code=404, detail="Table not found")
+
+    # Update seat assignments in purchase records
+    # We track sold seats via TicketPurchase.seat_assignments
+    # For manual closure, we create a dummy purchase or update existing
+    # Simpler approach: store blocked seats in table.shape_data
+    data = table.shape_data or {}
+    blocked_seats = set(data.get("blocked_seats", []))
+    sold_seats = set((await _sold_seats(db, event_id)).get(table.table_number, set()))
+
+    if req.status == "sold":
+        for seat in req.seat_numbers:
+            blocked_seats.add(seat)
+    else:  # available
+        for seat in req.seat_numbers:
+            blocked_seats.discard(seat)
+
+    data["blocked_seats"] = sorted(blocked_seats)
+    table.shape_data = data
+    table.updated_at = datetime.now(timezone.utc)
+
+    await db.commit()
+
+    # Return current seat status
+    all_seats = list(range(1, int(data.get("seats", 10)) + 1))
+    current_sold = sorted(sold_seats | blocked_seats)
+    return {
+        "table_id": table.id,
+        "table_number": table.table_number,
+        "total_seats": len(all_seats),
+        "sold_seats": current_sold,
+        "available_seats": [s for s in all_seats if s not in current_sold],
+    }
+
+
+@router.get("/events/{event_id}/report", response_model=dict)
+async def get_event_report(
+    event_id: int,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """HTML/Infographic report for event 105: shows all purchases with tables/seats."""
+    event_result = await db.execute(
+        select(Event).where(Event.id == event_id)
+    )
+    event = event_result.scalar_one_or_none()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    if event.organizer_id != user.id and user.role not in ("admin", "super_admin"):
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    # Get all completed purchases
+    result = await db.execute(
+        select(TicketPurchase).where(
+            TicketPurchase.event_id == event_id,
+            TicketPurchase.status == "completed",
+        ).order_by(TicketPurchase.created_at.desc())
+    )
+    purchases = result.scalars().all()
+
+    # Build report data
+    report_data = []
+    for p in purchases:
+        table_nums = p.table_numbers or []
+        seat_assignments = p.seat_assignments or []
+        for i, table in enumerate(table_nums):
+            seats = []
+            if seat_assignments:
+                for sa in seat_assignments:
+                    if isinstance(sa, dict) and sa.get("table") == table:
+                        seats.append(sa.get("seat"))
+                    elif isinstance(sa, int) and len(table_nums) == 1:
+                        seats.append(sa)
+            report_data.append({
+                "buyer_name": p.buyer_name,
+                "buyer_email": p.buyer_email,
+                "buyer_phone": p.buyer_phone,
+                "table": table,
+                "seats": seats,
+                "package": p.package_name,
+                "quantity": p.quantity,
+                "amount": p.amount,
+                "reference": p.reference,
+                "paid_at": p.paid_at.isoformat() if p.paid_at else None,
+            })
+
+    # Also include manually blocked tables/seats
+    tables_result = await db.execute(
+        select(TableInventory).where(TableInventory.event_id == event_id)
+    )
+    tables = tables_result.scalars().all()
+    sold_seats = await _sold_seats(db, event_id)
+    manual_blocks = []
+    for t in tables:
+        data = t.shape_data or {}
+        blocked = set(data.get("blocked_seats", []))
+        auto_sold = set(sold_seats.get(t.table_number, set()))
+        manual_only = blocked - auto_sold
+        if manual_only:
+            manual_blocks.append({
+                "table": t.table_number,
+                "tier": t.tier_name,
+                "manually_blocked_seats": sorted(manual_only),
+                "status": t.status,
+            })
+
+    return {
+        "event": {
+            "id": event.id,
+            "title": event.title,
+            "date": str(event.event_date),
+            "venue": event.venue,
+        },
+        "purchases": report_data,
+        "manual_blocks": manual_blocks,
+        "summary": {
+            "total_purchases": len(purchases),
+            "total_tickets": sum(len(d["seats"]) or 1 for d in report_data),
+            "total_revenue": sum(d["amount"] for d in report_data),
+            "tables_sold": len(set(d["table"] for d in report_data if d["table"])),
+        },
+    }
 
 
 # Update PurchaseRequest to include table_numbers
