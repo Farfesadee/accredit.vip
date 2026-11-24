@@ -85,13 +85,6 @@ def wedding_content() -> dict:
                 "women": "Pastel colours, with fascinators",
                 "note": "Gentlemen: black tie. Ladies: soft pastel tones, with fascinators.",
             },
-            "traditional": {
-                "label": "The Traditional Wedding",
-                "when": "Thursday, 17 December 2026",
-                "men": "Dark green and white",
-                "women": "Asoebi",
-                "note": "Gentlemen: dark green and white. Ladies: the friends of the couple asoebi.",
-            },
             # Names only: the client asked us to drop the colour swatches and
             # keep the shade names as words.
             "colors": [
@@ -107,8 +100,6 @@ def wedding_content() -> dict:
         },
         "attendance_options": [
             { "value": "white_wedding", "label": "White Wedding", "date": "Saturday, 19 December 2026" },
-            { "value": "traditional", "label": "Traditional Wedding", "date": "Thursday, 17 December 2026" },
-            { "value": "both", "label": "Both", "date": "Both days" },
         ],
         "video_url": "/uploads/wedding-0cd6a8bc64df.mp4",
         # Opening curtain the client supplied (their montage). Silent clip: the
@@ -126,16 +117,13 @@ def wedding_content() -> dict:
             "/uploads/wedding-476c3bda1342.jpg",
         ],
         "monogram_url": "/uploads/wedding-crest-cream.png",
-        # The traditional holds two days before the white wedding. The venue
-        # came from the client's own save-the-date: Maha Event Center, Garki
-        # Area 8, Abuja, 2 PM (client direction, 9 November 2026).
+        # The traditional holds two days before the white wedding.
         "traditional": {
             "label": "The Traditional Wedding",
             "date": "Thursday, 17 December 2026",
             "time": "2:00 PM",
             "venue": "Maha Event Center",
             "location": "Garki Area 8, Abuja",
-            "note": "Gentlemen: dark green and white. Ladies: asoebi.",
         },
         # Anything about the day, answered from the details above. No invented
         # facts: times, venues, dress and the asoebi are all on the invitation.
@@ -154,7 +142,7 @@ def wedding_content() -> dict:
             },
             {
                 "q": "Where is the traditional wedding?",
-                "a": "Maha Event Center, Garki Area 8, Abuja, on Thursday, 17 December 2026 from 2:00 PM. The When and Where section carries directions from wherever you are.",
+                "a": "Maha Event Center, Garki Area 8, Abuja, on Thursday, 17 December 2026 from 2:00 PM.",
             },
             {
                 "q": "What should I wear to the white wedding?",
