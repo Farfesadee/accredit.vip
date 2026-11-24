@@ -2207,8 +2207,9 @@ async def _send_to_guest(
                     venue_str,
                     rsvp_link,
                 ]
-                # Template header image URL
-                header_image_url = "https://accredit.vip/uploads/warri/warri-cover.jpg"
+                # Template header image: use this event's own flier (never another event's).
+                # media_to_send is already the absolute URL of the latest flier/cover.
+                header_image_url = media_to_send
                 from app.services.whatsapp_cloud_service import send_whatsapp_cloud_template
                 ok, provider_id = await send_whatsapp_cloud_template(
                     guest.phone, meta_cloud_invite_template, content_vars, media_url=header_image_url
@@ -2817,6 +2818,14 @@ async def send_whatsapp_invites(
 
     from app.services.whatsapp_cloud_service import send_whatsapp_cloud_template
 
+    # Fetch this event's own flier for the template header (never another event's).
+    flier_result = await db.execute(
+        select(FlierAsset).where(FlierAsset.event_id == event_id).order_by(FlierAsset.created_at.desc())
+    )
+    flier = flier_result.scalars().first()
+    flyer_url = flier.url if flier else event.cover_image
+    template_header_image = _absolute_url(flyer_url) if flyer_url else None
+
     # Prepare event details for template variables
     from datetime import date as dt_date
 
@@ -2828,7 +2837,6 @@ async def send_whatsapp_invites(
             event_date = None
     date_str = event_date.strftime("%A, %d %B %Y") if event_date else ""
     venue_str = event.venue or ""
-    template_header_image = "https://accredit.vip/uploads/warri/warri-cover.jpg"
 
     sent = 0
     failed = 0
