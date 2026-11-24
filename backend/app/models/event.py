@@ -72,6 +72,8 @@ class Event(Base):
     # Paystack key mode for this event: "live" or "test". NULL = use platform default.
     # Per-event override set in admin/event controls.
     paystack_key_mode = Column(String, nullable=True)  # "live" | "test" | NULL
+    # Table categories enabled for this event (JSON array of category names)
+    table_categories_enabled = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
