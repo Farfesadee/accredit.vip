@@ -458,16 +458,11 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
 
   const chosenState = chosen ? tableState(chosen) : null;
 
-  const reserveLabel = isVip
-    ? "Add VIP pass"
-    : !mode
-    ? "Choose how to buy"
-    : "Reserve this table";
+  const reserveLabel = isVip ? "Add VIP pass" : "Reserve this table";
 
-  // Nothing is preselected: a table alone is not a choice of how to buy it.
-  const reserveDisabled = isVip
-    ? false
-    : !chosen || !mode || chosenState !== "available";
+  // Tables are bought whole. Seat selection is disabled for now, so a chosen
+  // table in the available state can go straight to the ticket panel.
+  const reserveDisabled = isVip ? false : !chosen || chosenState !== "available";
 
   const handleReserve = () => {
     if (reserveDisabled) return;
@@ -1030,14 +1025,14 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
               </div>
 
               {!isVip && (
-                <div>
+                <div aria-disabled="true" className="pointer-events-none select-none opacity-45">
                   <p className="mb-1 text-[12px] font-semibold leading-5 text-[#55665f]">
-                    Seats 4 and 8 are not for sale.
+                    Seat selection is currently disabled. Tables are bought as a whole.
                   </p>
                   <svg
                     viewBox="0 0 250 220"
                     role="group"
-                    aria-label={`Seats on table ${chosen.n}`}
+                    aria-label={`Seats on table ${chosen.n} (seat selection disabled)`}
                     className="mx-auto w-full max-w-[270px]"
                   >
                     <text
@@ -1063,9 +1058,9 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
                       return (
                         <g
                           key={`seat-${n}`}
-                          className={(!off && !isSold && !mgmtMode) || (canManage && mgmtMode === "seat") ? "cursor-pointer" : undefined}
-                          tabIndex={(!off && !isSold && !mgmtMode) || (canManage && mgmtMode === "seat") ? 0 : -1}
-                          role={(!off && !isSold && !mgmtMode) || (canManage && mgmtMode === "seat") ? "button" : undefined}
+                          className={(canManage && mgmtMode === "seat") ? "cursor-pointer" : undefined}
+                          tabIndex={(canManage && mgmtMode === "seat") ? 0 : -1}
+                          role={(canManage && mgmtMode === "seat") ? "button" : undefined}
                           aria-label={`Seat ${n}${isSold ? " sold" : off ? " unavailable" : ""}`}
                           aria-pressed={isMgmtPicked}
                           onClick={() => {
@@ -1090,7 +1085,7 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
                             cy={y}
                             r={22}
                             fill="transparent"
-                            style={{ pointerEvents: ((!off && !isSold && !mgmtMode) || (canManage && mgmtMode === "seat")) ? "all" : "none" }}
+                            style={{ pointerEvents: ((canManage && mgmtMode === "seat")) ? "all" : "none" }}
                           />
                           {isMgmtPicked && (
                             <circle cx={x} cy={y} r={19} fill="none" stroke="#e53e3e" strokeWidth={3} strokeDasharray="6 4" />
