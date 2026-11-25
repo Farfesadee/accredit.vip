@@ -173,9 +173,11 @@ function AttendContent() {
   const loadEvents = useCallback(async (filters?: EventFilters) => {
     setLoading(true);
     try {
+      // The Attend page lists every public upcoming event. Spotlight only
+      // controls the featured banner on the landing page, so a stale or cleared
+      // spotlight flag must never empty this page.
       const allEvents = await getPublicEvents(filters);
-      const spotlight = allEvents.filter((e: any) => e.spotlight);
-      setEvents(spotlight);
+      setEvents(allEvents);
     } catch {}
     setLoading(false);
   }, []);
