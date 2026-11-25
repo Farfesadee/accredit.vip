@@ -82,6 +82,12 @@ const CATS = [
   { name: "VIP", color: "#c42d23", prefix: "VIP", enabled: true },
 ];
 
+// This tier has no package and is closed by the organiser. Selecting it shows a
+// sold-out screen instead of the map and cannot lead to a purchase.
+const SOLD_OUT_CATEGORY = "Platinum Extreme";
+const isSoldOutCategory = (index: number | null) =>
+  index !== null && CATS[index]?.name === SOLD_OUT_CATEGORY;
+
 /**
  * Category colours, so the ticket panel can print the same swatch the guest
  * sees on the plan next to each tier name.
@@ -398,6 +404,7 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
 
   const cat = category === null ? null : CATS[category];
   const isVip = category === 8;
+  const categorySoldOut = isSoldOutCategory(category);
   // Only VIP is enabled, tables disabled per client request
   const packageForCat = cat ? packages.find((p) => p.name === cat.name) || null : null;
   const packageSeats = Math.max(1, Number(packageForCat?.seats) || 1);
@@ -449,6 +456,7 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
   // A table with some seats taken can still sell the empty ones, but it can no
   // longer be bought whole. That is why availability does not depend on mode.
   const isAvailable = (m: Marker) => {
+    if (categorySoldOut) return false;
     const state = tableState(m);
     return state === "available" || state === "partial";
   };
@@ -465,7 +473,7 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
   const reserveDisabled = isVip ? false : !chosen || chosenState !== "available";
 
   const handleReserve = () => {
-    if (reserveDisabled) return;
+    if (reserveDisabled || categorySoldOut) return;
     if (isVip) {
       onReserve({
         packageName: CATS[8].name,
@@ -547,7 +555,7 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
                 />
                 VIP
               </button>
-              {/* Other categories in dropdown - disabled for now, only VIP active */}
+              {/* Table categories. A sold-out tier stays selectable so the guest sees the message. */}
               <div className="relative flex-1 min-w-[200px] sm:max-w-xs">
                 <select
                   id="floor-category"
@@ -564,7 +572,7 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
                   <option value="">Select a table category</option>
                   {CATS.slice(0, 8).map((c, i) => (
                     <option key={c.name} value={i}>
-                      {c.name}
+                      {c.name}{isSoldOutCategory(i) ? " (Sold out)" : ""}
                     </option>
                   ))}
                 </select>
@@ -712,16 +720,19 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
 
               {/* Tables */}
               {markers.map((m) => {
-                const state = tableState(m);
                 const active = category !== null && m.cat === category;
-                const open = state === "available" || state === "partial";
+                const tierSoldOut = active && categorySoldOut;
+                const state = tierSoldOut ? "sold" : tableState(m);
+                const open = !tierSoldOut && (state === "available" || state === "partial");
                 const selectable = active && open && !mgmtMode; // Disable guest selection in management mode
                 // Fill: active+available/partial = category color, sold/blocked = red, inactive = grey
                 const fill = active && open ? m.color : state === "sold" || state === "blocked" ? "#e53e3e" : "#e0e4e1";
                 const isChosen = chosenId === m.id;
                 const isMgmtChosen = mgmtTableId && mgmtMode === "table" && tables[m.code]?.id === mgmtTableId;
                 const name = `${m.side} · Table ${m.n}${
-                  state === "blocked" || state === "sold"
+                  tierSoldOut
+                    ? " · Sold out"
+                    : state === "blocked" || state === "sold"
                     ? " · Unavailable"
                     : state === "partial"
                     ? " · Seats still open"
@@ -946,6 +957,31 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
               <p aria-live="polite" className="text-[12px] font-semibold leading-5 text-[#55665f]">
                 {notice}
               </p>
+            </div>
+          ) : categorySoldOut ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span
+                  className="inline-block h-3.5 w-3.5 rounded-full border border-[#93a29b]"
+                  style={{ background: accent }}
+                />
+                <h3 className="text-base font-black text-[#182e2c]">{cat?.name}</h3>
+              </div>
+              <div className="rounded-xl border-2 border-[#e53e3e] bg-[#fff5f5] px-4 py-6 text-center">
+                <p className="text-2xl font-black uppercase tracking-[0.12em] text-[#c42d23]">
+                  Sold out
+                </p>
+                <p className="mt-2 text-[13px] font-semibold leading-6 text-[#55665f]">
+                  This category is no longer available. Choose another category to continue.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => reset(null)}
+                className="w-full rounded-xl border border-[#aab8b3] bg-white px-4 py-3 text-[13px] font-black text-[#182e2c] transition-colors hover:border-[#173935] touch-manipulation"
+              >
+                Choose another category
+              </button>
             </div>
           ) : !chosen ? (
             <div className="space-y-3">
