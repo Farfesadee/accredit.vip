@@ -564,13 +564,12 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
                       if (next !== null) nextFrame(mapCardRef.current);
                     }
                   }}
-                  disabled={true}
-                  className="h-12 w-full rounded-xl border border-[#aab8b3] bg-[#f5f5f5] px-3 text-base font-semibold text-[#999] outline-none appearance-none pr-10"
+                  className="h-12 w-full rounded-xl border border-[#aab8b3] bg-white px-3 text-base font-semibold text-[#182e2c] outline-none focus:border-[#173935] appearance-none pr-10"
                 >
-                  <option value="">Table categories coming soon</option>
+                  <option value="">Select a table category</option>
                   {CATS.slice(0, 8).map((c, i) => (
-                    <option key={c.name} value={i} disabled>
-                      {c.name} (unavailable)
+                    <option key={c.name} value={i}>
+                      {c.name}
                     </option>
                   ))}
                 </select>
