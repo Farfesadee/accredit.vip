@@ -271,15 +271,6 @@ function buildMarkers(): Marker[] {
   return markers;
 }
 
-function blockedMarker(cat: number, n: number) {
-  if (cat === 7) return true;
-  if (cat === 6) return n === 19;
-  if (cat === 4) return n === 39;
-  if (cat === 5) return n === 29;
-  if (cat === 3) return n === 49;
-  return n === 3;
-}
-
 function inkFor(hex: string) {
   const rgb = (hex.slice(1).match(/../g) || [])
     .map((part) => parseInt(part, 16) / 255)
@@ -445,11 +436,13 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
   };
 
   const tableState = (m: Marker): TableState => {
-    if (blockedMarker(m.cat, m.n)) return "blocked";
+    // Availability comes only from the database. All tables start available;
+    // the organizer marks them closed/sold from the admin dashboard.
     const row = tables[m.code];
     if (!row) return "available";
     if (row.status === "available") return "available";
     if (row.status === "partially_sold") return "partial";
+    if (row.status === "blocked") return "blocked";
     return "sold";
   };
 
