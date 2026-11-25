@@ -285,6 +285,10 @@ function inkFor(hex: string) {
   return luminance > 0.32 ? "#11241e" : "#ffffff";
 }
 
+// Going live: VIP is the only ticket on sale. The floor plan stays visible for
+// venue reference, but no table can be selected or bought.
+const TABLES_ENABLED = false;
+
 // No seat is blocked in test mode. Seats are only closed from the organizer's
 // inventory once the event goes live.
 const BLOCKED_SEATS: number[] = [];
@@ -407,6 +411,7 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
   const cat = category === null ? null : CATS[category];
   const isVip = category === 8;
   const categorySoldOut = isSoldOutCategory(category);
+  const tablesClosed = !TABLES_ENABLED;
   // Only VIP is enabled, tables disabled per client request
   const packageForCat = cat ? packages.find((p) => p.name === cat.name) || null : null;
   const packageSeats = Math.max(1, Number(packageForCat?.seats) || 1);
@@ -523,7 +528,7 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
           </h2>
         </div>
         <p className="max-w-sm text-[12px] font-semibold leading-5 text-white/75 sm:text-[13px]">
-          VIP or table — pick your experience.
+          VIP passes are now on sale.
         </p>
       </header>
 
@@ -557,11 +562,11 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
                 />
                 VIP
               </button>
-              {/* Table categories. A sold-out tier stays selectable so the guest sees the message. */}
+              {/* Table categories are closed for launch. VIP is the only active ticket. */}
               <div className="relative flex-1 min-w-[200px] sm:max-w-xs">
                 <select
                   id="floor-category"
-                  value={category === null || category === 8 ? "" : String(category)}
+                  value=""
                   onChange={(e) => {
                     const next = e.target.value === "" ? null : Number(e.target.value);
                     if (next !== 8) { // VIP handled by button
@@ -569,10 +574,11 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
                       if (next !== null) nextFrame(mapCardRef.current);
                     }
                   }}
-                  className="h-12 w-full rounded-xl border border-[#aab8b3] bg-white px-3 text-base font-semibold text-[#182e2c] outline-none focus:border-[#173935] appearance-none pr-10"
+                  disabled={!TABLES_ENABLED}
+                  className="h-12 w-full rounded-xl border border-[#aab8b3] bg-[#f5f5f5] px-3 text-base font-semibold text-[#999] outline-none appearance-none pr-10 disabled:cursor-not-allowed"
                 >
-                  <option value="">Select a table category</option>
-                  {CATS.slice(0, 8).map((c, i) => (
+                  <option value="">Tables not available</option>
+                  {TABLES_ENABLED && CATS.slice(0, 8).map((c, i) => (
                     <option key={c.name} value={i}>
                       {c.name}{isSoldOutCategory(i) ? " (Sold out)" : ""}
                     </option>
@@ -722,7 +728,7 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
                 const tierSoldOut = active && categorySoldOut;
                 const state = tierSoldOut ? "sold" : tableState(m);
                 const open = !tierSoldOut && (state === "available" || state === "partial");
-                const selectable = active && open && !mgmtMode; // Disable guest selection in management mode
+                const selectable = active && open && !mgmtMode && !tablesClosed; // VIP only at launch
                 // Every table is open for now: active tables take their category
                 // colour, everything else is neutral grey. Nothing is red.
                 const fill = active && open ? m.color : "#e0e4e1";
@@ -919,7 +925,29 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
               )}
             </div>
           )}
-          {category === null ? (
+          {tablesClosed && category === null ? (
+            <div className="space-y-2">
+              <p className="flex items-center gap-2 text-[13px] font-black text-[#182e2c]">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#173935] text-[11px] font-black text-white">
+                  2
+                </span>
+                VIP admission
+              </p>
+              <p className="text-[13px] font-semibold leading-6 text-[#55665f]">
+                Tables are not on sale yet. Choose VIP above and add it to your order to continue.
+              </p>
+              <button
+                type="button"
+                onClick={handleReserve}
+                className="w-full rounded-xl bg-[#173935] px-4 py-3.5 text-sm font-black text-white transition-colors hover:bg-[#11241e] touch-manipulation"
+              >
+                Add VIP pass
+              </button>
+              <p aria-live="polite" className="text-[12px] font-semibold leading-5 text-[#55665f]">
+                {notice}
+              </p>
+            </div>
+          ) : category === null ? (
             <div className="space-y-2">
               <p className="flex items-center gap-2 text-[13px] font-black text-[#182e2c]">
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#173935] text-[11px] font-black text-white">

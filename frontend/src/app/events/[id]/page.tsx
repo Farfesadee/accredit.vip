@@ -676,7 +676,7 @@ function PublicEventContent() {
                 <>
                   <p className="text-2xl font-black text-white">SELECT TICKET</p>
                   <p className="mt-1 text-xs font-medium text-white/60">
-                    Pick VIP or a table on the plan above.
+                    Pick a VIP pass above to continue.
                   </p>
                 </>
               ) : (
