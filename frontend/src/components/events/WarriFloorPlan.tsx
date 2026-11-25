@@ -661,10 +661,6 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
               <span className="inline-block h-2.5 w-2.5 rounded-full border border-[#c2cbc6] bg-[#e0e4e1]" />
               Other category
             </span>
-            <span className="inline-flex items-center gap-1.5 text-[#e53e3e]">
-                <span className="inline-block h-2.5 w-2.5 rounded-full border border-[#e53e3e] bg-[#e53e3e]" />
-                Unavailable
-              </span>
             <span className="inline-flex items-center gap-1.5 text-[#42544d]">
               <span className="inline-block h-2.5 w-2.5 rounded-full ring-2 ring-[#172b25]" />
               Selected
@@ -725,15 +721,14 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
                 const state = tierSoldOut ? "sold" : tableState(m);
                 const open = !tierSoldOut && (state === "available" || state === "partial");
                 const selectable = active && open && !mgmtMode; // Disable guest selection in management mode
-                // Fill: active+available/partial = category color, sold/blocked = red, inactive = grey
-                const fill = active && open ? m.color : state === "sold" || state === "blocked" ? "#e53e3e" : "#e0e4e1";
+                // Every table is open for now: active tables take their category
+                // colour, everything else is neutral grey. Nothing is red.
+                const fill = active && open ? m.color : "#e0e4e1";
                 const isChosen = chosenId === m.id;
                 const isMgmtChosen = mgmtTableId && mgmtMode === "table" && tables[m.code]?.id === mgmtTableId;
                 const name = `${m.side} · Table ${m.n}${
                   tierSoldOut
                     ? " · Sold out"
-                    : state === "blocked" || state === "sold"
-                    ? " · Unavailable"
                     : state === "partial"
                     ? " · Seats still open"
                     : ""
