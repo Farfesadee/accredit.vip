@@ -27,7 +27,7 @@ from app.services.ticket_fulfillment import fulfill_ticket_purchase
 
 # Ignore checkouts that are still in flight, and do not query ancient abandoned
 # ones on every run.
-MIN_AGE_MINUTES = 2
+MIN_AGE_MINUTES = 0
 LOOKBACK_DAYS = 7
 
 
