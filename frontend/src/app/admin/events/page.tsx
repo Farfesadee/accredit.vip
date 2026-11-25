@@ -76,7 +76,11 @@ export default function AdminEventsPage() {
   const [availInput, setAvailInput] = useState("");
   const [spotlightOn, setSpotlightOn] = useState(false);
   const [paystackKeyMode, setPaystackKeyMode] = useState<"live" | "test" | "">("");
-  const [tableCategoriesEnabled, setTableCategoriesEnabled] = useState<string[]>([]);
+  // Enabled by default for testing - all categories enabled
+  const [tableCategoriesEnabled, setTableCategoriesEnabled] = useState<string[]>([
+    "Silver Table", "Gold Table", "Premium Gold", "Platinum Star", 
+    "Platinum Legacy", "Platinum Prime", "Platinum Prestige", "Platinum Extreme", "VIP"
+  ]);
   const [inviteSubj, setInviteSubj] = useState("");
   const [inviteBody, setInviteBody] = useState("");
   const [fTitle, setFTitle] = useState("");

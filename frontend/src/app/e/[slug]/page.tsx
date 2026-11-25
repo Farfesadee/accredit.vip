@@ -166,24 +166,6 @@ function PublicEventContent() {
                     <p className="text-muted-foreground">{event.description}</p>
                   </div>
                 )}
-                {lineup.length > 0 && (
-                  <div className="pt-4">
-                    <h3 className="font-semibold mb-3">Lineup</h3>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      {lineup.map((person, index) => (
-                        <div key={`${person.role}-${person.name}-${index}`} className="rounded-lg border p-3">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{person.role || "Guest"}</p>
-                          <p className="font-semibold">{person.name || "To be announced"}</p>
-                          {person.attach_headshot && (
-                            <p className="mt-1 text-xs text-muted-foreground">
-                              {person.headshot_source === "ai" ? "AI headshot requested for flyer" : "Headshot attached to flyer"}
-                            </p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
                 {event.after_party_enabled && event.after_party_location && (
                   <div className="pt-4">
                     <h3 className="font-semibold mb-2">After Party</h3>

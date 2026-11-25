@@ -605,57 +605,6 @@ function PublicEventContent() {
             <AboutSection description={event.description} />
           )}
 
-          {/* Lineup: photographs, not icons. Each block lists its own acts. */}
-          {lineup.length > 0 && (
-            <div>
-              <h2 className="text-lg font-black text-[#0D1B2A] mb-4">Lineup</h2>
-              <div className="space-y-3">
-                {[
-                  { role: "Music", label: "Music", image: "/warri/lineup-music.jpg", blurb: "Live bands and headline sets" },
-                  { role: "Comedy", label: "Comedy", image: "/warri/lineup-comedy.jpg", blurb: "Stand-up from the main stage" },
-                  { role: "DJ", label: "DJs", image: "/warri/lineup-dj.jpg", blurb: "Decks running all night" },
-                ].map((section) => {
-                  const people = lineup.filter((p: any) => p.role === section.role);
-                  if (people.length === 0) return null;
-                  return (
-                    <details key={section.role} className="group overflow-hidden rounded-2xl border border-[#e8edf2] bg-white">
-                      <summary className="flex cursor-pointer list-none items-center gap-3 p-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1ABC9C]/40">
-                        <img
-                          src={section.image}
-                          alt={`${section.label} at the event`}
-                          width={64}
-                          height={64}
-                          loading="lazy"
-                          className="h-16 w-16 flex-shrink-0 rounded-xl object-cover"
-                        />
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-black text-[#0D1B2A]">{section.label}</span>
-                          <span className="mt-0.5 block truncate text-xs font-semibold text-[#64748b]">
-                            {people.length} act{people.length === 1 ? "" : "s"} · {section.blurb}
-                          </span>
-                        </span>
-                        <svg className="h-5 w-5 flex-shrink-0 text-[#94a3b8] transition-transform duration-200 group-open:rotate-180" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </summary>
-                      <ul className="border-t border-[#eef2f6] px-3 py-2">
-                        {people.map((person: any, i: number) => (
-                          <li
-                            key={`${section.role}-${i}`}
-                            className="flex items-start gap-2 py-1.5 text-sm font-bold text-[#0D1B2A]"
-                          >
-                            <span className="mt-[7px] h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[#1ABC9C]" aria-hidden="true" />
-                            <span className="min-w-0">{person.name || "To be announced"}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </details>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
           {/* After Party */}
           {event.after_party_enabled && event.after_party_location && (
             <div className="rounded-xl border border-[#fce7f3] bg-[#fff1f8] p-5">
