@@ -285,7 +285,9 @@ function inkFor(hex: string) {
   return luminance > 0.32 ? "#11241e" : "#ffffff";
 }
 
-const BLOCKED_SEATS = [4, 8];
+// No seat is blocked in test mode. Seats are only closed from the organizer's
+// inventory once the event goes live.
+const BLOCKED_SEATS: number[] = [];
 
 const VIP_BANKS: [number, number, number, number][] = [
   [148, 552, 255, 0],
@@ -414,7 +416,7 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
   const chosenTable = chosen ? tables[chosen.code] : undefined;
   const tableSeats = Math.max(1, Number(chosenTable?.seat_count) || packageSeats);
   const soldSeats = new Set<number>(chosenTable?.sold_seats || []);
-  // Unavailable seats include blocked (4, 8) and sold - shown in red
+  // No seat is blocked in test mode; only genuinely sold seats count.
   const unavailableSeats = new Set<number>([...BLOCKED_SEATS, ...Array.from(soldSeats)]);
 
   const reset = (nextCategory?: number | null) => {

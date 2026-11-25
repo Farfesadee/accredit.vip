@@ -392,18 +392,13 @@ async def purchase_ticket(
         if len(set(req.seat_numbers)) != len(req.seat_numbers):
             raise HTTPException(status_code=400, detail="Each seat can only be selected once.")
 
-        # The seating ring on the published plan leaves seats 4 and 8 empty.
-        blocked_seats = {4, 8}
+        # No seat is blocked by default. Seats are only closed when the
+        # organiser explicitly blocks them on the inventory (live mode).
         for seat in req.seat_numbers:
             if seat < 1 or seat > seats_per_table:
                 raise HTTPException(
                     status_code=400,
                     detail=f"Invalid seat number: {seat}. Must be between 1 and {seats_per_table}.",
-                )
-            if seat in blocked_seats:
-                raise HTTPException(
-                    status_code=409,
-                    detail=f"Seat {seat} is not for sale on this table.",
                 )
 
         if has_inventory:
@@ -423,6 +418,8 @@ async def purchase_ticket(
                 )
             if table.status in ("sold", "blocked"):
                 raise HTTPException(status_code=409, detail=f"Table {code} is no longer available")
+            data = table.shape_data or {}
+            blocked_seats = set(data.get("blocked_seats", []))
             taken = blocked_seats | (await _sold_seats(db, event.id)).get(code, set())
             clash = sorted(set(req.seat_numbers) & taken)
             if clash:
