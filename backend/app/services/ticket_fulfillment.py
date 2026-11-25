@@ -15,10 +15,10 @@ from app.services.ticket_delivery import (
     generate_ticket_qr,
     save_ticket_qr_image,
     send_ticket_email,
+    send_ticket_whatsapp,
     build_ticket_pdf,
     build_warri_ticket_pdf,
 )
-from app.services.ticket_fulfillment import credit_wallet_payment
 
 
 async def fulfill_ticket_purchase(db: AsyncSession, purchase: TicketPurchase) -> None:
@@ -312,3 +312,26 @@ async def fulfill_ticket_purchase(db: AsyncSession, purchase: TicketPurchase) ->
         )
     except Exception:
         pass
+
+
+async def credit_wallet_payment(db: AsyncSession, reference: str) -> None:
+    """Credit a wallet from a paid wallet-funding transaction (WAL- references)."""
+    from app.models.wallet import Wallet, WalletTransaction, DEFAULT_BALANCES
+
+    result = await db.execute(
+        select(WalletTransaction).where(WalletTransaction.reference == reference)
+    )
+    tx = result.scalar_one_or_none()
+    if not tx or tx.status != "pending":
+        return
+
+    tx.status = "completed"
+    wallet_result = await db.execute(select(Wallet).where(Wallet.id == tx.wallet_id))
+    wallet = wallet_result.scalar_one_or_none()
+    if wallet:
+        cur = tx.currency or "NGN"
+        balances = dict(wallet.balances or DEFAULT_BALANCES)
+        balances[cur] = balances.get(cur, 0.0) + tx.amount
+        wallet.balances = balances
+        wallet.balance = balances.get(cur, 0.0)
+    await db.commit()
