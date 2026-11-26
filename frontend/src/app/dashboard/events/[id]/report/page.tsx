@@ -358,7 +358,13 @@ export default function EventReportPage() {
                         <td className="py-2.5 px-3 text-sm text-slate-900 text-right whitespace-nowrap">{Number(s.amount).toLocaleString()}</td>
                         <td className="py-2.5 px-3 text-xs font-mono text-slate-600 whitespace-nowrap">{s.reference}</td>
                         <td className="py-2.5 px-3 text-xs text-slate-500 whitespace-nowrap">
-                          {s.paid_at ? new Date(s.paid_at).toLocaleString() : s.created_at ? new Date(s.created_at).toLocaleString() : "—"}
+                          {s.paid_at || s.created_at
+                            ? new Intl.DateTimeFormat("en-NG", {
+                                timeZone: "Africa/Lagos",
+                                day: "2-digit", month: "short", year: "numeric",
+                                hour: "2-digit", minute: "2-digit", hour12: true,
+                              }).format(new Date(s.paid_at || s.created_at || "")) + " (WAT)"
+                            : "Not recorded"}
                         </td>
                       </tr>
                     ))}

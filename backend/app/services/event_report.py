@@ -736,7 +736,7 @@ def build_event_report_html(
             f'<td class="num" data-l="Qty">{_num(p.quantity or 0)}</td>'
             f'<td class="num" data-l="Amount">{_esc(_money(p.amount or 0, currency))}</td>'
             f'<td class="mono" data-l="Reference">{_esc(p.reference or "")}</td>'
-            f'<td class="num" data-l="Paid">{_esc(_short(p.paid_at or p.created_at))}</td>'
+            f'<td class="num" data-l="Paid">{_esc(_short(p.paid_at or p.created_at) + " " + _time_label(p.paid_at or p.created_at, "WAT"))}</td>'
             "</tr>"
             for p in purchases
         )

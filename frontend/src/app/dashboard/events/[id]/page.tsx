@@ -1367,6 +1367,18 @@ function EventDetailContent() {
                                 <p className="text-sm text-slate-500">NGN {p.amount?.toLocaleString()}</p>
                               </div>
                             </div>
+                            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-slate-200 pt-2 text-xs text-slate-500">
+                              <span>
+                                Bought: {p.paid_at || p.created_at
+                                  ? new Intl.DateTimeFormat("en-NG", {
+                                      timeZone: "Africa/Lagos",
+                                      day: "2-digit", month: "short", year: "numeric",
+                                      hour: "2-digit", minute: "2-digit", hour12: true,
+                                    }).format(new Date(p.paid_at || p.created_at)) + " (WAT)"
+                                  : "Not recorded"}
+                              </span>
+                              {p.reference && <span className="font-mono">Ref: {p.reference}</span>}
+                            </div>
                           </div>
                         ))}
                       </div>
