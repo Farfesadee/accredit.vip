@@ -94,6 +94,7 @@ interface ActivityItem {
   invited_by?: string | null;
   checked_in_at: string;
   location?: string | null;
+  qr_token?: string | null;
 }
 
 interface Day {
@@ -121,7 +122,14 @@ export function AccreditationScanClient() {
   const [mode, setMode] = useState<Mode>("scanner");
 
   // Scanner state
-  const [scanResult, setScanResult] = useState<{ status: string; message: string; guest?: any; scannedToken?: string } | null>(null);
+  const [scanResult, setScanResult] = useState<{
+    status: string;
+    message: string;
+    guest?: any;
+    scannedToken?: string;
+    previous_checkin?: { location?: string; time?: string; date?: string; at?: string; qr_token?: string } | null;
+    checkedInAt?: string | null;
+  } | null>(null);
 
   // Manual state
   const [manualQuery, setManualQuery] = useState("");
@@ -422,8 +430,8 @@ export function AccreditationScanClient() {
       const body: any = { token };
       if (selectedDayId) body.event_day_id = selectedDayId;
       const res = await apiClient<any>("/scanner/verify", { method: "POST", body });
-      if (res.valid) setScanResult({ status: "found", message: `${res.guest.name}`, guest: res.guest, scannedToken: token });
-      else setScanResult({ status: res.reason || "error", message: res.message, guest: res.guest, scannedToken: token });
+      if (res.valid) setScanResult({ status: "found", message: `${res.guest.name}`, guest: res.guest, scannedToken: token, previous_checkin: res.previous_checkin });
+      else setScanResult({ status: res.reason || "error", message: res.message, guest: res.guest, scannedToken: token, previous_checkin: res.previous_checkin });
     } catch (err: any) {
       setScanResult({ status: "error", message: err.message || "Verification failed" });
     }
@@ -448,7 +456,7 @@ export function AccreditationScanClient() {
       const loc = getEffectiveLocation();
       if (loc) body.location = loc;
       const res = await apiClient<any>("/scanner/checkin", { method: "POST", body });
-      setScanResult({ status: res.status, message: res.message });
+      setScanResult({ status: res.status, message: res.message, checkedInAt: res.checked_in_at, scannedToken: token });
       if (selectedEvent) { loadStats(selectedEvent.id, selectedDayId ?? undefined); loadActivity(selectedEvent.id, 1, "", selectedDayId ?? undefined); }
     } catch (err: any) {
       setScanResult({ status: "error", message: err.message || "Check-in failed" });
@@ -1116,6 +1124,7 @@ export function AccreditationScanClient() {
                   <p className="text-sm font-semibold truncate">{item.guest_name}</p>
                   <p className="text-xs text-white/50 truncate">{item.guest_email || item.guest_phone || "\u2014"}</p>
                   {item.invited_by && <p className="text-[10px] text-purple-400/70 truncate mt-0.5">{selectedEvent?.id === 71 ? item.invited_by : `Host: ${item.invited_by}`}</p>}
+                  {item.qr_token && <p className="text-[10px] text-amber-300/80 truncate mt-0.5">Ticket: {item.qr_token}</p>}
                 </div>
                 <div className="text-right flex-shrink-0">
                   <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-900/40 text-green-400 text-[10px] font-medium">
@@ -1273,6 +1282,12 @@ export function AccreditationScanClient() {
                           </p>
                         </div>
                       )}
+                      {scanResult.scannedToken && (
+                        <div>
+                          <p className="text-xs text-white/50 uppercase tracking-wide">Ticket</p>
+                          <p className="text-sm font-mono text-white/80 break-all">{scanResult.scannedToken}</p>
+                        </div>
+                      )}
                       <div className="flex items-center justify-between pt-2 border-t border-white/10">
                         <div>
                           <p className="text-xs text-white/50 uppercase tracking-wide">RSVP Status</p>
@@ -1288,6 +1303,19 @@ export function AccreditationScanClient() {
                           </span>
                         )}
                       </div>
+                    </div>
+                  )}
+                  {(scanResult.checkedInAt || scanResult.previous_checkin?.at) && (
+                    <div className="rounded-lg bg-white/10 border border-white/20 px-3 py-2">
+                      <p className="text-xs text-white/50 uppercase tracking-wide">
+                        {scanResult.previous_checkin?.at ? "Scanned earlier at" : "Scanned at"}
+                      </p>
+                      <p className="text-sm font-bold text-white">
+                        {formatDateTime(scanResult.checkedInAt || scanResult.previous_checkin!.at!)}
+                      </p>
+                      {scanResult.previous_checkin?.location && (
+                        <p className="text-xs text-white/70">Gate: {scanResult.previous_checkin.location}</p>
+                      )}
                     </div>
                   )}
                   <div className="flex gap-2 flex-wrap pt-2">

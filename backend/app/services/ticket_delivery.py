@@ -109,6 +109,8 @@ def format_ticket_email(
     qr_code_base64: str,
     flyer_url: str | None = None,
     qr_image_url: str | None = None,
+    qr_image_urls: list[str] | None = None,
+    qr_tokens: list[str] | None = None,
 ) -> tuple[str, str]:
     """Format ticket email content - returns (subject, html_content)"""
 
@@ -121,6 +123,21 @@ def format_ticket_email(
         )
     # Gmail blocks data: URIs: prefer a hosted image URL when available.
     qr_src = qr_image_url or f"data:image/png;base64,{qr_code_base64}"
+
+    # One card per ticket. A buyer of five passes gets five distinct codes, so
+    # each friend can be admitted on their own scan.
+    images = list(qr_image_urls or []) or [qr_src]
+    codes = list(qr_tokens or [])
+    qr_cards = []
+    for idx, src in enumerate(images):
+        label = codes[idx] if idx < len(codes) else (f"Ticket {idx + 1}" if len(images) > 1 else "Your Entry QR Code")
+        qr_cards.append(
+            f'<div style="display:inline-block;margin:10px;text-align:center;">'
+            f'<p style="font-weight:bold;color:#0D1B2A;font-size:13px;">{label}</p>'
+            f'<img src="{src}" alt="Ticket QR Code {idx + 1}" style="width:200px;height:200px;" />'
+            f'</div>'
+        )
+    qr_section_html = "".join(qr_cards)
 
     html_content = f"""
     <!DOCTYPE html>
@@ -182,9 +199,8 @@ def format_ticket_email(
                 </div>
 
                 <div class="qr-section">
-                    <p style="font-weight: bold; color: #0D1B2A;">Your Entry QR Code</p>
-                    <img src="{qr_src}" alt="Ticket QR Code" style="width:200px;height:200px;" />
-                    <p style="font-size: 12px; color: #64748b;">Present this QR code at the gate for entry</p>
+                    {qr_section_html}
+                    <p style="font-size: 12px; color: #64748b;">Each QR code admits one guest and can be scanned once. Give one to each member of your party.</p>
                 </div>
 
                 <div style="background: #e6faf5; padding: 15px; border-radius: 5px; margin: 15px 0;">
@@ -549,6 +565,8 @@ def build_warri_ticket_pdf(
     quantity: int = 1,
     seats: int | None = None,
     package_color: str | None = None,
+    qr_codes: list[str] | None = None,
+    qr_tokens: list[str] | None = None,
 ) -> bytes:
     """Branded Warri Again pass: one page per ticket, in the tier's own colour.
 
@@ -580,10 +598,14 @@ def build_warri_ticket_pdf(
     band = 168
     total = max(1, int(quantity or 1))
 
-    try:
-        qr_reader = ImageReader(_io.BytesIO(base64.b64decode(qr_code_base64)))
-    except Exception:
-        qr_reader = None
+    all_qrs = list(qr_codes or []) or [qr_code_base64]
+    all_tokens = list(qr_tokens or [])
+    qr_readers = []
+    for code in all_qrs:
+        try:
+            qr_readers.append(ImageReader(_io.BytesIO(base64.b64decode(code))))
+        except Exception:
+            qr_readers.append(None)
 
     buf = _io.BytesIO()
     pdf = canvas.Canvas(buf, pagesize=A4)
@@ -642,8 +664,9 @@ def build_warri_ticket_pdf(
             pdf.setFont("Helvetica", 10)
             pdf.drawString(margin, top - 116, f"Table of {int(seats)}")
 
-        # QR
+        # QR - each page carries its own ticket's code, not a repeat of page 1.
         qr_size = 178
+        qr_reader = qr_readers[index] if index < len(qr_readers) else None
         if qr_reader is not None:
             pdf.drawImage(
                 qr_reader,
@@ -655,9 +678,10 @@ def build_warri_ticket_pdf(
                 mask="auto",
             )
 
+        page_token = all_tokens[index] if index < len(all_tokens) else ticket_reference
         pdf.setFillColorRGB(*INK)
         pdf.setFont("Helvetica-Bold", 12)
-        pdf.drawCentredString(width / 2, top - 170 - qr_size, ticket_reference)
+        pdf.drawCentredString(width / 2, top - 170 - qr_size, page_token)
 
         pdf.setFillColorRGB(*GREY)
         pdf.setFont("Helvetica", 9.5)
@@ -682,7 +706,7 @@ def build_warri_ticket_pdf(
         pdf.drawString(margin + 16, buyer_top - 64, "PACKAGE")
         pdf.setFillColorRGB(*CREAM)
         pdf.setFont("Helvetica", 10)
-        pdf.drawString(margin + 16, buyer_top - 79, f"{package_name} · {ticket_reference}")
+        pdf.drawString(margin + 16, buyer_top - 79, f"{package_name} · {page_token}")
 
         pdf.setFillColorRGB(*GREY)
         pdf.setFont("Helvetica", 8)
@@ -712,6 +736,8 @@ async def send_ticket_email(
     qr_image_url: str | None = None,
     pdf_bytes: bytes | None = None,
     pdf_filename: str | None = None,
+    qr_image_urls: list[str] | None = None,
+    qr_tokens: list[str] | None = None,
 ):
     """Send ticket via email (SMTP); attaches the QR PDF when provided."""
     from app.services.email_service import send_email, send_email_with_pdf
@@ -749,6 +775,8 @@ async def send_ticket_email(
             qr_code_base64=qr_code_base64,
             flyer_url=flyer_url,
             qr_image_url=qr_image_url,
+            qr_image_urls=qr_image_urls,
+            qr_tokens=qr_tokens,
         )
 
     if pdf_bytes and pdf_filename:

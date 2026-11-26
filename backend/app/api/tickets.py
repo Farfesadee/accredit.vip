@@ -13,6 +13,7 @@ from app.core.security import get_current_user, extract_token
 from app.models.user import User
 from app.models.event import Event, TableInventory
 from app.models.ticket_purchase import TicketPurchase
+from app.models.qr_code import QRCode
 from app.models.wallet import Wallet, WalletTransaction, DEFAULT_BALANCES
 from app.services.ticket_delivery import generate_ticket_qr, send_ticket_email, send_ticket_whatsapp, save_ticket_qr_image, build_ticket_pdf
 
@@ -964,6 +965,40 @@ async def verify_ticket_qr(
     }
 
 
+@router.get("/purchases/{reference}/qrs")
+async def ticket_qr_list(
+    reference: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Every ticket QR for a purchase. Quantity > 1 means one code per guest."""
+    result = await db.execute(
+        select(TicketPurchase).where(TicketPurchase.reference == reference)
+    )
+    purchase = result.scalar_one_or_none()
+    if not purchase or purchase.status != "completed":
+        raise HTTPException(status_code=404, detail="Ticket not found or not paid")
+
+    qty = max(1, int(purchase.quantity or 1))
+    tokens = [f"{reference}-{i}" for i in range(1, qty + 1)] if qty > 1 else [reference]
+    rows = (await db.execute(select(QRCode.token).where(QRCode.token.in_(tokens)))).scalars().all()
+    stored = set(rows)
+    if stored:
+        tokens = [t for t in tokens if t in stored]
+    base = settings.FRONTEND_URL.rstrip("/")
+    return {
+        "reference": reference,
+        "count": len(tokens),
+        "qrs": [
+            {
+                "token": t,
+                "url": f"{base}/uploads/ticket-qr-{t}.png",
+                "ticket_url": f"{base}/ticket/{t}",
+            }
+            for t in tokens
+        ],
+    }
+
+
 @router.get("/purchases/{reference}/qr-image")
 async def ticket_qr_image(
     reference: str,
@@ -979,10 +1014,13 @@ async def ticket_qr_image(
     event_result = await db.execute(select(Event).where(Event.id == purchase.event_id))
     event = event_result.scalar_one_or_none()
 
-    # Same canonical payload as the emailed QR: the public ticket URL, so a
-    # phone-camera scan opens the ticket page with the guest details.
+    # Same canonical payload as the emailed QR. For a multi-ticket purchase the
+    # stored tokens are {reference}-1..N, so use the first one instead of the
+    # bare reference, which the gate cannot resolve.
+    qty = max(1, int(purchase.quantity or 1))
+    token = f"{reference}-1" if qty > 1 else reference
     qr_b64 = generate_ticket_qr(
-        ticket_reference=purchase.reference,
+        ticket_reference=token,
         event_title=event.title if event else "",
         event_date=str(event.event_date) if event else "",
     )
@@ -1023,12 +1061,23 @@ async def resend_ticket_qr(
         except Exception:
             pass
 
-    qr_code = generate_ticket_qr(
-        ticket_reference=purchase.reference,
-        event_title=event.title,
-        event_date=str(event.event_date),
-        image_data=image_data,
-    )
+    qty = max(1, int(purchase.quantity or 1))
+    tokens = [f"{reference}-{i}" for i in range(1, qty + 1)] if qty > 1 else [reference]
+    stored = (await db.execute(select(QRCode.token).where(QRCode.token.in_(tokens)))).scalars().all()
+    if stored:
+        tokens = [t for t in tokens if t in stored]
+    qr_codes = []
+    qr_urls = []
+    for token in tokens:
+        code = generate_ticket_qr(
+            ticket_reference=token,
+            event_title=event.title,
+            event_date=str(event.event_date),
+            image_data=image_data,
+        )
+        qr_codes.append(code)
+        qr_urls.append(save_ticket_qr_image(code, token))
+    qr_code = qr_codes[0]
 
     # Determine if this is a Black Market event
     is_black_market = event.title == "BLACK MARKET Movie World Record Attempt"
@@ -1063,9 +1112,11 @@ async def resend_ticket_qr(
         template_type=template_type,
         package_name=purchase.package_name,
         flyer_url=None if is_black_market else flyer_url,
-        qr_image_url=save_ticket_qr_image(qr_code, purchase.reference),
+        qr_image_url=qr_urls[0],
         pdf_bytes=pdf_bytes,
         pdf_filename=pdf_filename,
+        qr_image_urls=qr_urls,
+        qr_tokens=tokens,
     )
 
     return {"status": "ok", "message": f"QR resent to {purchase.buyer_email}"}

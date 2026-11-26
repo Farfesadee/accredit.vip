@@ -19,4 +19,8 @@ class CheckIn(Base):
     # here lets the scanner report where a previous check-in happened instead of
     # silently losing it.
     location = Column(String, nullable=True)
+    # Which ticket QR was consumed by this check-in. A buyer with five tickets
+    # has five QR rows on one guest; this keeps each ticket's admission separate
+    # instead of checking the guest in once and blocking the other four.
+    qr_token = Column(String, nullable=True, index=True)
     checked_in_at = Column(DateTime(timezone=True), server_default=func.now())

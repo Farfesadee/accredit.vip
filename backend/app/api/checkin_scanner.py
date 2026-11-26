@@ -118,18 +118,21 @@ async def scanner_undo_checkin(
         return {"status": "noop", "message": f"{guest.name} is not checked in."}
     for c in checkins:
         await db.delete(c)
-    # A day-scoped undo must leave the pass usable for the other days, so the
-    # QR is only freed when no check-in remains at all.
+    # Only free the ticket(s) whose check-in was actually removed. A buyer with
+    # five tickets must not have all five reopened because one was undone, and
+    # a day-scoped undo must leave the pass usable on the other days.
     remaining = (await db.execute(
-        select(func.count(CheckIn.id)).where(
+        select(CheckIn.qr_token).where(
             CheckIn.guest_id == guest.id, CheckIn.event_id == guest.event_id
         )
-    )).scalar() or 0
-    if remaining == 0:
-        qrs = (await db.execute(
-            select(QRCode).where(QRCode.guest_id == guest.id, QRCode.event_id == guest.event_id)
-        )).scalars().all()
-        for q in qrs:
+    )).scalars().all()
+    remaining_tokens = {t for t in remaining if t}
+    has_legacy_checkin = any(t is None for t in remaining)
+    qrs = (await db.execute(
+        select(QRCode).where(QRCode.guest_id == guest.id, QRCode.event_id == guest.event_id)
+    )).scalars().all()
+    for q in qrs:
+        if q.token not in remaining_tokens and not has_legacy_checkin:
             q.is_used = False
     await db.commit()
     return {"status": "undone", "message": f"Check-in reversed for {guest.name}."}
@@ -363,11 +366,25 @@ async def scanner_verify_token(req: ScanTokenRequest, request: Request, db: Asyn
 
     already_checked_in = False
     previous_checkin = None
+    ticket_token = qr.token if qr is not None else None
     if event and guest:
-        dup = select(CheckIn).where(CheckIn.guest_id == guest.id, CheckIn.event_id == event.id)
+        if ticket_token:
+            # A ticket QR is consumed on its own: five QRs on one buyer are five
+            # independent admissions. Legacy guest-level check-ins (no token)
+            # still guard the older flows.
+            dup = select(CheckIn).where(
+                CheckIn.event_id == event.id, CheckIn.qr_token == ticket_token
+            )
+        else:
+            dup = select(CheckIn).where(
+                CheckIn.event_id == event.id,
+                CheckIn.guest_id == guest.id,
+                CheckIn.qr_token.is_(None),
+            )
         if day is not None:
-            # One scan per guest per day: the same pass is valid again tomorrow.
             dup = dup.where(CheckIn.event_day_id == day.id)
+        else:
+            dup = dup.where(CheckIn.event_day_id.is_(None))
         c = await db.execute(dup.order_by(CheckIn.checked_in_at.desc()).limit(1))
         last_checkin = c.scalar_one_or_none()
         if last_checkin is not None:
@@ -375,6 +392,9 @@ async def scanner_verify_token(req: ScanTokenRequest, request: Request, db: Asyn
             previous_checkin = {
                 "location": getattr(last_checkin, "location", None) or "Unknown",
                 "time": last_checkin.checked_in_at.strftime("%I:%M %p") if last_checkin.checked_in_at else "Unknown",
+                "date": last_checkin.checked_in_at.strftime("%A, %d %B %Y") if last_checkin.checked_in_at else "Unknown",
+                "at": last_checkin.checked_in_at.isoformat() if last_checkin.checked_in_at else None,
+                "qr_token": getattr(last_checkin, "qr_token", None),
             }
 
     response_guest = {
@@ -418,8 +438,10 @@ async def scanner_verify_token(req: ScanTokenRequest, request: Request, db: Asyn
             "valid": False,
             "reason": "used",
             "message": (
-                f"{guest.name} is already checked in for {day_payload(day)['name']}."
+                f"This ticket was already scanned for {day_payload(day)['name']}."
                 if day is not None
+                else "This ticket was already scanned."
+                if ticket_token
                 else f"{guest.name} is already checked in."
             ),
             "guest": {**response_guest, "checked_in": True},
@@ -483,6 +505,12 @@ async def scanner_checkin(req: ScanTokenRequest, request: Request, db: AsyncSess
     day, day_error, days = await resolve_day(db, event, req.event_day_id, req.day_date)
     day_id = day.id if day is not None else None
 
+    # Serialise concurrent scans of the same ticket. Two staff scanning the
+    # same code at the same instant must not both be allowed through.
+    if qr is not None:
+        locked = await db.execute(select(QRCode).where(QRCode.id == qr.id).with_for_update())
+        qr = locked.scalar_one() or qr
+
     def _attempt(status: str):
         return ScanAttempt(
             guest_id=guest.id,
@@ -495,16 +523,29 @@ async def scanner_checkin(req: ScanTokenRequest, request: Request, db: AsyncSess
             location=location,
         )
 
-    existing_q = select(CheckIn.id).where(CheckIn.guest_id == guest.id, CheckIn.event_id == event.id)
+    if qr is not None and qr.token:
+        existing_q = select(CheckIn.id).where(
+            CheckIn.event_id == event.id, CheckIn.qr_token == qr.token
+        )
+    else:
+        existing_q = select(CheckIn.id).where(
+            CheckIn.event_id == event.id,
+            CheckIn.guest_id == guest.id,
+            CheckIn.qr_token.is_(None),
+        )
     if day is not None:
         existing_q = existing_q.where(CheckIn.event_day_id == day.id)
+    else:
+        existing_q = existing_q.where(CheckIn.event_day_id.is_(None))
     existing = await db.execute(existing_q.limit(1))
     if existing.first() is not None and event.id != 71:
         return {
             "status": "error",
             "message": (
-                f"{guest.name} is already checked in for {day_payload(day)['name']}."
+                "This ticket was already scanned for that day."
                 if day is not None
+                else "This ticket was already scanned."
+                if qr is not None
                 else f"{guest.name} is already checked in."
             ),
             "day": day_payload(day),
@@ -537,10 +578,24 @@ async def scanner_checkin(req: ScanTokenRequest, request: Request, db: AsyncSess
 
     if qr:
         qr.is_used = True
-    db.add(CheckIn(guest_id=guest.id, event_id=event.id, event_day_id=day_id, location=location))
+    checkin = CheckIn(
+        guest_id=guest.id,
+        event_id=event.id,
+        event_day_id=day_id,
+        location=location,
+        qr_token=qr.token if qr is not None else None,
+    )
+    db.add(checkin)
     db.add(_attempt("checked_in"))
     await db.commit()
-    return {"status": "approved", "message": "Check-in successful", "day": day_payload(day)}
+    await db.refresh(checkin)
+    return {
+        "status": "approved",
+        "message": "Check-in successful",
+        "day": day_payload(day),
+        "checked_in_at": checkin.checked_in_at.isoformat() if checkin.checked_in_at else None,
+        "qr_token": getattr(checkin, "qr_token", None),
+    }
 
 
 @router.get("/scanner/events")
@@ -627,24 +682,27 @@ async def scanner_event_stats(
         except ValueError:
             pass
 
-    if day is not None:
-        checked_in = await db.scalar(
-            select(func.count(func.distinct(CheckIn.guest_id))).where(
-                CheckIn.event_id == event_id,
-                CheckIn.event_day_id == day.id,
-            )
+    # Ticket QR check-ins count once per ticket (five tickets on one buyer are
+    # five admitted guests). Older guest-level rows still count once per guest.
+    def _stat_filters():
+        clauses = [CheckIn.event_id == event_id]
+        if day is not None:
+            clauses.append(CheckIn.event_day_id == day.id)
+        elif date_filter:
+            clauses.append(func.date(CheckIn.checked_in_at) == date_filter)
+        return clauses
+
+    ticket_heads = await db.scalar(
+        select(func.count(CheckIn.id)).where(
+            *_stat_filters(), CheckIn.qr_token.isnot(None)
         )
-    elif date_filter:
-        checked_in = await db.scalar(
-            select(func.count(func.distinct(CheckIn.guest_id))).where(
-                CheckIn.event_id == event_id,
-                func.date(CheckIn.checked_in_at) == date_filter,
-            )
+    )
+    legacy_heads = await db.scalar(
+        select(func.count(func.distinct(CheckIn.guest_id))).where(
+            *_stat_filters(), CheckIn.qr_token.is_(None)
         )
-    else:
-        checked_in = await db.scalar(
-            select(func.count(func.distinct(CheckIn.guest_id))).where(CheckIn.event_id == event_id)
-        )
+    )
+    checked_in = (ticket_heads or 0) + (legacy_heads or 0)
     total = await db.scalar(select(func.count(Guest.id)).where(Guest.event_id == event_id))
     return {
         "checked_in": checked_in or 0,
@@ -856,6 +914,7 @@ async def scanner_recent_activity(
                 "invited_by": r.invited_by,
                 "category": r.category,
                 "checked_in_at": r.CheckIn.checked_in_at.isoformat() if r.CheckIn.checked_in_at else None,
+                "qr_token": getattr(r.CheckIn, "qr_token", None),
                 "location": r.location,
             }
             for r in rows

@@ -248,7 +248,7 @@ async def fulfill_ticket_purchase(db: AsyncSession, purchase: TicketPurchase) ->
                     when = ""
 
                 pdf_bytes = build_warri_ticket_pdf(
-                    qr_code_base64=qr_codes[0],  # First QR for first page, will use unique per page internally
+                    qr_code_base64=qr_codes[0],
                     buyer_name=purchase.buyer_name,
                     package_name=purchase.package_name or "General Access",
                     ticket_reference=purchase.reference,
@@ -258,6 +258,8 @@ async def fulfill_ticket_purchase(db: AsyncSession, purchase: TicketPurchase) ->
                     quantity=purchase.quantity or 1,
                     seats=(package or {}).get("seats"),
                     package_color=(package or {}).get("color"),
+                    qr_codes=qr_codes,
+                    qr_tokens=qr_tokens,
                 )
                 pdf_filename = f"WARRI-AGAIN-{purchase.reference}.pdf"
 
@@ -272,13 +274,15 @@ async def fulfill_ticket_purchase(db: AsyncSession, purchase: TicketPurchase) ->
                 ticket_reference=purchase.reference,
                 ticket_count=purchase.quantity,
                 amount_paid=purchase.amount,
-                qr_code_base64=qr_codes[0],  # Primary QR for email template
+                qr_code_base64=qr_codes[0],
                 template_type=template_type,
                 package_name=purchase.package_name,
                 flyer_url=None if is_black_market else flyer_url,
-                qr_image_url=qr_image_urls[0],  # Primary QR image
+                qr_image_url=qr_image_urls[0],
                 pdf_bytes=pdf_bytes,
                 pdf_filename=pdf_filename,
+                qr_image_urls=qr_image_urls,
+                qr_tokens=qr_tokens,
             )
         except Exception as e:
             print(f"Failed to send ticket email: {e}")

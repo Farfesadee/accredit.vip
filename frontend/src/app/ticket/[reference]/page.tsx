@@ -34,6 +34,7 @@ function TicketContent() {
   const [error, setError] = useState<string | null>(null);
   const [showQrHelp, setShowQrHelp] = useState(false);
   const [refCopied, setRefCopied] = useState(false);
+  const [qrs, setQrs] = useState<{ token: string; url: string; ticket_url: string }[]>([]);
   const printRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -51,6 +52,14 @@ function TicketContent() {
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
+  }, [reference]);
+
+  useEffect(() => {
+    if (!reference) return;
+    fetch(`${API_BASE}/tickets/purchases/${reference}/qrs`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d?.qrs) setQrs(d.qrs); })
+      .catch(() => {});
   }, [reference]);
 
   const closeQrHelp = () => {
@@ -120,7 +129,7 @@ function TicketContent() {
           <div className="p-8">
             {/* Header */}
             <div className="text-center mb-6">
-              <h1 className="text-2xl font-bold text-gray-900">Admit One</h1>
+              <h1 className="text-2xl font-bold text-gray-900">{qrs.length > 1 ? `${qrs.length} Tickets` : "Admit One"}</h1>
               <p className="text-sm text-gray-500 mt-1">{ticket.event.title}</p>
             </div>
 
@@ -170,13 +179,26 @@ function TicketContent() {
               )}
             </div>
 
-            {/* QR Code */}
-            <div className="flex justify-center mb-4">
-              <img
-                src={qrUrl}
-                alt="Ticket QR Code"
-                className="w-48 h-48 border-2 border-gray-200 rounded-xl"
-              />
+            {/* QR codes: one per ticket, each usable once */}
+            <div className="mb-4 space-y-4">
+              {(qrs.length ? qrs : [{ token: reference, url: qrUrl, ticket_url: "" }]).map((qr, idx) => (
+                <div key={qr.token} className="flex flex-col items-center">
+                  <p className="text-xs font-bold text-gray-500 mb-1">
+                    Ticket {idx + 1} of {qrs.length || 1}
+                  </p>
+                  <img
+                    src={qr.url}
+                    alt={`Ticket QR Code ${idx + 1}`}
+                    className="w-48 h-48 border-2 border-gray-200 rounded-xl"
+                  />
+                  <p className="text-[10px] text-gray-400 mt-1 break-all">{qr.token}</p>
+                </div>
+              ))}
+              {qrs.length > 1 && (
+                <p className="text-center text-xs text-gray-500">
+                  Each QR admits one guest and can be used once. Give one to each member of your party.
+                </p>
+              )}
             </div>
 
             {/* Status */}
