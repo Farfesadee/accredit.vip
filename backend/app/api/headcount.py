@@ -551,7 +551,10 @@ async def undo_headcount_scan(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Remove a mistaken entry (a scan of the poster itself, or a double tap)."""
+    """Remove a mistaken entry. Admin-only: organizers and gate staff cannot
+    reverse their own counts."""
+    if not _is_admin(user):
+        raise HTTPException(status_code=403, detail="Only an admin can undo a scan")
     event = await _owned_event(db, event_id, user)
 
     if req.scan_id:
@@ -587,10 +590,11 @@ async def scanner_undo_headcount(
 ):
     """Undo one entry from the gate.
 
-    A mis-scan (the poster instead of a wristband, or a wristband read through
-    a pocket) has to be removable by the person standing at the door, so this
-    follows the scanner trust model rather than the organizer one.
+    A mis-scan has to be reversible, but only by an admin; gate staff can
+    create entries but must not erase them.
     """
+    if not _is_admin(user):
+        raise HTTPException(status_code=403, detail="Only an admin can undo a scan")
     event = await _headcount_event_for_token(db, req.token)
     if event is None:
         raise HTTPException(status_code=404, detail="This QR is not a headcount pass.")

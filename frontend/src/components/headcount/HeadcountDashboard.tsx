@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { apiClient, API_BASE } from "@/lib/api-client";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
+import { useAuth } from "@/contexts/auth-context";
 
 type HeadcountDay = {
   id: number;
@@ -111,6 +112,8 @@ function fullTime(value: string | null) {
 }
 
 export function HeadcountDashboard({ eventId }: { eventId: number | string }) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin" || user?.role === "super_admin";
   const [stats, setStats] = useState<HeadcountStats | null>(null);
   const [selectedDayId, setSelectedDayId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -179,6 +182,7 @@ export function HeadcountDashboard({ eventId }: { eventId: number | string }) {
   }, [stats]);
 
   async function handleUndo(scanId?: number) {
+    if (!isAdmin) return;
     setUndoing(true);
     try {
       const body: Record<string, unknown> = {};
@@ -239,7 +243,7 @@ export function HeadcountDashboard({ eventId }: { eventId: number | string }) {
   return (
     <div className="space-y-6">
       <ConfirmDialog
-        open={undoTarget !== null}
+        open={isAdmin && undoTarget !== null}
         title="Undo this scan?"
         message="The scan is removed and the count goes down by one. Use this for a wristband scanned twice, or the poster scanned by mistake."
         confirmLabel={undoing ? "Removing..." : "Undo scan"}
@@ -471,13 +475,15 @@ export function HeadcountDashboard({ eventId }: { eventId: number | string }) {
             <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#94a3b8]">
               Recent entries
             </p>
-            <button
-              onClick={() => setUndoTarget("last")}
-              className="inline-flex items-center gap-1.5 text-[11px] font-bold text-[#64748b] hover:text-[#0D1B2A]"
-            >
-              <RotateCcw className="h-3.5 w-3.5" />
-              Undo last scan
-            </button>
+            {isAdmin && (
+              <button
+                onClick={() => setUndoTarget("last")}
+                className="inline-flex items-center gap-1.5 text-[11px] font-bold text-[#64748b] hover:text-[#0D1B2A]"
+              >
+                <RotateCcw className="h-3.5 w-3.5" />
+                Undo last scan
+              </button>
+            )}
           </div>
           {stats.recent.length === 0 ? (
             <p className="px-5 py-8 text-center text-sm text-[#94a3b8]">
@@ -499,13 +505,15 @@ export function HeadcountDashboard({ eventId }: { eventId: number | string }) {
                       {scan.staff ? ` · ${scan.staff}` : ""}
                     </p>
                   </div>
-                  <button
-                    onClick={() => setUndoTarget(scan.id)}
-                    title="Undo this scan"
-                    className="rounded-lg p-2 text-[#94a3b8] transition-colors hover:bg-[#fef2f2] hover:text-red-500"
-                  >
-                    <RotateCcw className="h-3.5 w-3.5" />
-                  </button>
+                  {isAdmin && (
+                    <button
+                      onClick={() => setUndoTarget(scan.id)}
+                      title="Undo this scan"
+                      className="rounded-lg p-2 text-[#94a3b8] transition-colors hover:bg-[#fef2f2] hover:text-red-500"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>

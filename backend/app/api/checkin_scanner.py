@@ -104,10 +104,11 @@ async def scanner_undo_checkin(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Reverse a mistaken check-in: removes the check-in record(s) and frees
-    the guest's QR code(s) so they scan green again. Same trust model as
-    scanner check-in (any authenticated user). Check-in history
-    (scan_attempts) is preserved for audit."""
+    """Reverse a mistaken check-in. Admin-only: gate staff can create entries
+    but must not erase them. The check-in history (scan_attempts) is preserved
+    for audit."""
+    if (user.role or "") not in ("admin", "super_admin"):
+        raise HTTPException(status_code=403, detail="Only an admin can undo a check-in")
     guest = await db.get(Guest, req.guest_id)
     if not guest:
         raise HTTPException(status_code=404, detail="Guest not found")

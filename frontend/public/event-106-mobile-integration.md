@@ -120,7 +120,7 @@ Content-Type: application/json
 { "token": "https://accredit.vip/h/obi?c=B3E4XG2Q", "event_day_id": 26 }
 ```
 
-Deletes the latest scan for that night, **frees that wristband code so it can be used again**, and returns the updated stats. `{"status":"noop"}` means there was nothing to undo. The organizer equivalent is `POST /headcount/events/106/undo` with `{"scan_id": 1234}`.
+Deletes the latest scan for that night, **frees that wristband code so it can be used again**, and returns the updated stats. `{"status":"noop"}` means there was nothing to undo. **Admin-only (role `admin` or `super_admin`).** Non-admins receive HTTP 403; the Undo buttons are hidden from gate staff and organizers. The organizer-equivalent endpoint `POST /headcount/events/106/undo` is also admin-only.
 
 ### 5. Public wristband info (no auth)
 
