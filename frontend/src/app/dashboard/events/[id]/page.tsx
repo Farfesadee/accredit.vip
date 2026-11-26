@@ -1162,17 +1162,17 @@ function EventDetailContent() {
                         Failed Messages
                       </Link>
                     )}
-                    {/* Download report for events with table inventory (e.g., Warri Again) */}
+                    {/* Designed HTML infographic report with Print / Save as PDF */}
                     {event.slug === "warri-again-grand-spectacle-2026" && (
                       <button
                         onClick={() => {
-                          const url = `/api/v1/tickets/events/${id}/report`;
+                          const url = `/api/v1/tickets/events/${id}/report-html`;
                           window.open(url, "_blank", "noopener,noreferrer");
                         }}
                         className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 text-sm font-medium hover:bg-slate-200 transition-colors"
                       >
                         <BarChart3 className="w-4 h-4" />
-                        Download Report
+                        Open infographic report
                       </button>
                     )}
                   </div>
@@ -1353,13 +1353,19 @@ function EventDetailContent() {
                       not show. The couple run invitations, not ticket sales. */}
                   {!PORTAL && purchases.length > 0 && (
                     <div>
-                      <h3 className="text-sm font-bold text-secondary mb-3">Ticket Sales ({purchases.length})</h3>
+                      <h3 className="text-sm font-bold text-secondary mb-3">
+                        Ticket Sales ({purchases.filter((p) => !p.is_test).length} real
+                        {purchases.filter((p) => p.is_test).length > 0 && ` · ${purchases.filter((p) => p.is_test).length} test`})
+                      </h3>
                       <div className="space-y-2">
                         {purchases.map((p) => (
                           <div key={p.id} className="bg-slate-50 border border-slate-200 rounded-lg p-4 hover:border-slate-300 transition-colors">
                             <div className="flex items-center justify-between">
                               <div>
-                                <p className="font-medium text-slate-900">{p.buyer_name}</p>
+                                <p className="font-medium text-slate-900">
+                                  {p.buyer_name}
+                                  {p.is_test && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-black uppercase text-amber-700">Test</span>}
+                                </p>
                                 <p className="text-sm text-slate-500">{p.buyer_email}{p.buyer_phone && ` • ${p.buyer_phone}`}</p>
                               </div>
                               <div className="text-right">

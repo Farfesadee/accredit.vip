@@ -579,6 +579,11 @@ def build_event_report_html(
             heads += 1
     extra_heads = max(0, heads - len(accepted))
 
+    # Test-mode charges are kept for QA but are not real sales. Exclude them
+    # from every KPI and show them in their own clearly labelled section.
+    real_purchases = [p for p in purchases if not getattr(p, "is_test", False)]
+    test_purchases = [p for p in purchases if getattr(p, "is_test", False)]
+    purchases = real_purchases
     orders = len(purchases)
     tickets_sold = sum(int(p.quantity or 0) for p in purchases)
     revenue = sum(float(p.amount or 0) for p in purchases)
@@ -752,6 +757,32 @@ def build_event_report_html(
         )
     else:
         sales_html = '<p class="empty">No completed ticket sales recorded for this event.</p>'
+
+    if test_purchases:
+        test_rows = "".join(
+            "<tr>"
+            f'<td data-l="Buyer">{_esc(p.buyer_name or "")}</td>'
+            f'<td data-l="Contact">{_esc(p.buyer_email or "")}</td>'
+            f'<td data-l="Package">{_esc(p.package_name or "Ticket")}</td>'
+            f'<td class="num" data-l="Qty">{_num(p.quantity or 0)}</td>'
+            f'<td class="num" data-l="Amount">{_esc(_money(p.amount or 0, currency))}</td>'
+            f'<td class="mono" data-l="Reference">{_esc(p.reference or "")}</td>'
+            f'<td class="num" data-l="Paid">{_esc(_short(p.paid_at or p.created_at) + " " + _time_label(p.paid_at or p.created_at, "WAT"))}</td>'
+            "</tr>"
+            for p in test_purchases
+        )
+        test_html = (
+            '<div class="tblwrap"><table class="tbl stack">'
+            "<thead><tr><th>Buyer</th><th>Contact</th><th>Package</th>"
+            "<th style='text-align:right'>Qty</th><th style='text-align:right'>Amount</th>"
+            "<th>Reference</th><th style='text-align:right'>Paid</th></tr></thead>"
+            f"<tbody>{test_rows}</tbody></table></div>"
+        )
+        sales_html += _collapsible(
+            f"TEST purchases, excluded from totals ({_plural(len(test_purchases), 'order')})",
+            test_html,
+            False,
+        )
 
     # ---- roster ------------------------------------------------------- #
     ordered_guests = sorted(guests, key=lambda g: (g.name or "").lower())

@@ -20,6 +20,17 @@ from app.services.ticket_delivery import generate_ticket_qr, send_ticket_email, 
 router = APIRouter()
 
 
+def _is_test_paystack_key(key: str | None) -> bool:
+    """True when a Paystack secret belongs to a test/sandbox account."""
+    if not key:
+        return False
+    test_keys = {
+        settings.PAYSTACK_TEST_SECRET_KEY,
+        settings.PAYSTACK_EVENT_105_TEST_SECRET_KEY,
+    }
+    return key in {k for k in test_keys if k}
+
+
 class PurchaseRequest(BaseModel):
     event_id: int
     buyer_name: str = Field(min_length=1)
@@ -757,6 +768,11 @@ async def purchase_ticket(
     paystack_secret = settings.paystack_secret_key(
         buyer_user.email if buyer_user else None, req.event_id, event.paystack_key_mode
     )
+    # Persist whether this order was started on a test key so reports can mark
+    # it as test and leave it out of real sales totals.
+    if _is_test_paystack_key(paystack_secret) != bool(purchase.is_test):
+        purchase.is_test = _is_test_paystack_key(paystack_secret)
+        await db.commit()
     if paystack_secret:
         try:
             async with httpx.AsyncClient() as client:
@@ -892,6 +908,10 @@ async def verify_purchase(
             and data.get("data", {}).get("reference") == reference
         ):
             paystack_success = True
+            test_flag = _is_test_paystack_key(key)
+            if bool(purchase.is_test) != test_flag:
+                purchase.is_test = test_flag
+                await db.commit()
             break
 
     if paystack_success:
@@ -1486,6 +1506,69 @@ async def update_seat_status(
     }
 
 
+@router.get("/events/{event_id}/report-html")
+async def get_event_report_html(
+    event_id: int,
+    download: bool = False,
+    user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Designed HTML infographic report for the event organizer.
+
+    Test-mode purchases are labelled and excluded from the totals by the report
+    builder. `?download=1` saves it as a self-contained HTML file.
+    """
+    from fastapi.responses import HTMLResponse
+    from app.models.checkin import CheckIn
+    from app.models.flier import FlierAsset
+    from app.models.guest import Guest
+    from app.services.event_report import build_event_report_html
+
+    event_result = await db.execute(select(Event).where(Event.id == event_id))
+    event = event_result.scalar_one_or_none()
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    if event.organizer_id != user.id and user.role not in ("admin", "super_admin"):
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    guests = (await db.execute(
+        select(Guest).where(Guest.event_id == event_id).order_by(Guest.id)
+    )).scalars().all()
+    checked_in = {
+        row[0]
+        for row in (await db.execute(
+            select(CheckIn.guest_id).where(CheckIn.event_id == event_id)
+        )).all()
+    }
+    purchases = (await db.execute(
+        select(TicketPurchase).where(
+            TicketPurchase.event_id == event_id,
+            TicketPurchase.status == "completed",
+        ).order_by(TicketPurchase.created_at.desc())
+    )).scalars().all()
+
+    flyer_bytes: bytes | None = None
+    try:
+        upload_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads")
+        flier = (await db.execute(
+            select(FlierAsset).where(FlierAsset.event_id == event_id).order_by(FlierAsset.created_at.desc())
+        )).scalars().first()
+        artwork_url = (flier.url if flier else None) or event.cover_image
+        if artwork_url:
+            path = os.path.join(upload_dir, os.path.basename(artwork_url))
+            if os.path.exists(path):
+                with open(path, "rb") as fh:
+                    flyer_bytes = fh.read()
+    except Exception:
+        flyer_bytes = None
+
+    html = build_event_report_html(event, list(guests), checked_in, list(purchases), flyer_bytes)
+    headers = {}
+    if download:
+        headers["Content-Disposition"] = f'attachment; filename="event-{event_id}-report.html"'
+    return HTMLResponse(content=html, headers=headers)
+
+
 @router.get("/events/{event_id}/report", response_model=dict)
 async def get_event_report(
     event_id: int,
@@ -1517,6 +1600,9 @@ async def get_event_report(
     for p in purchases:
         table_nums = p.table_numbers or []
         seat_assignments = p.seat_assignments or []
+        # General-admission orders have no table number but still need a row.
+        if not table_nums:
+            table_nums = [None]
         for i, table in enumerate(table_nums):
             seats = []
             if seat_assignments:
@@ -1536,6 +1622,7 @@ async def get_event_report(
                 "amount": p.amount,
                 "reference": p.reference,
                 "paid_at": p.paid_at.isoformat() if p.paid_at else None,
+                "is_test": bool(p.is_test),
             })
 
     # Also include manually blocked tables/seats
@@ -1568,10 +1655,14 @@ async def get_event_report(
         "purchases": report_data,
         "manual_blocks": manual_blocks,
         "summary": {
-            "total_purchases": len(purchases),
-            "total_tickets": sum(len(d["seats"]) or 1 for d in report_data),
-            "total_revenue": sum(d["amount"] for d in report_data),
-            "tables_sold": len(set(d["table"] for d in report_data if d["table"])),
+            "total_purchases": sum(1 for p in purchases if not p.is_test),
+            "total_tickets": sum(p.quantity or 0 for p in purchases if not p.is_test),
+            "total_revenue": sum(p.amount or 0 for p in purchases if not p.is_test),
+            "tables_sold": len(set(
+                d["table"] for d in report_data if d["table"] and not d["is_test"]
+            )),
+            "test_purchases": sum(1 for p in purchases if p.is_test),
+            "test_revenue": sum(p.amount or 0 for p in purchases if p.is_test),
         },
     }
 

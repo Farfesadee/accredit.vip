@@ -39,6 +39,7 @@ type Sale = {
   package_name: string | null;
   paid_at: string | null;
   created_at: string | null;
+  is_test?: boolean;
 };
 
 export default function EventReportPage() {
@@ -99,8 +100,10 @@ export default function EventReportPage() {
   const totalContactable = useMemo(() => guests.filter((g) => g.email || g.phone).length, [guests]);
   const rsvpRate = guests.length > 0 ? Math.round((accepted.length / guests.length) * 100) : 0;
   const responseRate = guests.length > 0 ? Math.round(((accepted.length + declined.length) / guests.length) * 100) : 0;
-  const totalTicketsSold = useMemo(() => sales.reduce((n, s) => n + (Number(s.quantity) || 0), 0), [sales]);
-  const totalRevenue = useMemo(() => sales.reduce((n, s) => n + (Number(s.amount) || 0), 0), [sales]);
+  const realSales = useMemo(() => sales.filter((s) => !s.is_test), [sales]);
+  const testSaleCount = sales.length - realSales.length;
+  const totalTicketsSold = useMemo(() => realSales.reduce((n, s) => n + (Number(s.quantity) || 0), 0), [realSales]);
+  const totalRevenue = useMemo(() => realSales.reduce((n, s) => n + (Number(s.amount) || 0), 0), [realSales]);
 
   const channelStats = useMemo(() => {
     const stats: Record<string, { sent: number; delivered: number; read: number; failed: number }> = {};
@@ -315,7 +318,22 @@ export default function EventReportPage() {
         </div>
 
         <div className="mb-8" style={PORTAL ? { display: "none" } : undefined}>
-          <h2 className="text-lg font-bold text-slate-900 mb-4">Ticket Sales ({sales.length} order{sales.length === 1 ? "" : "s"})</h2>
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <h2 className="text-lg font-bold text-slate-900">Ticket Sales ({realSales.length} real order{realSales.length === 1 ? "" : "s"})</h2>
+            {testSaleCount > 0 && (
+              <button
+                onClick={() => window.open(`/api/v1/tickets/events/${id}/report-html`, "_blank", "noopener,noreferrer")}
+                className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100"
+              >
+                Open infographic report
+              </button>
+            )}
+          </div>
+          {testSaleCount > 0 && (
+            <p className="mb-3 text-xs text-amber-700">
+              {testSaleCount} test purchase{testSaleCount === 1 ? "" : "s"} excluded from these totals. Labelled TEST in the table below.
+            </p>
+          )}
           {sales.length === 0 ? (
             <p className="text-sm text-slate-400">No ticket sales yet.</p>
           ) : (
@@ -323,7 +341,7 @@ export default function EventReportPage() {
               <div className="grid grid-cols-3 gap-4 mb-4">
                 <div className="rounded-lg" style={{ background: `#10B981` + `15` }}>
                   <p className="text-xs font-medium" style={{ color: `#10B981` }}>Orders</p>
-                  <p className="text-xl font-bold mt-1" style={{ color: `#10B981` }}>{sales.length}</p>
+                  <p className="text-xl font-bold mt-1" style={{ color: `#10B981` }}>{realSales.length}</p>
                 </div>
                 <div className="rounded-lg" style={{ background: `${ACCENT}15` }}>
                   <p className="text-xs font-medium" style={{ color: ACCENT }}>Tickets sold</p>
@@ -351,6 +369,7 @@ export default function EventReportPage() {
                       <tr key={s.id} className="border-b border-slate-100 hover:bg-slate-50">
                         <td className="py-2.5 px-3 text-sm font-medium text-slate-900 whitespace-nowrap">
                           {s.buyer_name}
+                          {s.is_test && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-black uppercase text-amber-700">Test</span>}
                           <span className="block text-xs font-normal text-slate-500">{s.buyer_email}</span>
                         </td>
                         <td className="py-2.5 px-3 text-sm text-slate-600 whitespace-nowrap">{s.package_name || "—"}</td>

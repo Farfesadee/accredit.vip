@@ -42,7 +42,7 @@ def candidate_keys(event: Event | None) -> list[str]:
     return [key for key in dict.fromkeys(keys) if key]
 
 
-async def paystack_paid(reference: str, event: Event | None, client: httpx.AsyncClient) -> bool:
+async def paystack_paid(reference: str, event: Event | None, client: httpx.AsyncClient) -> str | None:
     for key in candidate_keys(event):
         try:
             resp = await client.get(
@@ -59,8 +59,8 @@ async def paystack_paid(reference: str, event: Event | None, client: httpx.Async
             and data.get("data", {}).get("status") == "success"
             and data.get("data", {}).get("reference") == reference
         ):
-            return True
-    return False
+            return key
+    return None
 
 
 async def reconcile() -> None:
@@ -90,13 +90,20 @@ async def reconcile() -> None:
                 )
                 event = event_result.scalar_one_or_none()
                 try:
-                    paid = await paystack_paid(purchase.reference, event, client)
+                    winning_key = await paystack_paid(purchase.reference, event, client)
                 except Exception as exc:
                     print(f"[reconcile] {purchase.reference}: verify error {type(exc).__name__}")
                     continue
-                if not paid:
+                if not winning_key:
                     print(f"[reconcile] {purchase.reference}: not paid yet")
                     continue
+                test_keys = {
+                    k for k in (settings.PAYSTACK_TEST_SECRET_KEY,
+                                settings.PAYSTACK_EVENT_105_TEST_SECRET_KEY) if k
+                }
+                if bool(purchase.is_test) != (winning_key in test_keys):
+                    purchase.is_test = winning_key in test_keys
+                    await db.commit()
                 try:
                     await fulfill_ticket_purchase(db, purchase)
                     print(

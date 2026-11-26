@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, func, JSON
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, func, JSON
 from sqlalchemy.orm import relationship
 from app.core.database import Base
 
@@ -31,5 +31,8 @@ class TicketPurchase(Base):
     # unaffected.
     table_numbers = Column(JSON, nullable=True)
     seat_assignments = Column(JSON, nullable=True)
+    # Test-mode Paystack charges are kept for QA but must never count as real
+    # sales in reports. Set from the key that actually verified the payment.
+    is_test = Column(Boolean, nullable=False, default=False, server_default="false")
 
     event = relationship("Event", foreign_keys=[event_id])
