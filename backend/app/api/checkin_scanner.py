@@ -12,6 +12,7 @@ from app.models.guest import Guest
 from app.models.event import Event
 from app.models.scan_attempt import ScanAttempt
 from app.models.event_day import EventDay
+from app.models.ticket_purchase import TicketPurchase
 from app.core.security import get_current_user, verify_password, create_access_token
 from app.models.user import User
 from app.core.config import settings
@@ -295,6 +296,31 @@ def _event_has_passed(event, days=None) -> bool:
     return event_end < datetime.now(timezone.utc)
 
 
+async def _ticket_position(token: str | None, db: AsyncSession) -> str | None:
+    """Return '3/7' when a ticket QR belongs to a multi-ticket purchase.
+
+    Tokens for quantity > 1 are ``TKT-<hex>-<n>``. Single tickets have no
+    suffix, and non-ticket RSVP codes return None, so nothing changes for them.
+    """
+    if not token:
+        return None
+    raw = token.split("/")[-1]
+    match = re.match(r"^(TKT-[0-9A-Fa-f]+)-(\d+)$", raw)
+    if not match:
+        return None
+    result = await db.execute(
+        select(TicketPurchase).where(TicketPurchase.reference == match.group(1))
+    )
+    purchase = result.scalar_one_or_none()
+    if not purchase:
+        return None
+    total = max(1, int(purchase.quantity or 1))
+    if total <= 1:
+        return None
+    index = int(match.group(2))
+    return f"{index}/{total}" if 1 <= index <= total else None
+
+
 def _event_block(event, day=None) -> dict:
     block = {"id": event.id, "title": event.title}
     if day is not None:
@@ -367,6 +393,9 @@ async def scanner_verify_token(req: ScanTokenRequest, request: Request, db: Asyn
     already_checked_in = False
     previous_checkin = None
     ticket_token = qr.token if qr is not None else None
+    ticket_position = await _ticket_position(
+        ticket_token or (raw_token.split("/")[-1] if raw_token else None), db
+    )
     if event and guest:
         if ticket_token:
             # A ticket QR is consumed on its own: five QRs on one buyer are five
@@ -395,6 +424,7 @@ async def scanner_verify_token(req: ScanTokenRequest, request: Request, db: Asyn
                 "date": last_checkin.checked_in_at.strftime("%A, %d %B %Y") if last_checkin.checked_in_at else "Unknown",
                 "at": last_checkin.checked_in_at.isoformat() if last_checkin.checked_in_at else None,
                 "qr_token": getattr(last_checkin, "qr_token", None),
+                "ticket_position": ticket_position,
             }
 
     response_guest = {
@@ -418,6 +448,7 @@ async def scanner_verify_token(req: ScanTokenRequest, request: Request, db: Asyn
             "message": f"{guest.name} declined the invitation and cannot be checked in.",
             "guest": {**response_guest, "checked_in": False},
             "event": _event_block(event, day),
+            "ticket_position": ticket_position,
         }
 
     # A closed day, a day that is not on this event, or a multi-day event with
@@ -429,6 +460,7 @@ async def scanner_verify_token(req: ScanTokenRequest, request: Request, db: Asyn
             "message": day_error_message(day_error, day),
             "guest": {**response_guest, "checked_in": already_checked_in},
             "event": _event_block(event, day),
+            "ticket_position": ticket_position,
             "days": [day_payload(d) for d in days],
             "previous_checkin": previous_checkin,
         }
@@ -446,6 +478,7 @@ async def scanner_verify_token(req: ScanTokenRequest, request: Request, db: Asyn
             ),
             "guest": {**response_guest, "checked_in": True},
             "event": _event_block(event, day),
+            "ticket_position": ticket_position,
             "previous_checkin": previous_checkin,
         }
 
@@ -458,6 +491,7 @@ async def scanner_verify_token(req: ScanTokenRequest, request: Request, db: Asyn
             "message": "Already checked in",
             "guest": {**response_guest, "checked_in": True},
             "event": _event_block(event, day),
+            "ticket_position": ticket_position,
             "previous_checkin": previous_checkin,
         }
 
@@ -468,6 +502,7 @@ async def scanner_verify_token(req: ScanTokenRequest, request: Request, db: Asyn
             "message": f"The event '{event.title}' has already ended.",
             "guest": {**response_guest, "checked_in": False},
             "event": _event_block(event, day),
+            "ticket_position": ticket_position,
         }
 
     return {
@@ -476,6 +511,7 @@ async def scanner_verify_token(req: ScanTokenRequest, request: Request, db: Asyn
         "message": f"{guest.name} can be checked in.",
         "guest": {**response_guest, "rsvp_status": guest.rsvp_status, "checked_in": already_checked_in},
         "event": _event_block(event, day),
+        "ticket_position": ticket_position,
         "days": [day_payload(d) for d in days],
         "previous_checkin": previous_checkin if already_checked_in else None,
     }
@@ -504,6 +540,10 @@ async def scanner_checkin(req: ScanTokenRequest, request: Request, db: AsyncSess
 
     day, day_error, days = await resolve_day(db, event, req.event_day_id, req.day_date)
     day_id = day.id if day is not None else None
+    ticket_position = await _ticket_position(
+        (qr.token if qr is not None else None) or (raw_token.split("/")[-1] if raw_token else None),
+        db,
+    )
 
     # Serialise concurrent scans of the same ticket. Two staff scanning the
     # same code at the same instant must not both be allowed through.
@@ -595,6 +635,7 @@ async def scanner_checkin(req: ScanTokenRequest, request: Request, db: AsyncSess
         "day": day_payload(day),
         "checked_in_at": checkin.checked_in_at.isoformat() if checkin.checked_in_at else None,
         "qr_token": getattr(checkin, "qr_token", None),
+        "ticket_position": ticket_position,
     }
 
 
@@ -903,8 +944,10 @@ async def scanner_recent_activity(
         .limit(per_page)
     )
     rows = result.all()
-    return {
-        "activity": [
+    activity = []
+    for r in rows:
+        token = getattr(r.CheckIn, "qr_token", None)
+        activity.append(
             {
                 "id": r.CheckIn.id,
                 "guest_id": r.CheckIn.guest_id,
@@ -914,11 +957,13 @@ async def scanner_recent_activity(
                 "invited_by": r.invited_by,
                 "category": r.category,
                 "checked_in_at": r.CheckIn.checked_in_at.isoformat() if r.CheckIn.checked_in_at else None,
-                "qr_token": getattr(r.CheckIn, "qr_token", None),
+                "qr_token": token,
+                "ticket_position": await _ticket_position(token, db),
                 "location": r.location,
             }
-            for r in rows
-        ],
+        )
+    return {
+        "activity": activity,
         "total": total,
         "page": page,
         "per_page": per_page,

@@ -95,6 +95,7 @@ interface ActivityItem {
   checked_in_at: string;
   location?: string | null;
   qr_token?: string | null;
+  ticket_position?: string | null;
 }
 
 interface Day {
@@ -127,8 +128,9 @@ export function AccreditationScanClient() {
     message: string;
     guest?: any;
     scannedToken?: string;
-    previous_checkin?: { location?: string; time?: string; date?: string; at?: string; qr_token?: string } | null;
+    previous_checkin?: { location?: string; time?: string; date?: string; at?: string; qr_token?: string; ticket_position?: string } | null;
     checkedInAt?: string | null;
+    ticketPosition?: string | null;
   } | null>(null);
 
   // Manual state
@@ -430,8 +432,8 @@ export function AccreditationScanClient() {
       const body: any = { token };
       if (selectedDayId) body.event_day_id = selectedDayId;
       const res = await apiClient<any>("/scanner/verify", { method: "POST", body });
-      if (res.valid) setScanResult({ status: "found", message: `${res.guest.name}`, guest: res.guest, scannedToken: token, previous_checkin: res.previous_checkin });
-      else setScanResult({ status: res.reason || "error", message: res.message, guest: res.guest, scannedToken: token, previous_checkin: res.previous_checkin });
+      if (res.valid) setScanResult({ status: "found", message: `${res.guest.name}`, guest: res.guest, scannedToken: token, previous_checkin: res.previous_checkin, ticketPosition: res.ticket_position });
+      else setScanResult({ status: res.reason || "error", message: res.message, guest: res.guest, scannedToken: token, previous_checkin: res.previous_checkin, ticketPosition: res.ticket_position });
     } catch (err: any) {
       setScanResult({ status: "error", message: err.message || "Verification failed" });
     }
@@ -456,7 +458,7 @@ export function AccreditationScanClient() {
       const loc = getEffectiveLocation();
       if (loc) body.location = loc;
       const res = await apiClient<any>("/scanner/checkin", { method: "POST", body });
-      setScanResult({ status: res.status, message: res.message, checkedInAt: res.checked_in_at, scannedToken: token });
+      setScanResult({ status: res.status, message: res.message, checkedInAt: res.checked_in_at, scannedToken: token, ticketPosition: res.ticket_position });
       if (selectedEvent) { loadStats(selectedEvent.id, selectedDayId ?? undefined); loadActivity(selectedEvent.id, 1, "", selectedDayId ?? undefined); }
     } catch (err: any) {
       setScanResult({ status: "error", message: err.message || "Check-in failed" });
@@ -1124,7 +1126,8 @@ export function AccreditationScanClient() {
                   <p className="text-sm font-semibold truncate">{item.guest_name}</p>
                   <p className="text-xs text-white/50 truncate">{item.guest_email || item.guest_phone || "\u2014"}</p>
                   {item.invited_by && <p className="text-[10px] text-purple-400/70 truncate mt-0.5">{selectedEvent?.id === 71 ? item.invited_by : `Host: ${item.invited_by}`}</p>}
-                  {item.qr_token && <p className="text-[10px] text-amber-300/80 truncate mt-0.5">Ticket: {item.qr_token}</p>}
+                  {item.ticket_position && <p className="text-[10px] text-amber-300 font-bold truncate mt-0.5">Ticket {item.ticket_position}</p>}
+                  {item.qr_token && <p className="text-[10px] text-amber-300/60 truncate mt-0.5">{item.qr_token}</p>}
                 </div>
                 <div className="text-right flex-shrink-0">
                   <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-900/40 text-green-400 text-[10px] font-medium">
@@ -1234,6 +1237,11 @@ export function AccreditationScanClient() {
                        scanResult.status === "declined" ? "Invitation Declined" :
                        scanResult.status === "error" ? "Error" : scanResult.message}
                     </p>
+                    {(scanResult.ticketPosition || scanResult.previous_checkin?.ticket_position) && (
+                      <span className="ml-auto flex-shrink-0 rounded-lg bg-white/15 border border-white/30 px-2.5 py-1 text-sm font-black text-white">
+                        Ticket {scanResult.ticketPosition || scanResult.previous_checkin!.ticket_position}
+                      </span>
+                    )}
                   </div>
                   {scanResult.guest && (
                     <div className="space-y-2 bg-white/10 rounded-lg p-3 border border-white/20">
