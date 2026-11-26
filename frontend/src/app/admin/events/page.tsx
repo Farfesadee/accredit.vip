@@ -11,6 +11,7 @@ import { NotificationBell } from "@/components/notification-bell";
 import { AdminLogoutButton } from "@/components/admin/logout-button";
 import { ConfirmDialog } from "@/components/shared/confirm-dialog";
 import { EventDaysCard } from "@/components/admin/event-days-card";
+import WarriFloorPlan from "@/components/events/WarriFloorPlan";
 
 function maskEmail(email: string) {
   const [local, domain] = email.split("@");
@@ -74,6 +75,12 @@ export default function AdminEventsPage() {
   const [priceInput, setPriceInput] = useState("");
   const [availInput, setAvailInput] = useState("");
   const [spotlightOn, setSpotlightOn] = useState(false);
+  const [paystackKeyMode, setPaystackKeyMode] = useState<"live" | "test" | "">("");
+  // Enabled by default for testing - all categories enabled
+  const [tableCategoriesEnabled, setTableCategoriesEnabled] = useState<string[]>([
+    "Silver Table", "Gold Table", "Premium Gold", "Platinum Star", 
+    "Platinum Legacy", "Platinum Prime", "Platinum Prestige", "Platinum Extreme", "VIP"
+  ]);
   const [inviteSubj, setInviteSubj] = useState("");
   const [inviteBody, setInviteBody] = useState("");
   const [fTitle, setFTitle] = useState("");
@@ -139,6 +146,8 @@ export default function AdminEventsPage() {
     setPriceInput(e.ticket_price === null || e.ticket_price === undefined ? "" : String(e.ticket_price));
     setAvailInput(e.tickets_available === null || e.tickets_available === undefined ? "" : String(e.tickets_available));
     setSpotlightOn(!!e.spotlight);
+    setPaystackKeyMode(e.paystack_key_mode || "");
+    setTableCategoriesEnabled(e.table_categories_enabled || []);
     setInviteSubj(e.invite_subject || "");
     setInviteBody(e.invite_body || "");
     setFTitle(e.title || "");
@@ -168,6 +177,7 @@ export default function AdminEventsPage() {
         is_public: isPublic,
         status: statusSel,
         spotlight: spotlightOn,
+        table_categories_enabled: tableCategoriesEnabled.length > 0 ? tableCategoriesEnabled : undefined,
       };
       body.registration_close_at = closeAtInput ? new Date(closeAtInput).toISOString() : "";
       if (fTitle.trim()) body.title = fTitle.trim();
@@ -650,6 +660,9 @@ export default function AdminEventsPage() {
                   <button onClick={() => setSpotlightOn(!spotlightOn)} className={`px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${spotlightOn ? "bg-amber-100 text-amber-700" : "bg-slate-200 text-slate-600"}`}>
                     Spotlight: {spotlightOn ? "FEATURED" : "OFF"}
                   </button>
+                  <button onClick={() => { if (!ctrlEvent) return; const next = paystackKeyMode === "test" ? "live" : "test"; apiClient(`/admin/events/${ctrlEvent.id}/controls`, { method: "PATCH", body: { paystack_key_mode: next } }).then(r => { setCtrlEvent({...ctrlEvent, paystack_key_mode: next }); setPaystackKeyMode(next); setCtrlMsg({ok:true, text:`Paystack mode: ${next}`}); fetchEvents(); }).catch(e => setCtrlMsg({ok:false, text:e.message})) }} className={`px-4 py-2.5 rounded-xl text-sm font-bold transition-all ${paystackKeyMode === "test" ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"}`}>
+                    Paystack: {paystackKeyMode === "test" ? "TEST MODE" : "LIVE MODE"}
+                  </button>
                   <div className="sm:col-span-2 grid gap-2 sm:grid-cols-3">
                     <div>
                       <label className="block text-xs font-bold text-[#64748b] mb-1.5">Title</label>
@@ -699,6 +712,21 @@ export default function AdminEventsPage() {
 
                 {/* Multi-day schedule: per-day accreditation switches and per-day reports */}
                 <EventDaysCard eventId={ctrlEvent.id} eventDate={ctrlEvent.event_date} />
+                {/* Warri Again seating plan management (event 105 only) */}
+                {ctrlEvent.id === 105 && (
+                  <div className="mt-6">
+                    <h3 className="text-base font-black text-[#0D1B2A] mb-3">Seating Plan Management</h3>
+                    <p className="text-xs text-[#94a3b8] mb-4">Manage table and seat availability directly on the plan. Click tables or seats to mark them as closed, open, or sold.</p>
+                    <WarriFloorPlan
+                      eventId={ctrlEvent.id}
+                      packages={ctrlEvent.pass_packages || []}
+                      currencySymbol="₦"
+                      onReserve={() => {}}
+                      isOrganizer={true}
+                      isAdmin={true}
+                    />
+                  </div>
+                )}
               </div>
             )}
           </div>

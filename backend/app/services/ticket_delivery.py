@@ -10,6 +10,15 @@ from app.core.config import settings
 from app.services.whatsapp_cloud_service import send_whatsapp_cloud
 
 
+def format_event_date(event_date: str) -> str:
+    """Format event date as 'Tuesday, November 24, 2026' from ISO date string."""
+    try:
+        dt = datetime.strptime(event_date, "%Y-%m-%d")
+        return dt.strftime("%A, %B %d, %Y")
+    except Exception:
+        return event_date
+
+
 BLACK_MARKET_GENERAL_EMAIL = {
     "subject": "YOUR ENTRY BARCODE: BLACK MARKET Movie World Record Attempt",
     "template": "general",
@@ -707,12 +716,15 @@ async def send_ticket_email(
     """Send ticket via email (SMTP); attaches the QR PDF when provided."""
     from app.services.email_service import send_email, send_email_with_pdf
 
+    # Format date as "Tuesday, November 24, 2026"
+    formatted_date = format_event_date(event_date)
+
     if template_type and template_type == "black_market" and package_name:
         is_premium = "premium" in package_name.lower() or "VIP" in package_name
         subject, html_content = format_black_market_email(
             buyer_name=buyer_name,
             event_title=event_title,
-            event_date=str(event_date),
+            event_date=formatted_date,
             event_time=str(event_time),
             venue=venue,
             ticket_reference=ticket_reference,
@@ -728,7 +740,7 @@ async def send_ticket_email(
         subject, html_content = format_ticket_email(
             buyer_name=buyer_name,
             event_title=event_title,
-            event_date=str(event_date),
+            event_date=formatted_date,
             event_time=str(event_time),
             venue=venue,
             ticket_reference=ticket_reference,
@@ -767,12 +779,14 @@ async def send_ticket_whatsapp(
     """Send ticket via WhatsApp using Meta Cloud API first, then Twilio fallback."""
     import httpx
 
+    formatted_date = format_event_date(event_date)
+
     message = f"""
 🎉 *Ticket Confirmed!*
 
 Hi {buyer_name},
 
-Your ticket for *{event_title}* on {event_date} has been confirmed!
+Your ticket for *{event_title}* on {formatted_date} has been confirmed!
 
 Reference: {ticket_reference}
 

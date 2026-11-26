@@ -24,6 +24,7 @@ import WaitlistTabContent from "@/components/events/WaitlistTabContent";
 import InvitesTabContent from "@/components/events/InvitesTabContent";
 import NBCLocationDashboard from "@/components/events/NBCLocationDashboard";
 import { PORTAL, PORTAL_ACCENT } from "@/lib/portal";
+import WarriFloorPlan from "@/components/events/WarriFloorPlan";
 
 const ACCENT = PORTAL ? PORTAL_ACCENT : "#1ABC9C";
 
@@ -906,9 +907,11 @@ function EventDetailContent() {
   const canSendInvites = totalGuests > 0 && invalidPhoneGuests.length === 0;
 
   const isNBCEvent = Number(id) === 71;
+  const isWarriEvent = Number(id) === 105;
 
   const tabs = [
     { id: "overview", label: "Overview", icon: BarChart3 },
+    ...(isWarriEvent ? [{ id: "seating", label: "Seating Plan", icon: BarChart3 }] : []),
     ...(isNBCEvent ? [
       { id: "airport", label: "Airport", icon: MapPin },
       { id: "abuja_continental", label: "Abuja Continental", icon: MapPin },
@@ -1158,6 +1161,19 @@ function EventDetailContent() {
                         <AlertTriangle className="w-4 h-4" />
                         Failed Messages
                       </Link>
+                    )}
+                    {/* Download report for events with table inventory (e.g., Warri Again) */}
+                    {event.slug === "warri-again-grand-spectacle-2026" && (
+                      <button
+                        onClick={() => {
+                          const url = `/api/v1/tickets/events/${id}/report`;
+                          window.open(url, "_blank", "noopener,noreferrer");
+                        }}
+                        className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 text-sm font-medium hover:bg-slate-200 transition-colors"
+                      >
+                        <BarChart3 className="w-4 h-4" />
+                        Download Report
+                      </button>
                     )}
                   </div>
 
@@ -1567,6 +1583,25 @@ function EventDetailContent() {
                     {flierUploading && <div className="mt-2 flex items-center gap-2 text-sm text-slate-600"><Loader className="w-4 h-4 animate-spin" /> Uploading...</div>}
                   </div>
                 </div>
+              </div>
+            )}
+
+            {activeTab === "seating" && isWarriEvent && (
+              <div className="p-6 space-y-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h2 className="text-lg font-bold text-secondary">Seating Plan Management</h2>
+                    <p className="text-sm text-slate-500 mt-1">Manage table and seat availability directly on the plan</p>
+                  </div>
+                </div>
+                <WarriFloorPlan
+                  eventId={Number(id)}
+                  packages={event.pass_packages || []}
+                  currencySymbol="₦"
+                  onReserve={() => {}}
+                  isOrganizer={true}
+                  isAdmin={true}
+                />
               </div>
             )}
               </div>

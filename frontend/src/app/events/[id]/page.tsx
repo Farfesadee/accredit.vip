@@ -15,6 +15,7 @@ import WarriFloorPlan, {
 } from "@/components/events/WarriFloorPlan";
 import { formatTimeForDisplay, getCurrencySymbol } from "@/lib/event-form-options";
 import { PhoneInput } from "@/components/shared/phone-input";
+import { useAuth } from "@/contexts/auth-context";
 
 const UPLOAD_BASE = API_BASE.replace(/\/api\/v1\/?$/, "");
 
@@ -129,6 +130,7 @@ function PublicEventContent() {
   const { id } = useParams<{ id: string }>();
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { user } = useAuth();
 
   const [event, setEvent] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -452,81 +454,7 @@ function PublicEventContent() {
         </div>
       )}
 
-      {/* Compact masthead for the seating-plan event. No flyer hero: the event
-          identity and the facts share one short strip, so the seating plan is
-          the first thing a visitor sees. */}
-      {isFloorPlanEvent && (
-        <div className="border-b border-[#e8edf2] bg-[#f8f9fc]">
-          <div className="mx-auto max-w-[1400px] px-4 py-3.5 sm:px-6 lg:px-8">
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <h1 className="text-xl font-black leading-tight text-[#0D1B2A] sm:text-2xl">
-                {event.title}
-              </h1>
-              <span
-                className="rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.16em] text-[#0f766e]"
-                style={{ background: "rgba(26,188,156,0.14)" }}
-              >
-                {cat || "Event"}
-              </span>
-              {isEnded && (
-                <span className="rounded-full bg-[#64748b] px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.16em] text-white">
-                  Ended
-                </span>
-              )}
-              <span className="text-xs font-semibold text-[#64748b]">by {event.host_name}</span>
-            </div>
-            <div className="mt-2 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-[13px] font-semibold text-[#475569]">
-            <span className="inline-flex items-center gap-1.5">
-              <svg className="h-4 w-4 text-[#1ABC9C]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              {formatEventDate(event.event_date)}
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <svg className="h-4 w-4 text-[#1ABC9C]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              {formatTimeForDisplay(event.event_time)}
-              <span className="font-normal text-[#94a3b8]">{event.timezone}</span>
-            </span>
-            <span className="inline-flex min-w-0 items-center gap-1.5">
-              <svg className="h-4 w-4 flex-shrink-0 text-[#1ABC9C]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-              <span className="truncate">{event.venue}</span>
-            </span>
-            {event.dress_code && (
-              <span className="inline-flex items-center gap-1.5">
-                <svg className="h-4 w-4 text-[#1ABC9C]" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                </svg>
-                {event.dress_code}
-              </span>
-            )}
-            {(event.latitude && event.longitude) || event.map_link ? (
-              <a
-                href={
-                  event.latitude && event.longitude
-                    ? `https://www.google.com/maps/dir/?api=1&destination=${event.latitude},${event.longitude}`
-                    : event.map_link
-                }
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 font-bold text-[#16A085] hover:text-[#1ABC9C]"
-              >
-                Directions
-                <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2.5} viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                </svg>
-              </a>
-            ) : null}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Main Content */}
+            {/* Main Content */}
       <div
         className={`flex-1 mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 sm:py-10 grid gap-8 grid-cols-[minmax(0,1fr)] lg:gap-10 lg:items-start ${
           isFloorPlanEvent
@@ -677,57 +605,6 @@ function PublicEventContent() {
             <AboutSection description={event.description} />
           )}
 
-          {/* Lineup: photographs, not icons. Each block lists its own acts. */}
-          {lineup.length > 0 && (
-            <div>
-              <h2 className="text-lg font-black text-[#0D1B2A] mb-4">Lineup</h2>
-              <div className="space-y-3">
-                {[
-                  { role: "Music", label: "Music", image: "/warri/lineup-music.jpg", blurb: "Live bands and headline sets" },
-                  { role: "Comedy", label: "Comedy", image: "/warri/lineup-comedy.jpg", blurb: "Stand-up from the main stage" },
-                  { role: "DJ", label: "DJs", image: "/warri/lineup-dj.jpg", blurb: "Decks running all night" },
-                ].map((section) => {
-                  const people = lineup.filter((p: any) => p.role === section.role);
-                  if (people.length === 0) return null;
-                  return (
-                    <details key={section.role} className="group overflow-hidden rounded-2xl border border-[#e8edf2] bg-white">
-                      <summary className="flex cursor-pointer list-none items-center gap-3 p-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1ABC9C]/40">
-                        <img
-                          src={section.image}
-                          alt={`${section.label} at the event`}
-                          width={64}
-                          height={64}
-                          loading="lazy"
-                          className="h-16 w-16 flex-shrink-0 rounded-xl object-cover"
-                        />
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-sm font-black text-[#0D1B2A]">{section.label}</span>
-                          <span className="mt-0.5 block truncate text-xs font-semibold text-[#64748b]">
-                            {people.length} act{people.length === 1 ? "" : "s"} · {section.blurb}
-                          </span>
-                        </span>
-                        <svg className="h-5 w-5 flex-shrink-0 text-[#94a3b8] transition-transform duration-200 group-open:rotate-180" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </summary>
-                      <ul className="border-t border-[#eef2f6] px-3 py-2">
-                        {people.map((person: any, i: number) => (
-                          <li
-                            key={`${section.role}-${i}`}
-                            className="flex items-start gap-2 py-1.5 text-sm font-bold text-[#0D1B2A]"
-                          >
-                            <span className="mt-[7px] h-1.5 w-1.5 flex-shrink-0 rounded-full bg-[#1ABC9C]" aria-hidden="true" />
-                            <span className="min-w-0">{person.name || "To be announced"}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </details>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
           {/* After Party */}
           {event.after_party_enabled && event.after_party_location && (
             <div className="rounded-xl border border-[#fce7f3] bg-[#fff1f8] p-5">
@@ -797,9 +674,9 @@ function PublicEventContent() {
                 <p className="text-2xl font-black text-white">FREE ENTRY</p>
               ) : awaitingFloorChoice ? (
                 <>
-                  <p className="text-2xl font-black text-white">Choose a table</p>
+                  <p className="text-2xl font-black text-white">SELECT TICKET</p>
                   <p className="mt-1 text-xs font-medium text-white/60">
-                    Pick a numbered table on the plan above, or add a VIP pass.
+                    Pick a VIP pass above to continue.
                   </p>
                 </>
               ) : (

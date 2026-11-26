@@ -41,6 +41,8 @@ type Props = {
   packages: { name: string; price: number | string; seats?: number; capacity?: number | null }[];
   currencySymbol: string;
   onReserve: (selection: FloorPlanSelection) => void;
+  isOrganizer?: boolean;      // Can manage tables/seats
+  isAdmin?: boolean;          // Admin can manage all
 };
 
 type ApiTable = {
@@ -69,16 +71,22 @@ type Marker = {
 };
 
 const CATS = [
-  { name: "Silver Table", color: "#12c9ed", prefix: "SL" },
-  { name: "Gold Table", color: "#47ed15", prefix: "GL" },
-  { name: "Premium Gold", color: "#009337", prefix: "PGL" },
-  { name: "Platinum Star", color: "#ffda48", prefix: "PS" },
-  { name: "Platinum Legacy", color: "#3465ac", prefix: "PL" },
-  { name: "Platinum Prime", color: "#956536", prefix: "PPM" },
-  { name: "Platinum Prestige", color: "#ff9c36", prefix: "PP" },
-  { name: "Platinum Extreme", color: "#cb3700", prefix: "PE" },
-  { name: "VIP", color: "#c42d23", prefix: "VIP" },
+  { name: "Silver Table", color: "#12c9ed", prefix: "SL", enabled: false },
+  { name: "Gold Table", color: "#47ed15", prefix: "GL", enabled: false },
+  { name: "Premium Gold", color: "#009337", prefix: "PGL", enabled: false },
+  { name: "Platinum Star", color: "#ffda48", prefix: "PS", enabled: false },
+  { name: "Platinum Legacy", color: "#3465ac", prefix: "PL", enabled: false },
+  { name: "Platinum Prime", color: "#956536", prefix: "PPM", enabled: false },
+  { name: "Platinum Prestige", color: "#ff9c36", prefix: "PP", enabled: false },
+  { name: "Platinum Extreme", color: "#cb3700", prefix: "PE", enabled: false },
+  { name: "VIP", color: "#c42d23", prefix: "VIP", enabled: true },
 ];
+
+// This tier has no package and is closed by the organiser. Selecting it shows a
+// sold-out screen instead of the map and cannot lead to a purchase.
+const SOLD_OUT_CATEGORY = "Platinum Extreme";
+const isSoldOutCategory = (index: number | null) =>
+  index !== null && CATS[index]?.name === SOLD_OUT_CATEGORY;
 
 /**
  * Category colours, so the ticket panel can print the same swatch the guest
@@ -269,15 +277,6 @@ function buildMarkers(): Marker[] {
   return markers;
 }
 
-function blockedMarker(cat: number, n: number) {
-  if (cat === 7) return true;
-  if (cat === 6) return n === 19;
-  if (cat === 4) return n === 39;
-  if (cat === 5) return n === 29;
-  if (cat === 3) return n === 49;
-  return n === 3;
-}
-
 function inkFor(hex: string) {
   const rgb = (hex.slice(1).match(/../g) || [])
     .map((part) => parseInt(part, 16) / 255)
@@ -286,7 +285,13 @@ function inkFor(hex: string) {
   return luminance > 0.32 ? "#11241e" : "#ffffff";
 }
 
-const BLOCKED_SEATS = [4, 8];
+// Going live: VIP is the only ticket on sale. The floor plan stays visible for
+// venue reference, but no table can be selected or bought.
+const TABLES_ENABLED = false;
+
+// No seat is blocked in test mode. Seats are only closed from the organizer's
+// inventory once the event goes live.
+const BLOCKED_SEATS: number[] = [];
 
 const VIP_BANKS: [number, number, number, number][] = [
   [148, 552, 255, 0],
@@ -297,7 +302,7 @@ const VIP_BANKS: [number, number, number, number][] = [
 
 type TableState = "available" | "partial" | "sold" | "blocked";
 
-export default function WarriFloorPlan({ eventId, packages, currencySymbol, onReserve }: Props) {
+export default function WarriFloorPlan({ eventId, packages, currencySymbol, onReserve, isOrganizer = false, isAdmin = false }: Props) {
   const markers = useMemo(buildMarkers, []);
   const [category, setCategory] = useState<number | null>(null);
   const [mode, setMode] = useState<"table" | "seat" | null>(null);
@@ -332,6 +337,55 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
   };
   const [tables, setTables] = useState<Record<string, ApiTable>>({});
   const [notice, setNotice] = useState("");
+  // Management mode (organizer/admin)
+  const canManage = isOrganizer || isAdmin;
+  const [mgmtMode, setMgmtMode] = useState<"table" | "seat" | null>(null);
+  const [mgmtTableId, setMgmtTableId] = useState<number | null>(null);
+  const [mgmtSeats, setMgmtSeats] = useState<number[]>([]);
+  const [mgmtLoading, setMgmtLoading] = useState(false);
+  const [mgmtError, setMgmtError] = useState("");
+
+  const handleTableStatusChange = async (tableIds: number[], status: "available" | "blocked" | "sold") => {
+    if (!canManage) return;
+    setMgmtLoading(true);
+    setMgmtError("");
+    try {
+      await apiClient(`/tickets/events/${eventId}/tables/status`, {
+        method: "PATCH",
+        body: { table_ids: tableIds, status },
+      });
+      // Refresh tables
+      const res = await apiClient<{ tables: ApiTable[] }>(`/tickets/events/${eventId}/floor-plan`);
+      const map: Record<string, ApiTable> = {};
+      for (const table of res.tables || []) map[table.table_number] = table;
+      setTables(map);
+      setNotice(`${tableIds.length} table(s) marked as ${status}`);
+    } catch (err: any) {
+      setMgmtError(err.message || "Failed to update table status");
+    }
+    setMgmtLoading(false);
+  };
+
+  const handleSeatStatusChange = async (tableId: number, seatNumbers: number[], status: "available" | "sold") => {
+    if (!canManage) return;
+    setMgmtLoading(true);
+    setMgmtError("");
+    try {
+      await apiClient(`/tickets/events/${eventId}/seats/status`, {
+        method: "PATCH",
+        body: { table_id: tableId, seat_numbers: seatNumbers, status },
+      });
+      // Refresh tables
+      const res = await apiClient<{ tables: ApiTable[] }>(`/tickets/events/${eventId}/floor-plan`);
+      const map: Record<string, ApiTable> = {};
+      for (const table of res.tables || []) map[table.table_number] = table;
+      setTables(map);
+      setNotice(`${seatNumbers.length} seat(s) on table marked as ${status}`);
+    } catch (err: any) {
+      setMgmtError(err.message || "Failed to update seat status");
+    }
+    setMgmtLoading(false);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -348,19 +402,26 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
     };
   }, [eventId]);
 
+  // Default to "fit" zoom on mount
+  useEffect(() => {
+    const timer = setTimeout(() => fitToPlan(), 100);
+    return () => clearTimeout(timer);
+  }, []);
+
   const cat = category === null ? null : CATS[category];
   const isVip = category === 8;
-  const isExtreme = category === 7;
-  const bySeat = mode === "seat";
+  const categorySoldOut = isSoldOutCategory(category);
+  const tablesClosed = !TABLES_ENABLED;
+  // Only VIP is enabled, tables disabled per client request
   const packageForCat = cat ? packages.find((p) => p.name === cat.name) || null : null;
   const packageSeats = Math.max(1, Number(packageForCat?.seats) || 1);
   const packagePrice = Number(packageForCat?.price) || 0;
-  const seatPrice = packageSeats > 1 ? Math.round(packagePrice / packageSeats) : packagePrice;
 
   const chosen = chosenId ? markers.find((m) => m.id === chosenId) || null : null;
   const chosenTable = chosen ? tables[chosen.code] : undefined;
   const tableSeats = Math.max(1, Number(chosenTable?.seat_count) || packageSeats);
   const soldSeats = new Set<number>(chosenTable?.sold_seats || []);
+  // No seat is blocked in test mode; only genuinely sold seats count.
   const unavailableSeats = new Set<number>([...BLOCKED_SEATS, ...Array.from(soldSeats)]);
 
   const reset = (nextCategory?: number | null) => {
@@ -389,17 +450,20 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
   };
 
   const tableState = (m: Marker): TableState => {
-    if (blockedMarker(m.cat, m.n)) return "blocked";
+    // Availability comes only from the database. All tables start available;
+    // the organizer marks them closed/sold from the admin dashboard.
     const row = tables[m.code];
     if (!row) return "available";
     if (row.status === "available") return "available";
     if (row.status === "partially_sold") return "partial";
+    if (row.status === "blocked") return "blocked";
     return "sold";
   };
 
   // A table with some seats taken can still sell the empty ones, but it can no
   // longer be bought whole. That is why availability does not depend on mode.
   const isAvailable = (m: Marker) => {
+    if (categorySoldOut) return false;
     const state = tableState(m);
     return state === "available" || state === "partial";
   };
@@ -409,23 +473,14 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
 
   const chosenState = chosen ? tableState(chosen) : null;
 
-  const reserveLabel = isVip
-    ? "Add VIP pass"
-    : !mode
-    ? "Choose how to buy"
-    : bySeat
-    ? seats.length
-      ? `Reserve ${seats.length} seat${seats.length === 1 ? "" : "s"}`
-      : "Select your seats"
-    : "Reserve this table";
+  const reserveLabel = isVip ? "Add VIP pass" : "Reserve this table";
 
-  // Nothing is preselected: a table alone is not a choice of how to buy it.
-  const reserveDisabled = isVip
-    ? false
-    : !chosen || !mode || (bySeat ? seats.length === 0 : chosenState !== "available");
+  // Tables are bought whole. Seat selection is disabled for now, so a chosen
+  // table in the available state can go straight to the ticket panel.
+  const reserveDisabled = isVip ? false : !chosen || chosenState !== "available";
 
   const handleReserve = () => {
-    if (reserveDisabled) return;
+    if (reserveDisabled || categorySoldOut) return;
     if (isVip) {
       onReserve({
         packageName: CATS[8].name,
@@ -442,35 +497,17 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
     }
     if (!chosen) return;
     const label = `${chosen.side} · Table ${chosen.n}`;
-    if (bySeat) {
-      onReserve({
-        packageName: cat?.name || "",
-        mode: "seat",
-        tables: [chosen.code],
-        seats: [...seats].sort((a, b) => a - b),
-        quantity: seats.length,
-        unitPrice: seatPrice,
-        totalPrice: seatPrice * seats.length,
-        label: `${label} · Seat${seats.length === 1 ? "" : "s"} ${[...seats]
-          .sort((a, b) => a - b)
-          .join(", ")}`,
-      });
-      setNotice(
-        `${seats.length} seat${seats.length === 1 ? "" : "s"} on ${label} added to the ticket panel below.`,
-      );
-    } else {
-      onReserve({
-        packageName: cat?.name || "",
-        mode: "table",
-        tables: [chosen.code],
-        seats: [],
-        quantity: 1,
-        unitPrice: packagePrice,
-        totalPrice: packagePrice,
-        label: `${label} · Whole table, ${packageSeats} seats`,
-      });
-      setNotice(`${label} added to the ticket panel below.`);
-    }
+    onReserve({
+      packageName: cat?.name || "",
+      mode: "table",
+      tables: [chosen.code],
+      seats: [],
+      quantity: 1,
+      unitPrice: packagePrice,
+      totalPrice: packagePrice,
+      label: `${label} · Table, ${packageSeats} seats`,
+    });
+    setNotice(`${label} added to the ticket panel below.`);
   };
 
   const categoryMarkers = category === null ? [] : markers.filter((m) => m.cat === category);
@@ -486,70 +523,85 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
           masthead above, so this bar only explains what to do here. */}
       <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-1.5 border-b border-[#e6ebe8] bg-[#173935] px-4 py-4 sm:px-6 sm:py-5">
         <div className="min-w-0">
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#9fd3c4]">
-            Seating plan
-          </p>
           <h2 className="mt-1 text-xl font-black leading-tight tracking-[-0.02em] text-white sm:text-2xl">
-            Choose your table
+            SELECT TICKET
           </h2>
         </div>
         <p className="max-w-sm text-[12px] font-semibold leading-5 text-white/75 sm:text-[13px]">
-          Pick a numbered table, then buy the whole table or just the seats you want.
+          VIP passes are now on sale.
         </p>
       </header>
 
       {/* Step 1: category. Starts empty on purpose. */}
       <div className="border-b border-[#e6ebe8] bg-[#f6f8f4] px-4 py-4 sm:px-6">
         <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:gap-4">
-          <label
-            htmlFor="floor-category"
-            className="flex items-center gap-2 text-[13px] font-black text-[#182e2c] sm:shrink-0"
-          >
-            <span
-              className="flex h-6 w-6 items-center justify-center rounded-full bg-[#173935] text-[11px] font-black text-white"
-              aria-hidden="true"
-            >
-              1
-            </span>
-            Ticket category
-          </label>
-          <select
-            id="floor-category"
-            value={category === null ? "" : String(category)}
-            onChange={(e) => {
-              const next = e.target.value === "" ? null : Number(e.target.value);
-              reset(next);
-              // A chosen category lights up the map's tables, so carry the
-              // guest down to the map instead of leaving them to scroll.
-              if (next !== null) nextFrame(mapCardRef.current);
-            }}
-            className="h-12 w-full rounded-xl border border-[#aab8b3] bg-white px-3 text-base font-semibold text-[#182e2c] outline-none focus:border-[#173935] sm:max-w-xs"
-          >
-            <option value="">Select a category</option>
-            {CATS.map((c, i) => (
-              <option key={c.name} value={i}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-          {cat && (
-            <p className="text-[13px] font-semibold leading-5 text-[#46564f]">
-              {packageForCat ? (
-                <>
-                  <span className="font-black text-[#182e2c]">{priceLabel(packagePrice)}</span>
-                  {packageSeats > 1 ? ` per table of ${packageSeats}` : " per guest"}
-                  {packageSeats > 1 && (
-                    <span className="text-[#6b7d75]"> · {priceLabel(seatPrice)} per seat</span>
-                  )}
-                  {!isVip && !isExtreme && (
-                    <span className="text-[#6b7d75]"> · {openCount} open</span>
-                  )}
-                </>
-              ) : (
-                "Price on request"
-              )}
-            </p>
-          )}
+          <fieldset className="flex-1 min-w-0">
+            <legend className="flex items-center gap-2 text-[13px] font-black text-[#182e2c] mb-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#173935] text-[11px] font-black text-white">
+                1
+              </span>
+              Ticket category
+            </legend>
+            <div className="flex flex-wrap gap-2">
+              {/* VIP as standalone button */}
+              <button
+                type="button"
+                onClick={() => {
+                  reset(8);
+                  nextFrame(mapCardRef.current);
+                }}
+                className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-bold transition-colors ${
+                  category === 8
+                    ? "bg-[#173935] text-white"
+                    : "bg-white border border-[#aab8b3] text-[#182e2c] hover:border-[#c42d23] hover:text-[#c42d23]"
+                }`}
+              >
+                <span
+                  className="inline-block h-3 w-3 rounded-full border border-[#93a29b]"
+                  style={{ background: CATS[8].color }}
+                />
+                VIP
+              </button>
+              {/* Table categories are closed for launch. VIP is the only active ticket. */}
+              <div className="relative flex-1 min-w-[200px] sm:max-w-xs">
+                <select
+                  id="floor-category"
+                  value=""
+                  onChange={(e) => {
+                    const next = e.target.value === "" ? null : Number(e.target.value);
+                    if (next !== 8) { // VIP handled by button
+                      reset(next);
+                      if (next !== null) nextFrame(mapCardRef.current);
+                    }
+                  }}
+                  disabled={!TABLES_ENABLED}
+                  className="h-12 w-full rounded-xl border border-[#aab8b3] bg-[#f5f5f5] px-3 text-base font-semibold text-[#999] outline-none appearance-none pr-10 disabled:cursor-not-allowed"
+                >
+                  <option value="">Tables not available</option>
+                  {TABLES_ENABLED && CATS.slice(0, 8).map((c, i) => (
+                    <option key={c.name} value={i}>
+                      {c.name}{isSoldOutCategory(i) ? " (Sold out)" : ""}
+                    </option>
+                  ))}
+                </select>
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-[#94a3b8]">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                </span>
+              </div>
+            </div>
+            {cat && isVip && (
+              <p className="text-[13px] font-semibold leading-5 text-[#46564f] mt-2">
+                {packageForCat ? (
+                  <>
+                    <span className="font-black text-[#182e2c]">{priceLabel(packagePrice)}</span>
+                    {packageSeats > 1 ? ` per table of ${packageSeats}` : " per guest"}
+                  </>
+                ) : (
+                  "Price on request"
+                )}
+              </p>
+            )}
+          </fieldset>
         </div>
       </div>
 
@@ -617,7 +669,6 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
               <span className="inline-block h-2.5 w-2.5 rounded-full border border-[#c2cbc6] bg-[#e0e4e1]" />
               Other category
             </span>
-            <span className="inline-flex items-center gap-1.5 text-[#8b9a94]">Unavailable</span>
             <span className="inline-flex items-center gap-1.5 text-[#42544d]">
               <span className="inline-block h-2.5 w-2.5 rounded-full ring-2 ring-[#172b25]" />
               Selected
@@ -673,15 +724,19 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
 
               {/* Tables */}
               {markers.map((m) => {
-                const state = tableState(m);
                 const active = category !== null && m.cat === category;
-                const open = state === "available" || state === "partial";
-                const selectable = active && open;
-                const fill = active ? (open ? m.color : "#d1d6d3") : "#e0e4e1";
+                const tierSoldOut = active && categorySoldOut;
+                const state = tierSoldOut ? "sold" : tableState(m);
+                const open = !tierSoldOut && (state === "available" || state === "partial");
+                const selectable = active && open && !mgmtMode && !tablesClosed; // VIP only at launch
+                // Every table is open for now: active tables take their category
+                // colour, everything else is neutral grey. Nothing is red.
+                const fill = active && open ? m.color : "#e0e4e1";
                 const isChosen = chosenId === m.id;
+                const isMgmtChosen = mgmtTableId && mgmtMode === "table" && tables[m.code]?.id === mgmtTableId;
                 const name = `${m.side} · Table ${m.n}${
-                  state === "blocked" || state === "sold"
-                    ? " · Unavailable"
+                  tierSoldOut
+                    ? " · Sold out"
                     : state === "partial"
                     ? " · Seats still open"
                     : ""
@@ -689,16 +744,26 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
                 return (
                   <g
                     key={m.id}
-                    className={selectable ? "cursor-pointer" : undefined}
-                    tabIndex={selectable ? 0 : -1}
-                    role={selectable ? "button" : undefined}
+                    className={(selectable || (canManage && mgmtMode === "table")) ? "cursor-pointer" : undefined}
+                    tabIndex={selectable || (canManage && mgmtMode === "table") ? 0 : -1}
+                    role={selectable || (canManage && mgmtMode === "table") ? "button" : undefined}
                     aria-label={name}
-                    aria-pressed={selectable ? isChosen : undefined}
-                    onClick={() => selectable && pick(m.id, true)}
+                    aria-pressed={selectable ? isChosen : canManage && mgmtMode === "table" ? Boolean(isMgmtChosen) : undefined}
+                    onClick={() => {
+                      if (selectable) pick(m.id, true);
+                      else if (canManage && mgmtMode === "table") {
+                        const tbl = tables[m.code];
+                        if (tbl) setMgmtTableId(tbl.id);
+                      }
+                    }}
                     onKeyDown={(e) => {
-                      if (selectable && (e.key === "Enter" || e.key === " ")) {
+                      if ((selectable || (canManage && mgmtMode === "table")) && (e.key === "Enter" || e.key === " ")) {
                         e.preventDefault();
-                        pick(m.id, true);
+                        if (selectable) pick(m.id, true);
+                        else if (canManage && mgmtMode === "table") {
+                          const tbl = tables[m.code];
+                          if (tbl) setMgmtTableId(tbl.id);
+                        }
                       }
                     }}
                   >
@@ -708,10 +773,13 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
                       cy={m.y}
                       r={26}
                       fill="transparent"
-                      style={{ pointerEvents: selectable ? "all" : "none" }}
+                      style={{ pointerEvents: (selectable || (canManage && mgmtMode === "table")) ? "all" : "none" }}
                     />
                     {isChosen && (
                       <circle cx={m.x} cy={m.y} r={24} fill="none" stroke="#172b25" strokeWidth={4} />
+                    )}
+                    {isMgmtChosen && (
+                      <circle cx={m.x} cy={m.y} r={25} fill="none" stroke="#e53e3e" strokeWidth={4} strokeDasharray="6 4" />
                     )}
                     <circle
                       cx={m.x}
@@ -719,10 +787,10 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
                       r={19}
                       fill={fill}
                       stroke={
-                        isChosen ? "#172b25" : state === "partial" ? "#6b7d75" : open ? "#58645f" : "#c9cfcb"
+                        isChosen ? "#172b25" : isMgmtChosen ? "#e53e3e" : state === "partial" ? "#6b7d75" : open ? "#58645f" : "#c9cfcb"
                       }
-                      strokeWidth={state === "partial" ? 3 : 2}
-                      strokeDasharray={state === "partial" ? "5 3" : undefined}
+                      strokeWidth={isMgmtChosen ? 3 : state === "partial" ? 3 : 2}
+                      strokeDasharray={isMgmtChosen ? "6 4" : state === "partial" ? "5 3" : undefined}
                     />
                     <text
                       x={m.x}
@@ -730,7 +798,7 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
                       fontSize={20}
                       fontWeight={700}
                       textAnchor="middle"
-                      fill={active ? inkFor(fill) : "#5c6862"}
+                      fill={active ? inkFor(fill) : state === "sold" ? "#ffffff" : "#5c6862"}
                       style={{ pointerEvents: "none" }}
                     >
                       {active && !open ? "x" : m.n}
@@ -742,13 +810,144 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
           </div>
 
           <p className="border-t border-[#f2f4f2] px-3 py-2 text-[11px] font-semibold text-[#6b7d75]">
-            Swipe the map to pan. Tap Fit to see the whole hall, or + to read the table numbers.
+            Swipe the map. Tap Fit to see the sitting arrangements.
           </p>
         </div>
 
         {/* SELECTION PANEL */}
         <aside ref={panelRef} className="min-w-0 rounded-2xl border border-[#e2e8e4] bg-white p-4">
-          {category === null ? (
+          {/* Management mode for organizer/admin */}
+          {canManage && (
+            <div className="mb-4 p-3 rounded-xl bg-amber-50 border border-amber-200">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-amber-700 font-black text-sm">🔧 Management Mode</span>
+                <select
+                  value={mgmtMode || ""}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setMgmtMode((v === "table" || v === "seat") ? v : null);
+                    setMgmtTableId(null);
+                    setMgmtSeats([]);
+                  }}
+                  className="px-3 py-1.5 rounded-lg border border-amber-300 bg-white text-sm font-semibold text-amber-800"
+                >
+                  <option value="">Select action…</option>
+                  <option value="table">Close/Open Tables</option>
+                  <option value="seat">Close/Open Seats</option>
+                </select>
+                {mgmtMode && (
+                  <button
+                    type="button"
+                    onClick={() => { setMgmtMode(null); setMgmtTableId(null); setMgmtSeats([]); }}
+                    className="px-2 py-1.5 rounded-lg bg-white border border-amber-300 text-amber-700 text-xs font-bold hover:bg-amber-50"
+                  >
+                    Exit
+                  </button>
+                )}
+              </div>
+              {mgmtMode === "table" && (
+                <div className="space-y-2 text-sm">
+                  <p className="font-semibold text-amber-800">Click tables on map to select, then choose status:</p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={mgmtLoading || !mgmtTableId}
+                      onClick={() => handleTableStatusChange(
+                        mgmtTableId ? [mgmtTableId] : [],
+                        "blocked"
+                      )}
+                      className="px-3 py-1.5 rounded-lg bg-red-100 text-red-700 font-bold text-xs hover:bg-red-200 disabled:opacity-50"
+                    >
+                      Mark Selected as Closed (Blocked)
+                    </button>
+                    <button
+                      type="button"
+                      disabled={mgmtLoading || !mgmtTableId}
+                      onClick={() => handleTableStatusChange(
+                        mgmtTableId ? [mgmtTableId] : [],
+                        "available"
+                      )}
+                      className="px-3 py-1.5 rounded-lg bg-green-100 text-green-700 font-bold text-xs hover:bg-green-200 disabled:opacity-50"
+                    >
+                      Reopen Selected
+                    </button>
+                    <button
+                      type="button"
+                      disabled={mgmtLoading || !mgmtTableId}
+                      onClick={() => handleTableStatusChange(
+                        mgmtTableId ? [mgmtTableId] : [],
+                        "sold"
+                      )}
+                      className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 font-bold text-xs hover:bg-slate-200 disabled:opacity-50"
+                    >
+                      Mark as Sold
+                    </button>
+                  </div>
+                  {mgmtTableId && (
+                    <p className="text-xs text-amber-600">
+                      Selected: Table ID {mgmtTableId} ({tables[Object.keys(tables).find(k => tables[k].id === mgmtTableId) || ""]?.table_number || "?"})
+                    </p>
+                  )}
+                </div>
+              )}
+              {mgmtMode === "seat" && mgmtTableId && (
+                <div className="space-y-2 text-sm">
+                  <p className="font-semibold text-amber-800">
+                    Click seats on the diagram to select, then choose status:
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={mgmtLoading || mgmtSeats.length === 0}
+                      onClick={() => handleSeatStatusChange(mgmtTableId, mgmtSeats, "sold")}
+                      className="px-3 py-1.5 rounded-lg bg-red-100 text-red-700 font-bold text-xs hover:bg-red-200 disabled:opacity-50"
+                    >
+                      Mark {mgmtSeats.length} Seat(s) as Sold
+                    </button>
+                    <button
+                      type="button"
+                      disabled={mgmtLoading || mgmtSeats.length === 0}
+                      onClick={() => handleSeatStatusChange(mgmtTableId, mgmtSeats, "available")}
+                      className="px-3 py-1.5 rounded-lg bg-green-100 text-green-700 font-bold text-xs hover:bg-green-200 disabled:opacity-50"
+                    >
+                      Reopen {mgmtSeats.length} Seat(s)
+                    </button>
+                  </div>
+                  {mgmtSeats.length > 0 && (
+                    <p className="text-xs text-amber-600">
+                      Selected seats: {mgmtSeats.join(", ")}
+                    </p>
+                  )}
+                </div>
+              )}
+              {mgmtError && (
+                <p className="text-sm text-red-600 font-semibold">{mgmtError}</p>
+              )}
+            </div>
+          )}
+          {tablesClosed && category === null ? (
+            <div className="space-y-2">
+              <p className="flex items-center gap-2 text-[13px] font-black text-[#182e2c]">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#173935] text-[11px] font-black text-white">
+                  2
+                </span>
+                VIP admission
+              </p>
+              <p className="text-[13px] font-semibold leading-6 text-[#55665f]">
+                Tables are not on sale yet. Choose VIP above and add it to your order to continue.
+              </p>
+              <button
+                type="button"
+                onClick={handleReserve}
+                className="w-full rounded-xl bg-[#173935] px-4 py-3.5 text-sm font-black text-white transition-colors hover:bg-[#11241e] touch-manipulation"
+              >
+                Add VIP pass
+              </button>
+              <p aria-live="polite" className="text-[12px] font-semibold leading-5 text-[#55665f]">
+                {notice}
+              </p>
+            </div>
+          ) : category === null ? (
             <div className="space-y-2">
               <p className="flex items-center gap-2 text-[13px] font-black text-[#182e2c]">
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#173935] text-[11px] font-black text-white">
@@ -771,12 +970,7 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
                 <h3 className="text-base font-black text-[#182e2c]">VIP admission</h3>
               </div>
               <p className="text-[13px] font-semibold leading-6 text-[#55665f]">
-                VIP is general admission, not a numbered table. Add it here, then choose how many
-                passes you need in the ticket panel.
-              </p>
-              <p className="text-sm font-black text-[#182e2c]">
-                {priceLabel(packagePrice)}
-                <span className="font-semibold text-[#6b7d75]"> per guest</span>
+                VIP is general admission. Add it to proceed to payment.
               </p>
               <button
                 type="button"
@@ -789,19 +983,30 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
                 {notice}
               </p>
             </div>
-          ) : isExtreme ? (
+          ) : categorySoldOut ? (
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <span
                   className="inline-block h-3.5 w-3.5 rounded-full border border-[#93a29b]"
                   style={{ background: accent }}
                 />
-                <h3 className="text-base font-black text-[#182e2c]">Platinum Extreme</h3>
+                <h3 className="text-base font-black text-[#182e2c]">{cat?.name}</h3>
               </div>
-              <p className="rounded-xl border border-[#e7b7b4] bg-[#fdf1f0] px-3 py-2.5 text-[12px] font-bold leading-5 text-[#8a2b26]">
-                Shown for reference on the organiser&apos;s plan. Public sales for this tier have
-                not been confirmed, so it cannot be bought here.
-              </p>
+              <div className="rounded-xl border-2 border-[#e53e3e] bg-[#fff5f5] px-4 py-6 text-center">
+                <p className="text-2xl font-black uppercase tracking-[0.12em] text-[#c42d23]">
+                  Sold out
+                </p>
+                <p className="mt-2 text-[13px] font-semibold leading-6 text-[#55665f]">
+                  This category is no longer available. Choose another category to continue.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => reset(null)}
+                className="w-full rounded-xl border border-[#aab8b3] bg-white px-4 py-3 text-[13px] font-black text-[#182e2c] transition-colors hover:border-[#173935] touch-manipulation"
+              >
+                Choose another category
+              </button>
             </div>
           ) : !chosen ? (
             <div className="space-y-3">
@@ -809,7 +1014,7 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#173935] text-[11px] font-black text-white">
                   2
                 </span>
-                Choose your table
+                Choose Ticket
               </p>
               <p className="text-[13px] font-semibold leading-6 text-[#55665f]">
                 Tap a coloured table on the map, or pick the number here.
@@ -829,9 +1034,6 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
                     </option>
                   ))}
               </select>
-              <p className="text-[12px] font-semibold leading-5 text-[#6b7d75]">
-                {openCount} table{openCount === 1 ? "" : "s"} open in {CATS[category ?? 0].name}.
-              </p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -850,18 +1052,17 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
                 />
               </div>
 
-              {/* Step 3: how to buy. No preselected option. */}
+              {/* Direct table selection - no seat mode */}
               <p className="flex items-center gap-2 text-[13px] font-black text-[#182e2c]">
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[#173935] text-[11px] font-black text-white">
                   3
                 </span>
-                {mode ? "Your choice" : "How would you like to buy?"}
+                Confirm your table
               </p>
 
-              {chosenState === "partial" && mode !== "seat" && (
+              {chosenState === "partial" && (
                 <p className="rounded-lg border border-[#f0c36d] bg-[#fffbeb] px-3 py-2 text-[12px] font-bold leading-5 text-[#92400e]">
-                  Some seats on this table are already taken, so only individual seats can be
-                  bought.
+                  Some seats on this table are already taken, so it cannot be bought whole.
                 </p>
               )}
 
@@ -869,70 +1070,30 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
                 <button
                   type="button"
                   disabled={chosenState !== "available"}
-                  onClick={() => {
-                    setMode("table");
-                    setSeats([]);
-                    setNotice("");
-                  }}
-                  className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left transition-colors ${
-                    mode === "table"
-                      ? "border-[#173935] bg-[#eef4f1]"
-                      : "border-[#dfe5e1] bg-white hover:border-[#aab8b3]"
-                  } disabled:cursor-not-allowed disabled:opacity-50`}
+                  onClick={handleReserve}
+                  className="flex items-center justify-between gap-2 rounded-xl border border-[#173935] bg-[#eef4f1] px-3 py-2.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <span className="min-w-0">
-                    <span className="block text-[13px] font-black text-[#182e2c]">Whole table</span>
+                    <span className="block text-[13px] font-black text-[#182e2c]">Table</span>
                     <span className="block text-[11px] font-semibold text-[#6b7d75]">
-                      All {packageSeats} seats, one payment
+                      {packageSeats} seats, one payment
                     </span>
                   </span>
                   <span className="flex-shrink-0 text-[13px] font-black text-[#182e2c]">
                     {priceLabel(packagePrice)}
                   </span>
                 </button>
-
-                {packageSeats > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMode("seat");
-                      setSeats([]);
-                      setNotice("");
-                    }}
-                    className={`flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left transition-colors ${
-                      mode === "seat"
-                        ? "border-[#173935] bg-[#eef4f1]"
-                        : "border-[#dfe5e1] bg-white hover:border-[#aab8b3]"
-                    }`}
-                  >
-                    <span className="min-w-0">
-                      <span className="block text-[13px] font-black text-[#182e2c]">
-                        Individual seats
-                      </span>
-                      <span className="block text-[11px] font-semibold text-[#6b7d75]">
-                        Pick your own seat numbers
-                      </span>
-                    </span>
-                    <span className="flex-shrink-0 text-[13px] font-black text-[#182e2c]">
-                      {priceLabel(seatPrice)} each
-                    </span>
-                  </button>
-                )}
               </div>
 
-              {bySeat && (
-                <div>
+              {!isVip && (
+                <div aria-disabled="true" className="pointer-events-none select-none opacity-45">
                   <p className="mb-1 text-[12px] font-semibold leading-5 text-[#55665f]">
-                    {seats.length === 0
-                      ? "Tap a seat number. Seats 4 and 8 are not for sale."
-                      : `Seats ${[...seats]
-                          .sort((a, b) => a - b)
-                          .join(", ")} selected.`}
+                    Seat selection is currently disabled. Tables are bought as a whole.
                   </p>
                   <svg
                     viewBox="0 0 250 220"
                     role="group"
-                    aria-label={`Seats on table ${chosen.n}`}
+                    aria-label={`Seats on table ${chosen.n} (seat selection disabled)`}
                     className="mx-auto w-full max-w-[270px]"
                   >
                     <text
@@ -949,43 +1110,54 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
                       const angle = ((n - 1) * Math.PI) / 5 - Math.PI / 2;
                       const x = 125 + 82 * Math.cos(angle);
                       const y = 110 + 82 * Math.sin(angle);
-                      const off = unavailableSeats.has(n);
-                      const picked = seats.includes(n);
-                      const fill = off ? "#d1d6d3" : chosen.color;
+                      const isSold = soldSeats.has(n);
+                      const isBlocked = BLOCKED_SEATS.includes(n);
+                      const off = isBlocked;
+                      const isMgmtPicked = mgmtMode === "seat" && mgmtSeats.includes(n);
+                      // Fill: sold = red, blocked = grey, available = category color
+                      const fill = isSold ? "#e53e3e" : off ? "#d1d6d3" : chosen.color;
                       return (
                         <g
                           key={`seat-${n}`}
-                          className={off ? undefined : "cursor-pointer"}
-                          tabIndex={off ? -1 : 0}
-                          role={off ? undefined : "button"}
-                          aria-label={`Seat ${n}${off ? " unavailable" : ""}`}
-                          aria-pressed={off ? undefined : picked}
-                          onClick={() => toggleSeat(n)}
+                          className={(canManage && mgmtMode === "seat") ? "cursor-pointer" : undefined}
+                          tabIndex={(canManage && mgmtMode === "seat") ? 0 : -1}
+                          role={(canManage && mgmtMode === "seat") ? "button" : undefined}
+                          aria-label={`Seat ${n}${isSold ? " sold" : off ? " unavailable" : ""}`}
+                          aria-pressed={isMgmtPicked}
+                          onClick={() => {
+                            if (mgmtMode === "seat" && canManage) {
+                              setMgmtSeats(prev => prev.includes(n) ? prev.filter(s => s !== n) : [...prev, n].sort((a,b)=>a-b));
+                            }
+                          }}
                           onKeyDown={(e) => {
-                            if (!off && (e.key === "Enter" || e.key === " ")) {
-                              e.preventDefault();
-                              toggleSeat(n);
+                            if ((canManage && mgmtMode === "seat")) {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                if (mgmtMode === "seat" && canManage) {
+                                  setMgmtSeats(prev => prev.includes(n) ? prev.filter(s => s !== n) : [...prev, n].sort((a,b)=>a-b));
+                                }
+                              }
                             }
                           }}
                         >
-                          <title>{off ? `Seat ${n} unavailable` : `Seat ${n}`}</title>
+                          <title>{isSold ? `Seat ${n} sold` : off ? `Seat ${n} unavailable` : `Seat ${n}`}</title>
                           <circle
                             cx={x}
                             cy={y}
                             r={22}
                             fill="transparent"
-                            style={{ pointerEvents: off ? "none" : "all" }}
+                            style={{ pointerEvents: ((canManage && mgmtMode === "seat")) ? "all" : "none" }}
                           />
-                          {picked && (
-                            <circle cx={x} cy={y} r={19} fill="none" stroke="#172b25" strokeWidth={3} />
+                          {isMgmtPicked && (
+                            <circle cx={x} cy={y} r={19} fill="none" stroke="#e53e3e" strokeWidth={3} strokeDasharray="6 4" />
                           )}
                           <circle
                             cx={x}
                             cy={y}
                             r={16}
                             fill={fill}
-                            stroke={off ? "#c9cfcb" : picked ? "#172b25" : "#58645f"}
-                            strokeWidth={picked ? 3 : 2}
+                            stroke={off ? "#c9cfcb" : isMgmtPicked ? "#e53e3e" : "#58645f"}
+                            strokeWidth={isMgmtPicked ? 3 : 2}
                           />
                           <text
                             x={x}
@@ -993,10 +1165,10 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
                             fontSize={17}
                             fontWeight={700}
                             textAnchor="middle"
-                            fill={off ? "#59655f" : inkFor(fill)}
+                            fill={isSold ? "#ffffff" : off ? "#59655f" : inkFor(fill)}
                             style={{ pointerEvents: "none" }}
                           >
-                            {off ? "x" : n}
+                            {off || isSold ? "x" : n}
                           </text>
                         </g>
                       );
@@ -1008,12 +1180,10 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
               {mode && (
                 <div className="rounded-xl bg-[#f6f8f4] px-3 py-2.5">
                   <p className="text-[12px] font-semibold text-[#42544d]">
-                    {bySeat
-                      ? `${seats.length || 0} x ${priceLabel(seatPrice)}`
-                      : `1 x ${priceLabel(packagePrice)}`}
+                    1 x {priceLabel(packagePrice)}
                   </p>
                   <p className="mt-0.5 text-base font-black text-[#173935]">
-                    {priceLabel(bySeat ? seatPrice * seats.length : packagePrice)}
+                    {priceLabel(packagePrice)}
                   </p>
                 </div>
               )}
@@ -1042,11 +1212,6 @@ export default function WarriFloorPlan({ eventId, packages, currencySymbol, onRe
           )}
         </aside>
       </div>
-
-      <p className="border-t border-[#e6ebe8] px-4 py-3 text-[11px] font-semibold leading-5 text-[#6b7d75] sm:px-6">
-        Availability is checked live against the organiser&apos;s table release. Sponsor allocations
-        and the final table release require organiser approval.
-      </p>
     </section>
   );
 }
