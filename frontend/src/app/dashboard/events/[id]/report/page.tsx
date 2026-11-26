@@ -359,11 +359,18 @@ export default function EventReportPage() {
                         <td className="py-2.5 px-3 text-xs font-mono text-slate-600 whitespace-nowrap">{s.reference}</td>
                         <td className="py-2.5 px-3 text-xs text-slate-500 whitespace-nowrap">
                           {s.paid_at || s.created_at
-                            ? new Intl.DateTimeFormat("en-NG", {
-                                timeZone: "Africa/Lagos",
-                                day: "2-digit", month: "short", year: "numeric",
-                                hour: "2-digit", minute: "2-digit", hour12: true,
-                              }).format(new Date(s.paid_at || s.created_at || "")) + " (WAT)"
+                            ? (() => {
+                                const d = new Date(s.paid_at || s.created_at || "");
+                                const day = new Intl.DateTimeFormat("en-GB", {
+                                  timeZone: "Africa/Lagos",
+                                  weekday: "long", day: "numeric", month: "short", year: "numeric",
+                                }).format(d).replace(/ (\d{4})$/, ", $1");
+                                const time = new Intl.DateTimeFormat("en-GB", {
+                                  timeZone: "Africa/Lagos",
+                                  hour: "2-digit", minute: "2-digit", hour12: true,
+                                }).format(d);
+                                return `${day} at ${time} (WAT)`;
+                              })()
                             : "Not recorded"}
                         </td>
                       </tr>
