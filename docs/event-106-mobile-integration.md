@@ -2,11 +2,13 @@
 
 ## What the app needs to do
 
-Event 106 is a **headcount** event. There is no per-guest QR. One shared QR is printed on every wristband:
+Event 106 is a **headcount** event. It now issues **5,000 unique wristband QRs**, each with its own random 8-character alphanumeric code (no ambiguous 0/O/1/I):
 
-**QR payload:** `https://accredit.vip/h/obi`
+**QR payload:** `https://accredit.vip/h/obi?c=<CODE>`
 
-A scan at the gate counts **one person entering** and the dashboard at `/dashboard/events/106` updates live. The same wristband can be scanned again for the next guest. There are eight nights (event days 26-33, 30 Nov 2026 to 18 Jan 2027).
+A scan at the gate counts **one person entering** and the dashboard at `/dashboard/events/106` updates live. **Each code can be counted once only**; a second presentation is refused with `already_used`. There are eight nights (event days 26-33, 30 Nov 2026 to 18 Jan 2027).
+
+The full code list is available as `https://accredit.vip/uploads/obi/obi-unique-codes.csv` (columns: `code`, `qr_url`, `qr_image`) and as `obi-unique-codes.json`. Each QR image is at `https://accredit.vip/uploads/obi/codes/<CODE>.png`.
 
 ## Base URL
 
@@ -61,13 +63,13 @@ Authorization: Bearer <token>
 Content-Type: application/json
 
 {
-  "token": "https://accredit.vip/h/obi",
+  "token": "https://accredit.vip/h/obi?c=B3E4XG2Q",
   "location": "Main gate",
   "event_day_id": 26
 }
 ```
 
-- `token` is required. It may be the full URL, `/h/obi`, or the bare slug `obi`.
+- `token` is required. Send the **exact scanned value including the `?c=` code**. The `c` value is parsed by the server; if it is missing, the scan follows the old repeatable shared-wristband behaviour.
 - `location` is optional; it defaults to `Main gate`.
 - `event_day_id` (26-33) is optional. If omitted, the server uses tonight in WAT; between 00:00 and 06:00 WAT it attributes the scan to the previous night.
 
@@ -81,6 +83,7 @@ Success response (HTTP 200):
   "scanned_at": "2026-11-30T18:05:12.345678+00:00",
   "night_total": 27,
   "total": 27,
+  "code": "B3E4XG2Q",
   "day": { "id": 26, "label": "Opening Night", "date": "2026-11-30" },
   "event": { "id": 106, "title": "OBI's HOUSE", "slug": "obi" }
 }
@@ -93,7 +96,11 @@ Only `status == "counted"` means a person was added. Other valid responses that 
 { "status": "day_closed",   "message": "...", "day": {...} }
 { "status": "invalid_day",  "message": "...", "day": null }
 { "status": "event_ended",  "message": "'OBI's HOUSE' has already ended." }
+{ "status": "invalid_code", "message": "Wristband code XXXXXXXX is not recognised.", "code": "XXXXXXXX" }
+{ "status": "already_used", "message": "Wristband code XXXXXXXX was already used at the gate.", "code": "XXXXXXXX", "used_at": "..." }
 ```
+
+`invalid_code` and `already_used` are checked **before** the night guard and never write a scan. Show a clear red result to staff and do not increment the app's own counter.
 
 ### 3. Live totals (for the app's dashboard screen)
 
@@ -110,10 +117,10 @@ POST /api/v1/scanner/headcount/undo
 Authorization: Bearer <token>
 Content-Type: application/json
 
-{ "token": "https://accredit.vip/h/obi", "event_day_id": 26 }
+{ "token": "https://accredit.vip/h/obi?c=B3E4XG2Q", "event_day_id": 26 }
 ```
 
-Deletes the latest scan for that night and returns the updated stats. `{"status":"noop"}` means there was nothing to undo.
+Deletes the latest scan for that night, **frees that wristband code so it can be used again**, and returns the updated stats. `{"status":"noop"}` means there was nothing to undo. The organizer equivalent is `POST /headcount/events/106/undo` with `{"scan_id": 1234}`.
 
 ### 5. Public wristband info (no auth)
 
@@ -123,13 +130,15 @@ GET /api/v1/headcount/event/obi
 
 Returns event details and `next_dates`. This endpoint records nothing; scanning a wristband with a guest's own phone opens this informational page and does **not** count.
 
-## Critical: repeat-scan behaviour
+## Critical: code handling
 
-The web scanner uses `repeatMode="exit"`: the same code must physically **leave the camera frame** before it can count again. The mobile app must replicate this, otherwise one wristband held still will count dozens of people.
+Each wristband carries a **unique code** and admits one person. The server enforces this: the second scan returns `already_used` and does not increment the count. The app must still avoid hammering the endpoint with the same still frame:
 
-- When a code is decoded, remember it.
-- Do not count it again until the scanner has seen no code (or a different code) for at least one frame.
-- Show a short "Lift the wristband away between guests" prompt to staff.
+- Remember the last decoded code; do not send it again until the scanner has seen no code (or a different code) for at least one frame.
+- Keep the web scanner's `exit` behaviour in mind: a code must physically leave the frame before the next presentation.
+- On `already_used`, show a red "Wristband already used" result and the `used_at` time. Do not count it.
+- On `invalid_code`, show a red "Unrecognised wristband" result. Do not count it.
+- Only `status: "counted"` increments the app's own counter.
 
 ## Night handling
 
@@ -159,9 +168,11 @@ GET  /api/v1/headcount/events/106/qr.png?size=1200
 1. Log in, call `/auth/me`, confirm 200.
 2. Get `/scanner/events`, confirm event 106 has `headcount_mode: true`.
 3. Get the days list and confirm 8 nights.
-4. Scan the shared QR once, confirm `status: "counted"` and `night_total` increments by 1.
-5. Hold the same QR still: confirm the app does not count it again.
-6. Lift it away and scan again: confirm the count increments.
-7. Check the web dashboard `/dashboard/events/106/headcount` shows the same number.
-8. Undo one scan, confirm both the app and web dashboard decrease by 1.
-9. Test a closed night and confirm the app does not increment.
+4. Scan a unique wristband QR once, confirm `status: "counted"`, `code` in the response, and `night_total` increments by 1.
+5. Scan the same QR again: confirm `status: "already_used"` and that the count does not change.
+6. Scan a QR with an unknown code: confirm `status: "invalid_code"` and no count.
+7. Lift it away and scan a different wristband: confirm the count increments.
+8. Check the web dashboard `/dashboard/events/106/headcount` shows the same number and the code in the recent scans.
+9. Undo one scan, confirm both the app and web dashboard decrease by 1, and that code can be scanned again.
+10. Export `GET /headcount/events/106/export.csv` and confirm the "Wristband code" column.
+11. Test a closed night and confirm the app does not increment.

@@ -12,7 +12,7 @@ on. Every other event keeps the guest-based flow it already has.
 import csv
 import io
 from datetime import datetime, time, timedelta, timezone
-from urllib.parse import unquote
+from urllib.parse import parse_qs, unquote, urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response, StreamingResponse
@@ -25,6 +25,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.event import Event
 from app.models.headcount import HeadcountScan
+from app.models.headcount_code import HeadcountCode
 from app.models.user import User
 from app.services.event_days import (
     DAY_CLOSED,
@@ -109,6 +110,32 @@ def _slug_from_token(token: str) -> str:
     if "/" in raw:
         return raw.split("/")[-1]
     return raw
+
+
+def _code_from_token(token: str) -> str | None:
+    """Pull the unique wristband code out of a QR URL's query string."""
+    raw = unquote((token or "").strip())
+    parsed = urlparse(raw)
+    for key, value in parse_qs(parsed.query).items():
+        if key.lower() == "c" and value and value[0].strip():
+            return value[0].strip().upper()
+    return None
+
+
+async def _free_scan_code(db: AsyncSession, scan: HeadcountScan) -> None:
+    """Undo releases that wristband so it can be scanned again."""
+    if not scan.code:
+        return
+    wristband = (
+        await db.execute(
+            select(HeadcountCode).where(
+                HeadcountCode.code == scan.code, HeadcountCode.event_id == scan.event_id
+            )
+        )
+    ).scalars().first()
+    if wristband is not None:
+        wristband.is_used = False
+        wristband.used_at = None
 
 
 async def _headcount_event_for_token(db: AsyncSession, token: str) -> Event | None:
@@ -332,6 +359,7 @@ async def _stats(db: AsyncSession, event: Event, day=None) -> dict:
                 "location": (scan.location or "").strip() or "Main gate",
                 "staff": staff_names.get(scan.scanned_by) if scan.scanned_by else None,
                 "day_id": scan.event_day_id,
+                "code": scan.code,
             }
         )
 
@@ -404,6 +432,32 @@ async def record_headcount_scan(
     if event is None:
         raise HTTPException(status_code=404, detail="This QR is not a headcount pass.")
 
+    # Unique wristband codes admit one person each. A code that is unknown or
+    # already used must never add to the running count.
+    code = _code_from_token(req.token)
+    wristband = None
+    if code:
+        wristband = (
+            await db.execute(
+                select(HeadcountCode).where(
+                    HeadcountCode.code == code, HeadcountCode.event_id == event.id
+                )
+            )
+        ).scalars().first()
+        if wristband is None:
+            return {
+                "status": "invalid_code",
+                "message": f"Wristband code {code} is not recognised.",
+                "code": code,
+            }
+        if wristband.is_used:
+            return {
+                "status": "already_used",
+                "message": f"Wristband code {code} was already used at the gate.",
+                "code": code,
+                "used_at": wristband.used_at.isoformat() if wristband.used_at else None,
+            }
+
     days = await list_days(db, event.id)
     day, error = _resolve_night(days, req.event_day_id, req.day_date)
 
@@ -430,10 +484,15 @@ async def record_headcount_scan(
         location=(req.location or "").strip() or "Main gate",
         device_info=request.headers.get("user-agent"),
         ip_address=request.client.host if request.client else None,
+        code=code,
     )
     db.add(scan)
     await db.commit()
     await db.refresh(scan)
+    if wristband is not None:
+        wristband.is_used = True
+        wristband.used_at = scan.created_at
+        await db.commit()
 
     night_total = await _count(db, event.id, day.id if day is not None else None)
     total = await _count(db, event.id)
@@ -445,6 +504,7 @@ async def record_headcount_scan(
         "scanned_at": scan.created_at.isoformat() if scan.created_at else None,
         "night_total": night_total,
         "total": total,
+        "code": code,
         "day": day_payload(day) if day is not None else None,
         "event": _event_payload(event),
     }
@@ -509,6 +569,7 @@ async def undo_headcount_scan(
             raise HTTPException(status_code=404, detail="There is nothing to undo yet")
 
     removed_day = scan.event_day_id
+    await _free_scan_code(db, scan)
     await db.delete(scan)
     await db.commit()
 
@@ -544,6 +605,7 @@ async def scanner_undo_headcount(
         return {"status": "noop", "message": "There is nothing to undo yet."}
 
     removed_day = scan.event_day_id
+    await _free_scan_code(db, scan)
     await db.delete(scan)
     await db.commit()
 
@@ -582,7 +644,7 @@ async def export_headcount_csv(
 
     buffer = io.StringIO()
     writer = csv.writer(buffer)
-    writer.writerow(["Scan ID", "Date (WAT)", "Time (WAT)", "Night", "Gate", "Scanned by"])
+    writer.writerow(["Scan ID", "Date (WAT)", "Time (WAT)", "Night", "Gate", "Scanned by", "Wristband code"])
     for scan in scans:
         local = scan.created_at.astimezone(WAT) if scan.created_at else None
         night = days.get(scan.event_day_id) if scan.event_day_id else None
@@ -594,6 +656,7 @@ async def export_headcount_csv(
                 (night.label if night and night.label else (night.date.isoformat() if night else "")),
                 (scan.location or "").strip() or "Main gate",
                 staff_names.get(scan.scanned_by, "") if scan.scanned_by else "",
+                scan.code or "",
             ]
         )
 

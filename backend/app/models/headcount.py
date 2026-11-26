@@ -29,4 +29,7 @@ class HeadcountScan(Base):
     location = Column(String, nullable=True)
     device_info = Column(String, nullable=True)
     ip_address = Column(String, nullable=True)
+    # Unique wristband code when this event issues per-person QRs. NULL on the
+    # older shared-wristband flow, which keeps counting every scan.
+    code = Column(String(16), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)

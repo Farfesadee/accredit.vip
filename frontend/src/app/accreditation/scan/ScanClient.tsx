@@ -183,7 +183,8 @@ export function AccreditationScanClient() {
   // so the gate shows a running total instead of a guest card.
   const [headcount, setHeadcount] = useState<any>(null);
   const [hcBusy, setHcBusy] = useState(false);
-  const [hcLast, setHcLast] = useState<{ total: number; night: number; at: string; day?: string | null } | null>(null);
+  const [hcLast, setHcLast] = useState<{ total: number; night: number; at: string; day?: string | null; code?: string | null } | null>(null);
+  const hcLastTokenRef = useRef<string | null>(null);
   const [hcFlash, setHcFlash] = useState(false);
   const [hcUndoing, setHcUndoing] = useState(false);
   const [hcGate, setHcGate] = useState("Main gate");
@@ -370,11 +371,13 @@ export function AccreditationScanClient() {
       if (loc) body.location = loc;
       const res = await apiClient<any>("/headcount/scan", { method: "POST", body });
       if (res.status === "counted") {
+        hcLastTokenRef.current = token;
         setHcLast({
           total: res.total,
           night: res.night_total,
           at: new Date().toISOString(),
           day: res.day?.name || null,
+          code: res.code || null,
         });
         setHcFlash(true);
         setTimeout(() => setHcFlash(false), 900);
@@ -391,7 +394,7 @@ export function AccreditationScanClient() {
 
   const undoHeadcount = async () => {
     if (!selectedEvent || hcUndoing) return;
-    const token = headcount?.qr_target;
+    const token = hcLastTokenRef.current || headcount?.qr_target;
     if (!token) return;
     setHcUndoing(true);
     try {
@@ -1203,6 +1206,7 @@ export function AccreditationScanClient() {
               <p className="text-xs text-white/60">
                 Tonight {hcLast.night} · All nights {hcLast.total}
                 {hcLast.day ? ` · ${hcLast.day}` : ""}
+                {hcLast.code ? ` · ${hcLast.code}` : ""}
               </p>
             </div>
             <button
