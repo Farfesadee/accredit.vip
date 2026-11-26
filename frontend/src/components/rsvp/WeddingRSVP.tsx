@@ -535,16 +535,26 @@ export default function WeddingRSVP({ slug, content, guestToken, guest }: Weddin
           style={{ minHeight: "calc(100svh - 3.5rem)" }}
         >
           <p className="text-[10px] uppercase font-medium" style={{ color: GOLD_LIGHT, letterSpacing: "0.42em" }}>
-            Sarah &amp; Patrick
+            Together with their families
           </p>
           <h1
-            className="mt-4 font-serif font-normal leading-[1.06]"
-            style={{ color: "#f8f2e6", fontSize: "clamp(2.35rem, 7.4vw, 4.25rem)" }}
+            className="mt-3 font-serif font-normal leading-[1.18]"
+            style={{ color: "#f8f2e6", fontSize: "clamp(2rem, 6vw, 3.4rem)" }}
           >
-            Request the honour
+            Sarah
             <br />
-            of your presence.
+            <span style={{ fontStyle: "italic", fontSize: "0.75em" }}>&amp;</span>
+            <br />
+            Patrick
           </h1>
+          <p
+            className="mt-4 font-serif italic leading-relaxed"
+            style={{ color: "#f8f2e6", fontSize: "clamp(1.15rem, 3.6vw, 1.75rem)" }}
+          >
+            request the pleasure of your company
+            <br />
+            at their wedding celebration
+          </p>
           <p
             className="mt-5 max-w-xl text-[14.5px] leading-relaxed sm:text-base"
             style={{ color: "rgba(248,242,230,0.88)" }}

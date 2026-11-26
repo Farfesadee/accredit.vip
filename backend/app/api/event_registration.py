@@ -169,10 +169,6 @@ def wedding_content() -> dict:
                 "q": "How do I get into the venue on the day?",
                 "a": "Once you confirm, your entry QR code is sent to you by email or WhatsApp. Please have it ready at the door.",
             },
-            {
-                "q": "Where can I stay?",
-                "a": "The Hotel Recommendations section lists hotels close to the venues, with directions from your current location. Please book directly with the hotel you choose.",
-            },
         ],
     }
 
