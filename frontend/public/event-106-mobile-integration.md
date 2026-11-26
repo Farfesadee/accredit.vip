@@ -132,7 +132,7 @@ Returns event details and `next_dates`. This endpoint records nothing; scanning 
 
 ## Critical: code handling
 
-Each wristband carries a **unique code** and admits one person. The server enforces this: the second scan returns `already_used` and does not increment the count. The app must still avoid hammering the endpoint with the same still frame:
+Each wristband carries a **unique code** and admits one person. The server enforces this: the second scan returns `already_used` and does not increment the count. **Nothing is counted on a scan alone.** The app must show the scanned code and two buttons, **Check-In** and **Cancel**, and only call `POST /headcount/scan` when staff press Check-In. This applies to all gate scans, not just headcount. The app must also avoid hammering the endpoint with the same still frame:
 
 - Remember the last decoded code; do not send it again until the scanner has seen no code (or a different code) for at least one frame.
 - Keep the web scanner's `exit` behaviour in mind: a code must physically leave the frame before the next presentation.
@@ -142,7 +142,7 @@ Each wristband carries a **unique code** and admits one person. The server enfor
 
 ## Night handling
 
-Use `event_day_id` from the night picker when one is selected. Otherwise let the server resolve the night. Be aware of the 00:00-06:00 WAT spillover: a scan at 1 AM belongs to the previous night.
+**Only one night is active at a time.** Night 1 opens on its date (30 Nov 2026); each following night opens 24 hours after the previous night's date, and the earlier night closes. A scheduled job keeps the database flags in sync, and the gate only offers the active night. Use `event_day_id` from the night picker when one is selected. Otherwise let the server resolve the night. Be aware of the 00:00-06:00 WAT spillover: a scan at 1 AM belongs to the previous night.
 
 ## Organizer-only endpoints (not for gate staff)
 
@@ -168,7 +168,7 @@ GET  /api/v1/headcount/events/106/qr.png?size=1200
 1. Log in, call `/auth/me`, confirm 200.
 2. Get `/scanner/events`, confirm event 106 has `headcount_mode: true`.
 3. Get the days list and confirm 8 nights.
-4. Scan a unique wristband QR once, confirm `status: "counted"`, `code` in the response, and `night_total` increments by 1.
+4. Scan a unique wristband QR: confirm the app shows the code with Check-In / Cancel and the count has **not** changed. Press Cancel, confirm still unchanged. Scan again and press Check-In, confirm `status: "counted"`, `code` in the response, and `night_total` increments by 1.
 5. Scan the same QR again: confirm `status: "already_used"` and that the count does not change.
 6. Scan a QR with an unknown code: confirm `status: "invalid_code"` and no count.
 7. Lift it away and scan a different wristband: confirm the count increments.

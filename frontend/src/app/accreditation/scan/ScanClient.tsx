@@ -186,6 +186,7 @@ export function AccreditationScanClient() {
   const [hcBusy, setHcBusy] = useState(false);
   const [hcLast, setHcLast] = useState<{ total: number; night: number; at: string; day?: string | null; code?: string | null } | null>(null);
   const hcLastTokenRef = useRef<string | null>(null);
+  const [hcPending, setHcPending] = useState<{ token: string; code: string | null } | null>(null);
   const [hcFlash, setHcFlash] = useState(false);
   const [hcUndoing, setHcUndoing] = useState(false);
   const [hcGate, setHcGate] = useState("Main gate");
@@ -417,12 +418,21 @@ export function AccreditationScanClient() {
     }
   };
 
+  const confirmHeadcount = async () => {
+    if (!hcPending || hcBusy) return;
+    const token = hcPending.token;
+    setHcPending(null);
+    await recordHeadcount(token);
+  };
+
   const handleVerify = async (token: string) => {
-    // A headcount wristband carries one shared code. It is counted every time
-    // it is presented, so none of the per-guest dedupe below applies.
+    // Nothing is counted on a scan alone. Show the code and wait for staff to
+    // press Check-In, on both the headcount and guest flows.
     const looksHeadcount = /\/h\/[^/]+/.test(token);
     if (isHeadcount || looksHeadcount) {
-      await recordHeadcount(token);
+      const match = token.match(/[?&]c=([A-Z0-9]+)/i);
+      setHcPending({ token, code: match ? match[1].toUpperCase() : null });
+      setError("");
       return;
     }
 
@@ -1224,6 +1234,35 @@ export function AccreditationScanClient() {
               </button>
             )}
           </div>
+        )}
+        {hcPending && (
+          <>
+            <div className="fixed inset-0 bg-black/60 z-30 lg:hidden" onClick={() => setHcPending(null)} />
+            <div className="fixed inset-x-0 top-0 z-40 p-4 lg:static lg:p-0">
+              <div className="rounded-2xl border border-blue-500/60 bg-blue-900/80 p-4 sm:p-5">
+                <p className="text-base font-bold text-white">Wristband scanned</p>
+                {hcPending.code && (
+                  <p className="mt-1 font-mono text-sm text-blue-200">{hcPending.code}</p>
+                )}
+                <p className="mt-1 text-xs text-white/60">Press Check-In to count this guest. Nothing is counted yet.</p>
+                <div className="mt-4 flex gap-2">
+                  <button
+                    onClick={confirmHeadcount}
+                    disabled={hcBusy}
+                    className="flex-1 rounded-xl bg-green-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-green-500 disabled:opacity-40 min-h-[44px]"
+                  >
+                    Check-In
+                  </button>
+                  <button
+                    onClick={() => setHcPending(null)}
+                    className="flex-1 rounded-xl bg-white/15 px-4 py-3 text-sm font-bold text-white transition hover:bg-white/25 min-h-[44px]"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </>
         )}
         {scanResult && (
           <>

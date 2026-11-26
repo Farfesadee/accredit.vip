@@ -112,6 +112,24 @@ def _slug_from_token(token: str) -> str:
     return raw
 
 
+def _single_active_night(days):
+    """Only one night is active at a time.
+
+    Night 1 opens on its own date. Every following night opens 24 hours after
+    the previous one's date, regardless of the weekly calendar dates, and the
+    previous night stops being active. The last night stays active once reached.
+    """
+    if not days:
+        return days
+    ordered = sorted(days, key=lambda d: (d.date or local_today(), d.day_number))
+    first = ordered[0].date
+    if first is None:
+        return ordered
+    index = (local_today() - first).days
+    index = max(0, min(index, len(ordered) - 1))
+    return [ordered[index]]
+
+
 def _code_from_token(token: str) -> str | None:
     """Pull the unique wristband code out of a QR URL's query string."""
     raw = unquote((token or "").strip())
@@ -289,7 +307,7 @@ async def _count(db: AsyncSession, event_id: int, day_id: int | None = None) -> 
 
 
 async def _stats(db: AsyncSession, event: Event, day=None) -> dict:
-    days = await list_days(db, event.id)
+    days = _single_active_night(await list_days(db, event.id))
 
     per_day_rows = (
         await db.execute(
@@ -458,7 +476,7 @@ async def record_headcount_scan(
                 "used_at": wristband.used_at.isoformat() if wristband.used_at else None,
             }
 
-    days = await list_days(db, event.id)
+    days = _single_active_night(await list_days(db, event.id))
     day, error = _resolve_night(days, req.event_day_id, req.day_date)
 
     if error:
@@ -524,7 +542,7 @@ async def scanner_headcount_stats(
     if not event or not event.headcount_mode:
         raise HTTPException(status_code=404, detail="Headcount event not found")
 
-    days = await list_days(db, event.id)
+    days = _single_active_night(await list_days(db, event.id))
     day = await _scope_day(db, event, days, event_day_id or None, day_date or None)
     return await _stats(db, event, day)
 
@@ -539,7 +557,7 @@ async def organizer_headcount_stats(
 ):
     """The organizer dashboard. Owner or platform admin only."""
     event = await _owned_event(db, event_id, user)
-    days = await list_days(db, event.id)
+    days = _single_active_night(await list_days(db, event.id))
     day = await _scope_day(db, event, days, event_day_id or None, day_date or None)
     return await _stats(db, event, day)
 
@@ -576,7 +594,7 @@ async def undo_headcount_scan(
     await db.delete(scan)
     await db.commit()
 
-    days = await list_days(db, event.id)
+    days = _single_active_night(await list_days(db, event.id))
     day = next((d for d in days if d.id == removed_day), None)
     stats = await _stats(db, event, day)
     return {"removed": True, **stats}
@@ -613,7 +631,7 @@ async def scanner_undo_headcount(
     await db.delete(scan)
     await db.commit()
 
-    days = await list_days(db, event.id)
+    days = _single_active_night(await list_days(db, event.id))
     day = next((d for d in days if d.id == removed_day), None)
     stats = await _stats(db, event, day)
     return {"status": "undone", "message": "Entry removed", **stats}
